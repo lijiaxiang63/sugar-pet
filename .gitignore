@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# local data, never commit
+work/
+*.nii
+!src/sugar_pet/data/*.nii.gz
+.DS_Store

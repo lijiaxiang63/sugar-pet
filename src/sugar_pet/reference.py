@@ -10,7 +10,7 @@ import nibabel as nib
 import numpy as np
 
 from . import __version__
-from .imageops import histogram_mode, load_image, region_mean, smooth, valid_voxels
+from .imageops import histogram_mode, load_image, smooth, valid_voxels
 from .masks import get_mask, resample_to, same_grid
 
 _VOLUMES = ("template", "ps_std", "hn_mean", "hn_std", "mask")
@@ -23,9 +23,9 @@ class Reference:
     Attributes
     ----------
     template
-        Mean of the controls after proportional scaling (mask mean = 1).
-        This is the "normality template" of the HN method and also the
-        control mean used by iPS.
+        Mean of the smoothed controls after proportional scaling.  This is
+        the "normality template" of the HN method and also the control mean
+        used by iPS.
     ps_std
         Standard deviation of the controls after proportional scaling.
     hn_mean, hn_std
@@ -74,30 +74,30 @@ class Reference:
         first = load_image(controls[0])
         mask0 = get_mask(mask, first)
         scaled = np.empty((len(controls),) + first.shape, dtype=np.float32)
+        unsmoothed = np.empty((len(controls), int(mask0.sum())), dtype=np.float32)
         in_fov = np.zeros(first.shape, dtype=np.int32)
-        ps = []
         for i, item in enumerate(controls):
             img = first if i == 0 else load_image(item)
             if not same_grid(img.shape, img.affine, first.shape, first.affine):
                 raise ValueError(f"control {i + 1} is on a different grid than the first control")
             data = img.get_fdata(dtype=np.float32)
             in_fov += valid_voxels(data)
-            data = smooth(data, img.affine, fwhm)
-            factor = region_mean(data, mask0 & valid_voxels(data))
-            ps.append(factor)
-            scaled[i] = data / factor
+            unsmoothed[i] = data[mask0]
+            scaled[i] = smooth(data, img.affine, fwhm)
             if progress:
                 progress(i + 1, len(controls))
 
         # Keep only voxels that every control actually covers.
-        mask0 = mask0 & (in_fov == len(controls))
-        if mask0.sum() < 1000:
+        final = mask0 & (in_fov == len(controls))
+        if final.sum() < 1000:
             raise ValueError("the mask barely overlaps the controls; are they in MNI space?")
-        # Rescale so that the final mask (not the first guess) has mean 1.
+        # Proportional scaling is defined on the images as given (before
+        # smoothing), so that all data-driven methods share one scale.
+        ps = unsmoothed[:, final[mask0]].mean(axis=1, dtype=np.float64)
+        del unsmoothed
+        mask0 = final
         for i in range(len(controls)):
-            correction = scaled[i][mask0].mean(dtype=np.float64)
-            scaled[i] /= correction
-            ps[i] *= correction
+            scaled[i] /= ps[i]
         template = scaled.mean(axis=0, dtype=np.float64).astype(np.float32)
         ps_std = scaled.std(axis=0, ddof=1, dtype=np.float64).astype(np.float32)
 

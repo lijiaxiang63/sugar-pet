@@ -4,7 +4,7 @@ import pytest
 
 from sugar_pet import METHODS, Reference, builtin_mask, normalize
 from sugar_pet.imageops import histogram_mode, spm_global
-from sugar_pet.normalize import REGION_METHODS
+from sugar_pet.normalize import REGION_METHODS, single_subject_t
 
 TRUE_SCALE = 5000.0
 
@@ -19,6 +19,17 @@ def test_histogram_mode_ignores_a_heavy_tail():
     values = np.concatenate([rng.normal(1.0, 0.05, 80_000), rng.normal(0.6, 0.1, 30_000)])
     assert abs(histogram_mode(values) - 1.0) < 0.01
     assert values.mean() < 0.9  # ... while the mean is dragged down
+
+
+def test_single_subject_t_is_the_two_sample_t_test():
+    from scipy import stats
+
+    rng = np.random.default_rng(3)
+    group = rng.normal(1.0, 0.1, (25, 50))
+    subject = rng.normal(0.9, 0.1, 50)
+    expected = stats.ttest_ind(subject[None], group, equal_var=True).statistic
+    got = single_subject_t(subject, group.mean(0), group.std(0, ddof=1), 25)
+    assert np.allclose(got, expected, atol=1e-5)
 
 
 def test_spm_global():

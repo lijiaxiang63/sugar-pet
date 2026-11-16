@@ -33,7 +33,8 @@ def output_name(path: str | Path, method: str) -> str:
 
 
 def _progress(done: int, total: int) -> None:
-    print(f"\r  {done}/{total}", end="" if done < total else "\n", file=sys.stderr, flush=True)
+    if sys.stderr.isatty():
+        print(f"\r  {done}/{total}", end="" if done < total else "\n", file=sys.stderr, flush=True)
 
 
 def cmd_methods(_args) -> int:

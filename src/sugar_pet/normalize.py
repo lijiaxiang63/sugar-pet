@@ -79,6 +79,19 @@ class NormResult:
         return nib.Nifti1Image(self.mask.astype(np.uint8), self.image.affine)
 
 
+def single_subject_t(data: np.ndarray, mean: np.ndarray, std: np.ndarray, n: int) -> np.ndarray:
+    """t statistic of one subject against ``n`` controls, with ``n - 1`` degrees of freedom.
+
+    This is the two-sample t-test with equal variances when one of the
+    groups has a single member (Crawford & Howell, 1998).  Negative values
+    mean lower uptake than the controls.
+    """
+    t = np.zeros(data.shape, dtype=np.float32)
+    ok = std > 0
+    t[ok] = (data[ok] - mean[ok]) / (std[ok] * np.sqrt(1.0 + 1.0 / n))
+    return t
+
+
 def _exclusion(t: np.ndarray, df: int, p_threshold: float, exclude: str) -> np.ndarray:
     """Voxels whose uptake differs significantly from the controls."""
     if exclude == "hypo":
@@ -91,17 +104,15 @@ def _exclusion(t: np.ndarray, df: int, p_threshold: float, exclude: str) -> np.n
 def _iterate(base, data, ref, mask0, factor0, p_threshold, exclude, max_iter, min_fraction, literal):
     """Refine a PS or HN factor by leaving out voxels that look abnormal.
 
-    The subject is compared with the controls voxel by voxel using the
-    two-sample t-test for one subject against a group (equal variances),
-    exactly what SPM computes for a single-subject analysis.
+    The subject, scaled by the current factor, is compared with the
+    controls voxel by voxel; significant voxels are dropped from the mask
+    and the factor is estimated again from what is left.
     """
     mean, std = (ref.template, ref.ps_std) if base == "ps" else (ref.hn_mean, ref.hn_std)
     usable = mask0 & (std > 0)
-    scale = std * np.sqrt(1.0 + 1.0 / ref.n)
     factor, mask, n_iter = factor0, mask0, 0
     for _ in range(max_iter):
-        t = np.zeros(data.shape, dtype=np.float32)
-        t[usable] = (data[usable] / factor - mean[usable]) / scale[usable]
+        t = single_subject_t(data / factor, mean, std, ref.n)
         new_mask = usable & ~_exclusion(t, ref.n - 1, p_threshold, exclude)
         if new_mask.sum() < min_fraction * mask0.sum():
             warnings.warn(
@@ -152,7 +163,8 @@ def normalize(
         Replace the default region of a method by your own mask (a built-in
         mask name or a NIfTI file in MNI space).  Required for
         ``method="region"``; ignored by the reference-based methods, which
-        use the mask stored in the reference.
+        use the mask stored in the reference (so does ``"ps"`` when a
+        reference is given and no mask is passed).
     fwhm
         Smoothing (mm) applied before the factor is estimated.  The output
         image itself is never smoothed.  Defaults to the smoothing of the
@@ -181,13 +193,13 @@ def normalize(
     raw = img.get_fdata(dtype=np.float32)
     info: dict = {}
 
+    if method in NEEDS_REFERENCE and reference is None:
+        raise ValueError(f"method '{method}' needs a reference built from healthy controls")
     ref = None
-    if method in NEEDS_REFERENCE:
-        if reference is None:
-            raise ValueError(f"method '{method}' needs a reference built from healthy controls")
+    if reference is not None:
         ref = reference if isinstance(reference, Reference) else Reference.load(reference)
         ref = ref.on_grid(img)
-        if fwhm is None:
+        if fwhm is None and method in NEEDS_REFERENCE:
             fwhm = ref.fwhm
     fwhm = float(fwhm or 0.0)
     data = smooth(raw, img.affine, fwhm)
@@ -200,10 +212,15 @@ def normalize(
     elif method in REGION_METHODS or method in ("region", "ps"):
         if method == "region" and mask is None:
             raise ValueError("method 'region' needs a mask")
-        region = mask if mask is not None else REGION_METHODS.get(method, "gray-matter")
+        if mask is None and method == "ps" and ref is not None:
+            # Same voxels as the reference-based methods, so that PS, iPS,
+            # HN and iHN are directly comparable.
+            region, info["mask"] = ref.mask, "reference"
+        else:
+            region = mask if mask is not None else REGION_METHODS.get(method, "gray-matter")
+            info["mask"] = region if isinstance(region, str) else "custom"
         final_mask = get_mask(region, img) & valid
         factor = region_mean(data, final_mask)
-        info["mask"] = region if isinstance(region, str) else "custom"
     else:
         mask0 = ref.mask & valid & (ref.template > 0)
         if mask0.sum() < 0.5 * ref.mask.sum():

@@ -13,12 +13,16 @@ native-space images in <work>/native are also warped through both
 ("spatial-norm"); SPM is the same program either way, so these agree as
 closely as it repeats itself.
 """
+import base64
 import csv
 import json
 import os
+import re
+import struct
 import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
 
 import nibabel as nib
@@ -30,6 +34,7 @@ PY = [sys.executable, "-m", "sugar_pet.cli"]
 GO = [str(S / "sugar-pet-cli")]
 hc = [str(p) for p in sorted(D.glob("sub-hc*"))]
 pt = [str(p) for p in sorted(D.glob("sub-pt*"))]
+cases = [str(p) for p in sorted(D.glob("sub-case*"))]
 tsv = str(D / "participants.tsv")
 native = [str(p) for p in sorted((S / "native").glob("*.nii*"))]
 SPM = os.environ.get("SPM_PATH")
@@ -48,6 +53,10 @@ def commands(o):
         "norm-moved": ["normalize", str(D / "sub-moved_pet.nii.gz"), str(D / "sub-fine_pet.nii.gz"), str(D / "sub-int16_pet.nii"), "-m", "all", "-r", ref, "-o", f"{o}/norm_moved", "--save-masks"],
         "zmap": ["zmap", *pt[:2], "-m", "hn,ips,ps,ihn,cerebellum,spm-global,pons", "-r", ref, "-o", f"{o}/z"],
         "wmap": ["zmap", *pt[:2], str(D / "sub-moved_pet.nii.gz"), "-m", "hn,ips,occipital", "-r", ref, "-o", f"{o}/w", "--covariates", tsv],
+        "classify": ["classify", *pt[:3], str(D / "sub-moved_pet.nii.gz"), "-r", ref, "-o", f"{o}/class", "--covariates", tsv, "--lang", "zh"],
+        "classify-cases": ["classify", *cases, "-r", ref, "-o", f"{o}/class_cases", "--covariates", tsv],
+        "classify-z": ["classify", *pt[3:6], hc[0], str(D / "sub-moved_pet.nii.gz"), str(D / "sub-fine_pet.nii.gz"), str(D / "sub-cut_pet.nii.gz"), "-r", ref, "-o", f"{o}/class_z", "-m", "ihn", "--check", "ps,occipital,pons"],
+        "classify-alone": ["classify", pt[0], "-r", ref0, "-o", f"{o}/class_alone", "--check", "none"],
         "cluster": ["reference-cluster", *pt, "-r", ref, "-o", f"{o}/cluster.nii.gz", "--p-threshold", "0.01", "--min-cluster", "0.5"],
         "norm-cluster": ["normalize", pt[0], "-m", "region", "--mask", f"{o}/cluster.nii.gz", "-o", f"{o}/norm_cluster"],
         "compare-grf": ["compare", "--group1", *pt, "--group2", *hc, "-m", "hn", "-r", ref, "-o", f"{o}/cmp", "--covariates", tsv, "--keep-images"],
@@ -99,15 +108,31 @@ for p in pyfiles:
             print("     py:", da, "\n     go:", db)
     else:
         ta, tb = p.read_text(), g.read_text()
-        if p.suffix == ".json":
+        if p.suffix == ".html":
+            # The figure is a PNG inside the page: compare its pixels, and the page without it.
+            pictures = []
+            for page in (ta, tb):
+                found = re.search(r'src="data:image/png;base64,([^"]*)"', page)
+                data = base64.b64decode(found.group(1))
+                size = struct.unpack(">II", data[16:24])
+                length = struct.unpack(">I", data[33:37])[0]
+                pictures.append((size, np.frombuffer(zlib.decompress(data[41 : 41 + length]), np.uint8).astype(int)))
+            same_size = pictures[0][0] == pictures[1][0]
+            off = float((np.abs(pictures[0][1] - pictures[1][1]) > 1).mean()) if same_size else 1.0
+            ta, tb = (re.sub(r'src="data:image/png;base64,[^"]*"', "", page) for page in (ta, tb))
+            flag = "" if ta == tb and off < 1e-3 else "  <<<<<<"
+            print(f"{rel!s:62s} text identical={ta == tb} picture {pictures[0][0]} pixels off={off:.1e}{flag}")
+        elif p.suffix == ".json":
             ja, jb = json.loads(ta), json.loads(tb)
-            def close(u, v):
+            # Scores are differences divided by a standard deviation, kept to four decimals.
+            tolerance = 2e-3 if p.name.endswith("_classification.json") else 0.0
+            def close(u, v, tolerance=tolerance):
                 if isinstance(u, dict):
                     return isinstance(v, dict) and u.keys() == v.keys() and all(close(u[k], v[k]) for k in u)
                 if isinstance(u, list):
                     return isinstance(v, list) and len(u) == len(v) and all(close(i, j) for i, j in zip(u, v))
                 if isinstance(u, (int, float)) and not isinstance(u, bool):
-                    return abs(u - v) <= 1e-6 * max(abs(u), 1e-12)
+                    return isinstance(v, (int, float)) and abs(u - v) <= max(1e-6 * max(abs(u), 1e-12), tolerance)
                 return u == v or (isinstance(u, str) and "/py/" in u)
             ja.pop("sugar_pet_version", None); jb.pop("sugar_pet_version", None)
             print(f"{str(rel):62s} json close={close(ja, jb)}")

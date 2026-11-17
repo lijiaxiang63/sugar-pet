@@ -208,6 +208,86 @@ def cmd_zmap(args) -> int:
     return 1 if failed else 0
 
 
+def report_stem(path: str | Path) -> str:
+    """``sub-01_pet.nii.gz`` -> ``sub-01``: what the files about one image are named after."""
+    stem = _strip_ext(Path(path).name)
+    return stem[:-4] if stem.endswith("_pet") and len(stem) > 4 else stem
+
+
+def shared_report_stem(images) -> str | None:
+    """What is wrong if two of the images would get the same report: the second would replace the first.
+
+    ``a/pet.nii.gz`` and ``b/pet.nii.gz`` share a name, and so do
+    ``sub-01.nii.gz`` and ``sub-01_pet.nii.gz``.  Names that differ only in
+    case count as one, as they are one file on most Macs and on Windows.
+    """
+    first: dict[str, str] = {}
+    for path in images:
+        stem = report_stem(path)
+        if stem.casefold() in first:
+            return (
+                f"{first[stem.casefold()]} and {path} would both be written as {stem}_report.html; "
+                "rename one or run them separately"
+            )
+        first[stem.casefold()] = str(path)
+    return None
+
+
+def cmd_classify(args) -> int:
+    from .classify import PATTERNS, classify, default_checks
+    from .report import percent
+
+    reference = Reference.load(args.reference)
+    checks = default_checks(reference, args.method) if args.check is None else _split(args.check)
+    if checks == ["none"]:
+        checks = []
+    problem = _unknown_methods([args.method, *checks]) or shared_report_stem(args.images)
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
+        return 2
+    for method in (args.method, *checks):  # stop early if the reference cannot serve a method
+        reference.control_stats(method)
+        if args.covariates:
+            reference.control_model(method)
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+    rows, failed = [], 0
+    for path in args.images:
+        name = Path(path).name
+        try:
+            covariates = read_table(args.covariates, [path], reference.covariates)[0] if args.covariates else None
+            res = classify(
+                path,
+                reference=reference,
+                method=args.method,
+                checks=checks,
+                covariates=covariates,
+                p_threshold=args.p_threshold,
+                exclude=args.exclude,
+                max_iter=args.max_iter,
+            )
+        except (ValueError, OSError, ImageFileError) as err:  # keep going with the other images
+            failed += 1
+            print(f"error: {name}: {err}", file=sys.stderr)
+            continue
+        for note in res.result["warnings"]:
+            print(f"warning: {name}: {note}", file=sys.stderr)
+        files = res.save(out, report_stem(path), args.lang)
+        found = res.conclusion
+        scores = {p["id"]: percent(p["score"]) for p in res.result["patterns"]}
+        cells = [found[key] or "" for key in ("category", "pattern", "alternative", "confidence", "side")]
+        rows.append([str(path), *cells, *(str(scores[name]) for name in PATTERNS), files["report"].name])
+        print(f"{name}\t{found['category']}\t{found['pattern'] or '-'}\t{found['confidence'] or '-'}")
+
+    table = out / "classification.tsv"
+    with open(table, "w") as fh:
+        fh.write("\t".join(["image", "category", "pattern", "alternative", "confidence", "side", *PATTERNS, "report"]))
+        fh.write("\n")
+        fh.writelines("\t".join(r) + "\n" for r in rows)
+    print(f"Reports and classification.tsv written to {out}", file=sys.stderr)
+    return 1 if failed else 0
+
+
 def _lookup(tables: list[str], image: str, names: list[str]) -> dict[str, str]:
     """Covariates of one image, from whichever table lists it."""
     problems = []
@@ -401,6 +481,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_iterative_options(p)
     p.set_defaults(func=cmd_zmap)
+
+    p = sub.add_parser(
+        "classify", help="match a patient against the patterns of parkinsonian syndromes; writes a report"
+    )
+    p.add_argument("images", nargs="+", help="FDG-PET images of patients, in MNI space")
+    p.add_argument("-r", "--reference", required=True, help="reference folder built from healthy controls")
+    p.add_argument("-o", "--output", required=True, help="output folder")
+    p.add_argument("-m", "--method", default="hn", help="normalisation the classification rests on [hn]")
+    p.add_argument(
+        "--check",
+        action="append",
+        help="other normalisations the findings are checked with, or 'none' [ps, and white-matter if the reference has it]",
+    )
+    p.add_argument(
+        "--covariates", help="TSV/CSV table with the covariates of these images: W-scores instead of z-scores"
+    )
+    p.add_argument("--lang", choices=("en", "zh"), default="en", help="language of the report [en]")
+    _add_iterative_options(p)
+    p.set_defaults(func=cmd_classify)
 
     p = sub.add_parser("compare", help="voxel-wise comparison of two groups (needs the 'stats' extra)")
     p.add_argument("--group1", nargs="+", required=True, help="images of group 1, e.g. the patients")

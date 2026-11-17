@@ -152,7 +152,7 @@ func progress(done, total int) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <methods|normalize|build-reference|zmap|compare|reference-cluster|masks|labels|spatial-norm> ...")
+		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <methods|normalize|build-reference|zmap|classify|compare|reference-cluster|masks|labels|spatial-norm> ...")
 		os.Exit(2)
 	}
 	ctx := context.Background()
@@ -206,6 +206,8 @@ func main() {
 		os.Exit(normalize(rest))
 	case "zmap":
 		os.Exit(zmap(rest))
+	case "classify":
+		os.Exit(classify(rest))
 	case "compare":
 		compare(ctx, rest)
 	case "reference-cluster":
@@ -423,6 +425,103 @@ func zmap(rest []string) int {
 			fmt.Println(file)
 		}
 	}
+	if failed > 0 {
+		return 1
+	}
+	return 0
+}
+
+func classify(rest []string) int {
+	a, err := parse(rest, nil, nil)
+	check(err)
+	method := a.str("--method", "hn")
+	ref, err := core.LoadReference(need(a, "--reference"))
+	check(err)
+	checks := core.DefaultChecks(ref, method)
+	if given, ok := a.values["--check"]; ok {
+		checks = split(given)
+		if checks == nil || (len(checks) == 1 && checks[0] == "none") {
+			checks = []string{}
+		}
+	}
+	unknownMethods(append([]string{method}, checks...))
+	if first, second, stem, found := core.SharedReportStem(a.pos); found {
+		fail(2, "%s and %s would both be written as %s_report.html; rename one or run them separately", first, second, stem)
+	}
+	table := a.str("--covariates", "")
+	for _, m := range append([]string{method}, checks...) { // stop early if the reference cannot serve a method
+		_, err := ref.ControlStats(m)
+		check(err)
+		if table != "" {
+			_, err := ref.ControlModel(m)
+			check(err)
+		}
+	}
+	lang := a.str("--lang", "en")
+	if lang != "en" && lang != "zh" {
+		fail(2, "option --lang: choose en or zh, not '%s'", lang)
+	}
+	out := need(a, "--output")
+	check(os.MkdirAll(out, 0o755))
+	var rows []string
+	failed := 0
+	for _, path := range a.pos {
+		name := filepath.Base(path)
+		opt := core.DefaultClassifyOptions()
+		opt.Checks = checks
+		opt.PThreshold = a.num("--p-threshold", 0.01)
+		opt.Exclude = a.str("--exclude", "hypo")
+		opt.MaxIter = int(a.num("--max-iter", 1))
+		var res *core.Classification
+		var err error
+		if table != "" {
+			var found []map[string]string
+			if found, err = core.ReadTable(table, []string{path}, ref.Covariates()); err == nil {
+				opt.Covariates = found[0]
+			}
+		}
+		var img *core.Volume
+		if err == nil {
+			img, err = core.LoadImage(path)
+		}
+		if err == nil {
+			res, err = core.Classify(img, name, method, ref, opt)
+		}
+		if err != nil { // keep going with the other images
+			failed++
+			fmt.Fprintf(os.Stderr, "error: %s: %v\n", name, err)
+			continue
+		}
+		for _, w := range res.Warnings {
+			fmt.Fprintf(os.Stderr, "warning: %s: %s\n", name, w)
+		}
+		files, err := res.Save(out, core.ReportStem(path), lang)
+		check(err)
+		found := res.Conclusion
+		cells := []string{path, found.Category, found.Pattern, found.Alternative, found.Confidence, found.Side}
+		for _, id := range core.Patterns {
+			for _, p := range res.Patterns {
+				if p.ID == id {
+					cells = append(cells, strconv.Itoa(core.Percent(p.Score)))
+				}
+			}
+		}
+		rows = append(rows, strings.Join(append(cells, filepath.Base(files.Report)), "\t"))
+		dash := func(s string) string {
+			if s == "" {
+				return "-"
+			}
+			return s
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\n", name, found.Category, dash(found.Pattern), dash(found.Confidence))
+	}
+	head := append([]string{"image", "category", "pattern", "alternative", "confidence", "side"}, core.Patterns...)
+	text := strings.Join(append(head, "report"), "\t") + "\n"
+	for _, row := range rows {
+		text += row + "\n"
+	}
+	check(os.WriteFile(filepath.Join(out, "classification.tsv"), []byte(text), 0o644))
+	fmt.Fprintf(os.Stderr, "Reports and classification.tsv written to %s\n", out)
 	if failed > 0 {
 		return 1
 	}

@@ -20,6 +20,7 @@ var (
 	iconSliders = icon(`<path d="M2 4.5h5.5M11 4.5h3M2 11.5h2.5M8 11.5h6"/><circle cx="9.25" cy="4.5" r="1.75"/><circle cx="6.25" cy="11.5" r="1.75"/>`)
 	iconLayers  = icon(`<path d="M8 2 14 5 8 8 2 5z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/>`)
 	iconCurve   = icon(`<path d="M1.5 12c3 0 3.6-8.5 6.5-8.5S11.5 12 14.5 12"/><path d="M1.5 14h13"/>`)
+	iconReport  = icon(`<rect x="3" y="2.8" width="10" height="11.4" rx="1.4"/><path d="M6 2.8V1.6h4v1.2"/><path d="M5 9.2h1.5l1-2.4 1.5 4.2 1-1.8h1"/>`)
 	iconCompare = icon(`<circle cx="6" cy="8" r="4.2"/><circle cx="10" cy="8" r="4.2"/>`)
 	iconTarget  = icon(`<circle cx="8" cy="8" r="5.8"/><circle cx="8" cy="8" r="2.2"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2"/>`)
 	iconGrid    = icon(`<rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/>`)

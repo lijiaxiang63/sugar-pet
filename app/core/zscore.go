@@ -29,18 +29,51 @@ func DefaultZMapOptions() ZMapOptions {
 // With covariates the result is a W-score map: the image is compared with
 // what the controls predict for a person of that age and sex.
 func ZMap(img *Volume, method string, ref *Reference, opt ZMapOptions) (*Volume, []string, error) {
-	if _, err := ref.ControlStats(method); err != nil { // fail before doing any work
+	parts, err := zmapScores(img, method, ref, opt)
+	if err != nil {
 		return nil, nil, err
+	}
+	return parts.volume(img, method, ref), parts.warnings, nil
+}
+
+// zmapParts is the work of ZMap: the scores, the voxels that were scored,
+// and how they came about.
+type zmapParts struct {
+	scores   []float32
+	brain    []bool
+	res      *NormResult
+	adjusted bool // W-scores, not z-scores
+	warnings []string
+}
+
+// volume turns the scores into the image ZMap returns.
+func (p *zmapParts) volume(img *Volume, method string, ref *Reference) *Volume {
+	out := NewVolume(img.Dim, img.Aff)
+	copy(out.Data, p.scores)
+	kind := "z-score"
+	if p.adjusted {
+		kind = "w-score"
+	}
+	out.Descrip = "sugar-pet " + kind + " " + method + " factor=" + fmtG(p.res.Factor) + " n=" + itoa(ref.N)
+	if len(out.Descrip) > 79 {
+		out.Descrip = out.Descrip[:79]
+	}
+	return out
+}
+
+func zmapScores(img *Volume, method string, ref *Reference, opt ZMapOptions) (*zmapParts, error) {
+	if _, err := ref.ControlStats(method); err != nil { // fail before doing any work
+		return nil, err
 	}
 	var row []float64
 	var warnings []string
 	if opt.Covariates != nil {
 		if _, err := ref.ControlModel(method); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		var err error
 		if row, warnings, err = DesignRow(ref.Terms, opt.Covariates); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	normOpt := DefaultNormOptions()
@@ -48,7 +81,7 @@ func ZMap(img *Volume, method string, ref *Reference, opt ZMapOptions) (*Volume,
 	normOpt.PThreshold, normOpt.Exclude, normOpt.MaxIter = opt.PThreshold, opt.Exclude, opt.MaxIter
 	res, err := Normalize(img, method, normOpt)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	warnings = append(warnings, res.Warnings...)
 	grid := ref.OnGrid(img.Dim, img.Aff)
@@ -71,29 +104,22 @@ func ZMap(img *Volume, method string, ref *Reference, opt ZMapOptions) (*Volume,
 	data := res.Image.Data
 	gm, err := GetMask(MaskSpec{Name: "gray-matter"}, img.Dim, img.Aff)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	par, err := GetMask(MaskSpec{Name: "parenchyma"}, img.Dim, img.Aff)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	valid := validVoxels(data)
 	smoothed := Smooth(data, img.Dim, img.Aff, grid.FWHM)
-	out := NewVolume(img.Dim, img.Aff)
+	parts := &zmapParts{scores: make([]float32, nvox), brain: make([]bool, nvox), res: res, adjusted: row != nil, warnings: warnings}
 	for v := 0; v < nvox; v++ {
 		if (gm[v] || par[v]) && valid[v] && std[v] > 0 {
-			out.Data[v] = (smoothed[v] - mean[v]) / std[v]
+			parts.brain[v] = true
+			parts.scores[v] = (smoothed[v] - mean[v]) / std[v]
 		}
 	}
-	kind := "z-score"
-	if row != nil {
-		kind = "w-score"
-	}
-	out.Descrip = "sugar-pet " + kind + " " + method + " factor=" + fmtG(res.Factor) + " n=" + itoa(ref.N)
-	if len(out.Descrip) > 79 {
-		out.Descrip = out.Descrip[:79]
-	}
-	return out, warnings, nil
+	return parts, nil
 }
 
 // ClusterOptions are the settings of ReferenceCluster.

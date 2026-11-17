@@ -2,18 +2,15 @@
 
 **S**tandardized **U**ptake **G**lobal **A**nd **R**egional-normalization：脑 FDG-**PET** 强度归一化工具。
 
-[English](README.md)
+[English](README.md) · [使用文档](https://lijiaxiang63.github.io/sugar-pet/zh/)
 
-FDG-PET 的体素值受注射剂量、血糖、体重等因素影响，不同受试者的图像不能直接比较。
-**强度归一化**的做法是把整幅图像除以一个数，即**归一化因子**：
+由于注射剂量、血糖水平、体重等因素的影响，不同受试者之间的脑 FDG-PET 原始体素值不能直接对比。**强度归一化**的做法是把整幅图像除以一个常数（即**归一化因子**）：
 
 ```
 归一化后的图像 = 原图像 / 因子
 ```
 
-各种方法的区别只在于这个因子怎么估计。sugar-pet 提供常用的几种方法，并实现了
-[López-González 等, NeuroImage 2020](https://doi.org/10.1016/j.neuroimage.2020.117229)
-中基于直方图的方法（HN、iPS、iHN）。
+各种归一化方法的区别，本质上只在于这个因子怎么估计。`sugar-pet` 集成了领域内常用的多种方法，并实现了 [López-González 等, NeuroImage 2020](https://doi.org/10.1016/j.neuroimage.2020.117229) 中基于直方图的方法（HN、iPS、iHN）。
 
 ## 安装
 
@@ -21,14 +18,13 @@ FDG-PET 的体素值受注射剂量、血糖、体重等因素影响，不同受
 pip install git+https://github.com/lijiaxiang63/sugar-pet
 ```
 
-开发用：
+用于本地开发：
 
 ```bash
 git clone https://github.com/lijiaxiang63/sugar-pet && cd sugar-pet && uv sync
 ```
 
-需要 Python 3.10+，只依赖 numpy、scipy、nibabel。组间统计（`sugar-pet compare`）
-还需要 [GrouVox](https://github.com/lijiaxiang63/GrouVox)：
+需要 Python 3.10+，核心包只依赖 numpy、scipy 和 nibabel。如果需要使用组间统计功能（`sugar-pet compare`），还需一并安装 [GrouVox](https://github.com/lijiaxiang63/GrouVox)：
 
 ```bash
 pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
@@ -36,238 +32,203 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 
 ## 桌面应用
 
-[`app/`](app) 是 SUGAR-PET 桌面应用：方法与命令行相同，但不需要安装任何环境
-（不需要 Python；只有可选的“空间标准化”页面要调用 SPM，才需要 MATLAB）。它是一个约 12 MB 的原生程序，支持 macOS、
-Windows 和 Linux，用 Go 和 [MyGo](https://github.com/egoist/mygo) 的原生界面
-编写，界面有中文和英文。
+[`app/`](app) 目录下是配套的 SUGAR-PET 桌面应用。它与命令行版本使用同一套算法，但开箱即用，无需配置 Python 环境（只有可选的“空间标准化”页面在调用 SPM 时才需要 MATLAB）。应用体积约 12 MB，支持 macOS、Windows 和 Linux，基于 Go 和 [MyGo](https://github.com/egoist/mygo) 原生界面库编写，支持中英文界面切换。
 
 ![SUGAR-PET](app/screenshots/normalize-zh.png)
 
-页面按下文的推荐流程排列：**空间标准化**、**强度归一化**、**参考库**、**Z 值图**、
-**帕金森综合征分类**、**组间比较**、**参考簇**，以及内置的**掩膜与图谱**。文件可以直接拖到列表里。
-应用读写的文件与命令行完全一致（参考库文件夹、`factors.tsv`、输出文件名、
-团块报告、分类报告），两者可以混用。
+[使用文档](https://lijiaxiang63.github.io/sugar-pet/zh/)对桌面端的每个页面都提供了详细的分步说明和截图。
 
-两个“normalisation”是不同的步骤。**空间标准化**把原始空间的 PET 配准到 MNI 空间，
-即 `sugar-pet spatial-norm`，需要 MATLAB 和 SPM12/SPM25（应用会自动查找 MATLAB，
-SPM 文件夹需自行选择），只有图像还不在 MNI 空间时才用得到。**强度归一化**是本工具
-的主题：每幅图像除以各自的因子，不需要其他软件。
+左侧栏按推荐的分析顺序排列了各个功能页面：**空间标准化**、**强度归一化**、**参考库**、**Z 值图**、**帕金森综合征分类**、**组间比较**、**参考簇**以及内置的**掩膜与图谱**。文件可以直接拖放进列表。桌面端读写的目录和文件格式（参考库文件夹、`factors.tsv`、输出命名、团块报告、分类报告）与命令行版本完全一致，两者可以随时混用。
 
-macOS、Windows 和 Linux 的安装包在
-[发布页](https://github.com/lijiaxiang63/sugar-pet/releases)；推送标签 `v<版本号>`
-会自动构建并发布（[`release.yml`](.github/workflows/release.yml)）。也可以用
-Go 1.27+ 自行构建：
+需要注意区分两个“normalisation”：**空间标准化**是指把原始空间的 PET 图像配准到 MNI 标准空间（对应 `sugar-pet spatial-norm`），需要 MATLAB 和 SPM12/SPM25（应用会自动查找 MATLAB，SPM 路径需手动指定），只有图像尚未配准到 MNI 空间时才需要这一步。**强度归一化**则是本工具的核心：将每幅图像除以各自估计出的因子，不依赖任何外部软件。
+
+macOS、Windows 和 Linux 的预编译安装包可在[发布页](https://github.com/lijiaxiang63/sugar-pet/releases)下载；向仓库推送 `v<版本号>` 标签会自动触发构建与发布（[`release.yml`](.github/workflows/release.yml)）。也可以用 Go 1.27+ 自行编译：
 
 ```bash
 cd app
-go tool mygo build        # 本机平台，输出到 build/<系统>-<架构>/
+go tool mygo build        # 编译当前平台，产物输出到 build/<系统>-<架构>/
 go tool mygo build -platform darwin/universal,windows/amd64,linux/amd64
-go tool mygo dev          # 开发时直接运行
+go tool mygo dev          # 开发模式下直接运行
 ```
 
-数值核心（[`app/core`](app/core)）是本包的 Go 移植，包含 GrouVox 的双样本
-t 检验和多重比较校正。`app/parity/run.py` 用两种实现运行同样的命令并逐个比较
-输出：图像的差异约为取值范围的 1e-6，表格和团块报告完全一致。在 `app` 中运行
-`go test ./...` 会用合成图像把应用各页面的完整分析流程走一遍。macOS 版仅有临时
-签名、未公证：首次打开请右键选择“打开”。
+应用的数值核心（[`app/core`](app/core)）是 Python 包的 Go 移植版，同时内置了 GrouVox 的双样本 t 检验和多重比较校正。`app/parity/run.py` 会用两种实现分别运行相同的命令并逐项比对输出：图像数值差异在取值范围的 1e-6 量级，表格与团块报告完全一致。在 `app` 目录下执行 `go test ./...` 会用合成图像把应用各页面的完整流程跑一遍。macOS 版目前仅有临时签名、未经 Apple 公证，首次打开请右键点击并选择“打开”。
 
 ## 快速上手
 
-输入图像必须已经**空间标准化到 MNI 空间**（体素大小和包围盒不限）。
-还没有标准化的见[图像还不在 MNI 空间？](#图像还不在-mni-空间)。
+输入图像必须已经**空间标准化到 MNI 空间**（体素大小和包围盒不限）。如果图像还在原始空间，请先看[图像还不在 MNI 空间？](#图像还不在-mni-空间)。
 
 ```bash
-# 1. 参考区法：不需要其他数据
+# 1. 参考区法：无需额外对照数据
 sugar-pet normalize sub-01_pet.nii.gz -m cerebellum -o out/
 
-# 2. 直方图法（推荐）：先用健康对照建一次参考库 ...
+# 2. 直方图法（推荐）：先用健康对照建一次参考库……
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/
 
-# ... 之后每个患者都用它
+# ……之后每位患者都可以直接调用它
 sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 ```
 
-`out/` 中每个输入对应一幅归一化图像（`sub-01_desc-hn_pet.nii.gz`），
-另有 `factors.tsv` 记录每幅图像的因子。
+运行后，`out/` 目录下会为每幅输入生成对应的归一化图像（如 `sub-01_desc-hn_pet.nii.gz`），并附带一份记录所有因子的 `factors.tsv`。
 
 ## 方法
 
-终端里运行 `sugar-pet methods` 可查看同样的列表。
+在终端运行 `sugar-pet methods` 可以查看完整列表。
 
 | `-m`             | 因子的估计方式                                             | 需要对照 |
 | ---------------- | ---------------------------------------------------------- | :------: |
 | `whole-brain`    | 全脑平均摄取（灰质 + 白质）                                |    否    |
-| `cerebellum`     | 全小脑平均摄取（文中的 RRC）                               |    否    |
+| `cerebellum`     | 全小脑平均摄取（文献中的 RRC）                             |    否    |
 | `cerebellar-gm`  | 小脑灰质平均摄取                                           |    否    |
 | `pons`           | 脑桥中央平均摄取                                           |    否    |
 | `white-matter`   | 大脑深部白质平均摄取                                       |    否    |
 | `occipital`      | 枕叶皮层平均摄取                                           |    否    |
 | `sensorimotor`   | 初级感觉运动皮层平均摄取                                   |    否    |
-| `region`         | 任意自选区域的平均摄取（`--mask` 或 `--labels`，见下）     |    否    |
+| `region`         | 任意自选区域的平均摄取（通过 `--mask` 或 `--labels` 指定） |    否    |
 | `ps`             | **比例缩放**：灰质掩膜内的平均摄取                         |    否    |
-| `spm-global`     | SPM 的全局均值（高于全图均值 1/8 的所有体素）              |    否    |
-| `hn`             | **直方图归一化**：图像除以对照均值图，取比值中**出现最多**的值 | 是   |
-| `ips`            | **迭代 PS**：先做 PS，找出低代谢体素，去掉后重做 PS        |    是    |
-| `ihn`            | **迭代 HN**：先做 HN，找出低代谢体素，去掉后重做 HN        |    是    |
+| `spm-global`     | SPM 全局均值（高于全图均值 1/8 的所有体素的均值）          |    否    |
+| `hn`             | **直方图归一化**：图像除以对照均值图，取比值中**出现频率最高**的值 | 是 |
+| `ips`            | **迭代 PS**：先做 PS，剔除低代谢体素后重做 PS              |    是    |
+| `ihn`            | **迭代 HN**：先做 HN，剔除低代谢体素后重做 HN              |    是    |
 
-一次用多种方法：`-m cerebellum,ps,hn` 或 `-m all`。加 `--factors-only` 只输出因子表。
+支持一次传入多种方法，例如 `-m cerebellum,ps,hn` 或 `-m all`。如果只想算因子不输出图像，加上 `--factors-only` 即可。
 
-`ps` 和 `whole-brain` 与其他参考区法一样，都是直接取区域均值，只是区域不同：
-`ps` 用灰质（与文章一致），`whole-brain` 用灰质加白质。
+`ps` 和 `whole-brain` 在实现上与其他参考区法一样，都是直接取指定区域的均值，只是掩膜范围不同：`ps` 只取灰质（与原文一致），`whole-brain` 则包含灰质和白质。
 
-参考区相关的选项：
+参考区相关的常用选项：
 
 | 选项                 | 含义                                                             |
 | -------------------- | ---------------------------------------------------------------- |
-| `--mask 名称或文件`  | 换用其他区域：[内置掩膜](#内置掩膜)的名称，或自己的 MNI 空间 NIfTI 文件 |
-| `--labels 34,85`     | 用图谱标签组合出区域（`sugar-pet labels` 列出全部标签）          |
-| `--statistic median` | 取区域的中位数而不是均值（`ps` 也适用）                          |
-| `--target 50`        | 把输出缩放到“参考值 = 50”而不是 1（任何方法都可用）              |
+| `--mask 名称或文件`  | 指定其他区域：填入[内置掩膜](#内置掩膜)名称，或自己的 MNI 空间 NIfTI 文件 |
+| `--labels 34,85`     | 用图谱标签组合出自定义区域（运行 `sugar-pet labels` 查看所有标签） |
+| `--statistic median` | 取区域中位数而非均值（`ps` 也适用）                              |
+| `--target 50`        | 将输出缩放到“参考值 = 50”而非默认的 1（适用于所有方法）          |
 
-例如，文章里另外两个参考区是内置掩膜：`-m region --mask brainstem`（RRBS）和
-`-m region --mask temporal-left`（RRTL，选病灶**对侧**）。
+例如，原文中的另外两个参考区就可以直接调用内置掩膜：`-m region --mask brainstem`（RRBS）以及 `-m region --mask temporal-left`（RRTL，通常选病灶**对侧**）。
 
 ### 该选哪种？
 
-按照文章的结论：
+根据原文的对比结论：
 
-* **默认推荐 `hn`。** 不需要预先知道哪些脑区受累，是表现最好的数据驱动方法。
-  `ihn` 得到的因子几乎相同（原因见[实现说明](#实现说明及与原文的差异)）。
-* **低代谢范围大时 `ps` 有偏。** 病灶拉低了全脑均值，因子偏小，
-  正常组织反而显得**高**代谢。`ips` 能消除大部分偏差。
-* **参考区法只在参考区足够大、且确实不受疾病影响时才可靠。** 脑桥这类小区域噪声大。
+* **默认推荐 `hn`。** 它不需要预先假设哪些脑区未受累，在数据驱动方法中表现最好。`ihn` 算出的因子通常与 `hn` 相差无几（原因见[实现说明](#实现说明及与原文的差异)）。
+* **大范围低代谢时 `ps` 存在偏差。** 病灶会拉低全脑均值，导致因子偏小，正常脑区反而显得**高**代谢。`ips` 能消除绝大部分这类偏差。
+* **参考区法依赖先验假设。** 只有当参考区体积足够大且确实不受疾病影响时才可靠；像脑桥这样的小区域噪声往往较大。
 
-哪些区域不受累取决于疾病，举几个例子：
+不同疾病相对保留的脑区不同，下面是一些常见参考：
 
-| 疾病                     | 不宜作参考区             | 通常保留               |
-| ------------------------ | ------------------------ | ---------------------- |
-| 阿尔茨海默病             | —                        | 小脑、脑桥、感觉运动皮层 |
-| 多系统萎缩（MSA）        | 小脑、脑桥               | 枕叶                   |
-| 进行性核上性麻痹（PSP）  | 脑桥（邻近中脑萎缩）     | 枕叶、小脑             |
-| 皮质基底节综合征（CBS）  | 感觉运动皮层             | 枕叶、小脑             |
-| 路易体痴呆、后部皮质萎缩 | 枕叶                     | 小脑、感觉运动皮层     |
+| 疾病                     | 不宜作参考区             | 通常相对保留             |
+| ------------------------ | ------------------------ | ------------------------ |
+| 阿尔茨海默病（AD）       | —                        | 小脑、脑桥、感觉运动皮层 |
+| 多系统萎缩（MSA）        | 小脑、脑桥               | 枕叶皮层                 |
+| 进行性核上性麻痹（PSP）  | 脑桥（邻近萎缩的中脑）   | 枕叶皮层、小脑           |
+| 皮质基底节综合征（CBS）  | 感觉运动皮层             | 枕叶皮层、小脑           |
+| 路易体痴呆（DLB）、PCA   | 枕叶皮层                 | 小脑、感觉运动皮层       |
 
-以上只是经验规律，具体请结合所研究疾病及分期的文献判断。
+以上仅作经验参考，具体研究请结合疾病分期和最新文献判断。
 
-`hn`、`ips`、`ps` 都假设**大部分**灰质是正常的。如果疾病让几乎所有区域的摄取都下降，
-它们看不出来；这时用白质参考区或[参考簇](#参考簇)做敏感性分析会有帮助。
+需要注意，`hn`、`ips` 和 `ps` 都假设**大部分**灰质是正常的。如果某种疾病导致全脑几乎所有皮层摄取都弥漫性下降，它们是看不出来的；这时建议用白质参考区或[参考簇](#参考簇)做敏感性分析。
 
 ## 推荐流程
 
-适用于“患者与健康对照比较”的研究。写的时候主要考虑非典型帕金森综合征（MSA、PSP、CBS），
-这类疾病里常用的参考区（小脑、脑桥）往往本身就受累。
+适用于“患者组 vs. 健康对照组”的常规对比研究，设计时主要考虑了非典型帕金森综合征（MSA、PSP、CBS），这类疾病中传统参考区（小脑、脑桥）往往自身就存在病变。
 
-**1. 患者和对照用同样的方式处理。** 尽量来自同一台扫描仪、同样的重建参数，
-用同一套空间标准化，并且每幅标准化后的图像都目视检查一遍。
+**1. 统一预处理标准。** 患者和对照尽量来自同一台扫描仪、采用相同的重建参数，走同一套空间标准化流程，并且逐幅目视检查配准质量。
 
-**2. 用全部对照建一个参考库**，同时提供他们的年龄和性别：
+**2. 用全部对照建一个参考库**，同时提供年龄和性别信息：
 
 ```bash
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates participants.tsv --stats-for occipital,white-matter
 ```
 
-**3. 用 `hn` 做组间比较**，这是主分析。
+**3. 用 `hn` 做组间比较**作为主分析：
 
 ```bash
 sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r hc_reference/ -o stats/ --covariates participants.tsv
 ```
 
-它会把两组图像归一化、平滑，并在每个体素上做检验，模型里包含年龄和性别
-（详见[组间比较](#组间比较)）。如果想用其他统计软件，就用 `sugar-pet normalize` 输出归一化图像，
-并把那边的全局缩放关掉（SPM 里不选 proportional scaling，也不选 ANCOVA），因为图像已经归一化过了。
+该命令会自动完成两组归一化、平滑以及纳入年龄和性别的逐体素统计检验（详见[组间比较](#组间比较)）。如果你想导出到 SPM 等其他统计软件里分析，可以先用 `sugar-pet normalize` 生成归一化图像，然后在统计软件中关闭全局缩放（例如 SPM 里不选 proportional scaling，也不选 ANCOVA），避免重复归一化。
 
-**4. 看单个患者时，生成 W 值图**，它校正了年龄和性别：
+**4. 个案分析使用 W 值图**（已校正年龄和性别）：
 
 ```bash
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
 ```
 
-对诊断未明的患者，`sugar-pet classify` 会把这样的图与 MSA、PSP、CBD、DLB 和 PD 的
-代谢模式逐一比对，并生成报告，见[帕金森综合征分类](#帕金森综合征分类)。
+对于诊断尚未明确的患者，`sugar-pet classify` 可以将这样的分布图与 MSA、PSP、CBD、DLB 和 PD 的典型模式逐一比对并输出报告，详见[帕金森综合征分类](#帕金森综合征分类)。
 
-**5. 换两种参考区把第 3、4 步重做一遍**（先 `-m occipital`，再 `-m white-matter`），作为敏感性分析：
+**5. 换用另外两种参考区重跑第 3、4 步**（先 `-m occipital`，再 `-m white-matter`），作为敏感性分析：
 
 * `occipital`：解剖参考区，MSA、PSP、CBS 通常不累及枕叶。
-* `white-matter`：不假设“大部分灰质正常”，所以能显示 `hn` 看不到的弥漫性下降，但噪声更大。
+* `white-matter`：不依赖“大部分灰质正常”的假设，能够检出 `hn` 看不到的弥漫性下降，但噪声相对较大。
 
-如果结论不变，就报告 `hn` 的结果并说明做过这项检查；如果结论变了，要如实写出来：
-依赖于归一化方法的结果是不稳健的。
+如果结论保持一致，论文中报告 `hn` 结果并说明做过敏感性检查即可；如果结论随方法改变，则应如实说明结果对归一化方式敏感。
 
-**论文里应写明**：所用方法（`hn`），对照的例数、年龄范围和性别构成，
-平滑核（默认 8 mm），以及 sugar-pet 的版本。
+**论文方法部分建议写明**：所使用的归一化方法（`hn`）、对照组的例数、年龄范围与性别构成、平滑核大小（默认 8 mm），以及 `sugar-pet` 版本号。
 
-**应避免**：
+**常见误区（建议避开）**：
 
-* 用疾病会累及的区域作参考区（MSA 的小脑和脑桥、PSP 的脑桥、CBS 的感觉运动皮层）；
-* 患者和对照用不同的方法归一化；
-* 患者和对照年龄不同时使用未校正的 Z 值；
-* 用同一批患者生成[参考簇](#参考簇)，又拿它来检验这批患者。
+* 使用疾病本身会累及的脑区作参考区（如 MSA 用小脑和脑桥、PSP 用脑桥、CBS 用感觉运动皮层）；
+* 患者组和对照组采用不同的归一化方法；
+* 两组年龄存在差异时直接看未校正的普通 Z 值；
+* 用同一批患者生成[参考簇](#参考簇)，再拿它来检验这批患者自己。
 
 ## 健康对照参考库
 
-`hn`、`ips`、`ihn` 需要把每幅图像与一组健康对照比较。
-`sugar-pet build-reference` 把对照汇总成一个小文件夹：
+`hn`、`ips` 和 `ihn` 需要将每幅受试者图像与健康对照组进行比较。`sugar-pet build-reference` 会将对照组汇总成一个结构紧凑的文件夹：
 
 | 文件               | 内容                                                  |
 | ------------------ | ----------------------------------------------------- |
-| `template.nii.gz`  | 对照经比例缩放后的均值图（HN 的“正常模板”）           |
-| `ps_std.nii.gz`    | 对照经 PS 后的标准差                                  |
-| `hn_mean.nii.gz`、`hn_std.nii.gz` | 对照经 HN 后的均值与标准差             |
-| `mask.nii.gz`      | 估计因子所用的体素（灰质掩膜）                        |
-| `reference.json`   | 对照例数、平滑核、每个对照的因子                      |
+| `template.nii.gz`  | 对照组经比例缩放后的均值图（HN 的“正常模板”）         |
+| `ps_std.nii.gz`    | 对照组经 PS 归一化后的标准差图                        |
+| `hn_mean.nii.gz`、`hn_std.nii.gz` | 对照组经 HN 归一化后的均值与标准差图   |
+| `mask.nii.gz`      | 估计因子所用的体素范围（灰质掩膜）                    |
+| `reference.json`   | 对照例数、平滑核大小及每例对照的因子                  |
 | `stats-<方法>_mean.nii.gz`、`..._std.nii.gz` | 仅在使用 `--stats-for` 时生成：对照经其他方法归一化后的均值与标准差（用于 [Z 值图](#z-值图)） |
-| `model-<方法>_beta.nii.gz`、`..._sd.nii.gz` | 仅在使用 `--covariates` 时生成：对照的摄取与年龄、性别的关系（用于 [W 值](#校正年龄和性别w-值)） |
+| `model-<方法>_beta.nii.gz`、`..._sd.nii.gz` | 仅在使用 `--covariates` 时生成：摄取与年龄、性别的回归参数（用于 [W 值](#校正年龄和性别w-值)） |
 
-对照应与患者来自同一台扫描仪、同样的重建参数，并经过相同的预处理，建议不少于 20 例。
+对照组应与患者来自同一台扫描仪、采用相同的重建参数并经过一致的预处理，建议不少于 20 例。
 
-默认情况下，对照和之后的每个患者都会用 8 mm 高斯核平滑，但**只用于估计因子**；
-输出图像是原图除以因子，不会被平滑。如果图像已经平滑过，两个命令都加 `--fwhm 0`。
+默认情况下，对照和后续的每幅患者图像都会先用 8 mm 高斯核平滑，但这**只用于估计归一化因子**；最终写出的归一化图像是原图除以因子，本身不会被平滑。如果输入图像在导入前已经平滑过，请给两个命令都加上 `--fwhm 0`。
 
 ## 迭代方法的选项
 
 | 选项              | 默认值  | 含义                                                         |
 | ----------------- | ------- | ------------------------------------------------------------ |
-| `--p-threshold`   | `0.01`  | 与对照相比 p 值（未校正）小于该阈值的体素被排除              |
-| `--exclude`       | `hypo`  | `hypo`：只排除低代谢体素（原文做法）；`both`：高代谢也排除   |
-| `--max-iter`      | `1`     | 重新估计的次数（原文为 1）                                   |
-| `--save-masks`    | 关      | 同时保存估计每个因子所用的掩膜                               |
+| `--p-threshold`   | `0.01`  | 与对照相比未校正 p 值小于该阈值的体素会被剔除                |
+| `--exclude`       | `hypo`  | `hypo`：仅剔除低代谢体素（原文做法）；`both`：同时剔除高代谢体素 |
+| `--max-iter`      | `1`     | 重新估计的迭代次数（原文为 1）                               |
+| `--save-masks`    | 关      | 同时保存估计每个因子时实际用到的体素掩膜                     |
 
 ## Z 值图
 
-Z 值图表示归一化后的图像每个体素偏离对照多远：`z = (图像 − 对照均值) / 对照标准差`，
-负值表示摄取低于对照。
+Z 值图用于逐体素衡量归一化后的图像偏离对照的程度：`z = (图像 − 对照均值) / 对照标准差`，负值表示摄取低于对照。
 
 ```bash
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o zmaps/
 ```
 
-输出 `sub-01_desc-hn_zmap.nii.gz`。比较之前，图像会按对照的方式平滑。
-`ps`、`ips`、`hn`、`ihn` 用任何参考库都可以。参考区法要求对照也用同一个参考区缩放过，
-所以建参考库时要指明：
+输出文件名为 `sub-01_desc-hn_zmap.nii.gz`。计算前，输入图像会按照与对照组相同的方式进行平滑。`ps`、`ips`、`hn` 和 `ihn` 可以直接使用任何参考库；但如果要用参考区法（如 `cerebellum`、`pons`）算 Z 值图，建库时必须提前用 `--stats-for` 保存对应的统计量：
 
 ```bash
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --stats-for cerebellum,pons
 sugar-pet zmap patients/*.nii.gz -m pons -r hc_reference/ -o zmaps/
 ```
 
-（`--stats-for all` 保存所有参考区。）
+（传 `--stats-for all` 可一次性保存所有参考区的统计量。）
 
 ### 校正年龄和性别（W 值）
 
-摄取随年龄变化，男女之间也略有差别。如果患者比对照年龄大，普通 Z 值会把年龄效应和疾病混在一起。
-W 值把每个患者与“对照中**同年龄、同性别**的人应有的摄取”相比：
-`w = (图像 − 预测值) / 对照的残差标准差`。
+脑内 FDG 摄取会随年龄变化，男女之间也存在轻微差异。如果患者普遍比对照组年龄大，普通 Z 值会把衰老效应和疾病效应混在一起。W 值则将每位患者与“对照组中**同年龄、同性别**人群的预期摄取”作比较：`w = (图像 − 模型预测值) / 对照组残差标准差`。
 
-建参考库时提供对照的年龄、性别表，算图时提供患者的表：
+建参考库时传入对照的协变量表，算图时传入患者的协变量表即可：
 
 ```bash
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates controls.tsv
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates patients.tsv
 ```
 
-输出 `sub-01_desc-hn_wmap.nii.gz`。不加 `--covariates` 时，`zmap` 仍用同一个参考库输出普通 Z 值。
+输出文件名为 `sub-01_desc-hn_wmap.nii.gz`。不传 `--covariates` 时，`zmap` 仍可复用同一个参考库输出普通 Z 值图。
 
-表格是 TSV 或 CSV 文件，例如 BIDS 的 `participants.tsv`：
+协变量表支持 TSV 或 CSV 格式，例如 BIDS 规范的 `participants.tsv`：
 
 ```
 participant_id	age	sex
@@ -275,15 +236,11 @@ sub-01	63	F
 sub-02	58	M
 ```
 
-每幅图像按 `participant_id` 找到对应的行（`sub-01` 对应 `sub-01_..._pet.nii.gz`），
-也可以用名为 `image` 的列直接写文件名。只读取需要校正的那几列。
-默认 `--adjust-for age,sex`；任何数值列或恰好两种取值的列都可以。
-年龄按线性关系处理；患者年龄超出对照的年龄范围时会给出警告。
+每幅图像按 `participant_id` 自动匹配对应行（如 `sub-01` 对应 `sub-01_..._pet.nii.gz`），也可以用 `image` 列直接写明文件名。程序只会读取参与校正的列。默认 `--adjust-for age,sex`，任何连续数值列或恰好包含两种取值的分类列都可以纳入。年龄按线性关系建模；如果患者年龄超出对照组的年龄范围，程序会给出提示。
 
 ## 帕金森综合征分类
 
-对一位诊断未明的患者，`sugar-pet classify` 找出其摄取低于或高于对照的脑区，
-判断这种分布像哪一种帕金森综合征，并生成报告：
+面对诊断尚未明确的患者，`sugar-pet classify` 会找出其摄取显著低于或高于对照的脑区，评估这种分布与几种常见帕金森综合征代谢模式的匹配度，并生成可视化报告：
 
 ```bash
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates controls.tsv --stats-for white-matter
@@ -292,96 +249,70 @@ sugar-pet classify sub-01_pet.nii.gz -r hc_reference/ -o reports/ --covariates p
 
 | `reports/` 中的文件              | 内容                                                        |
 | -------------------------------- | ----------------------------------------------------------- |
-| `sub-01_report.html`             | 报告，中文或英文（`--lang`）。单个网页，不依赖其他文件；在浏览器中可打印为 PDF |
-| `sub-01_desc-hn_wmap.nii.gz`     | 报告所依据的图（不给 `--covariates` 时为 `_zmap`）          |
-| `sub-01_classification.json`     | 报告中的全部数值：脑区、模式、结论                          |
-| `classification.tsv`             | 每幅图像一行：结论及与各模式的匹配度                        |
+| `sub-01_report.html`             | 独立 HTML 报告（`--lang` 可选 `en` 或 `zh`），不依赖外部资源，可在浏览器中直接打印为 PDF |
+| `sub-01_desc-hn_wmap.nii.gz`     | 生成报告所依据的偏离图（未传 `--covariates` 时为 `_zmap`）  |
+| `sub-01_classification.json`     | 报告中所有的结构化数值：脑区得分、模式评分、结论            |
+| `classification.tsv`             | 汇总表，每幅图像一行，记录最终结论与各模式的匹配度          |
 
-输出文件按图像文件名命名（`sub-01_pet.nii.gz` 对应 `sub-01`）。如果两幅图像会得到相同的名字
-（例如 `a/pet.nii.gz` 和 `b/pet.nii.gz`），程序会在写入任何文件之前拒绝运行，
-以免一位患者的报告覆盖另一位的。
+输出文件按输入图像的主文件名命名（`sub-01_pet.nii.gz` 对应 `sub-01`）。如果不同目录的两幅图像会映射到相同的文件名（例如 `a/pet.nii.gz` 和 `b/pet.nii.gz`），程序会在写入任何文件之前直接报错退出，防止互相覆盖。
 
-在[桌面应用](#桌面应用)里，这就是“帕金森综合征分类”页面：列出每位患者的结论，并可直接打开报告。
+在[桌面应用](#桌面应用)中，这对应“帕金森综合征分类”页面，可直接列出每位患者的结论并一键打开报告。
 
 ![SUGAR-PET 的帕金森综合征分类页面](app/screenshots/classify-zh.png)
 
-**它是辅助决策工具，不是诊断。** 诊断标准（MSA 2022、PSP 2017、DLB 2017）只把
-FDG-PET 列为支持性证据；下面的规则来自文献，没有用你的患者数据拟合或验证过。
-结果须结合临床表现、MRI 和多巴胺转运体显像来判断。
+**注意：这是科研辅助决策工具，不能代替临床诊断。** 现行临床诊断标准（MSA 2022、PSP 2017、DLB 2017）均只将 FDG-PET 作为支持性证据；内置规则整理自文献，并未在你的患者队列上拟合或验证过。实际判读需结合临床表现、结构 MRI 和多巴胺转运体显像。
 
-整个流程一图看懂：
+整个判定流程如下：
 
 ![sugar-pet classify 如何从一幅图像得出结论](docs/classify-flow-zh.svg)
 
-各步骤的文字说明：
+具体步骤说明：
 
-1. **与对照比较得到一幅图。** 图像先变成 [W 值图](#校正年龄和性别w-值)
-   （不给 `--covariates` 时为 Z 值图），默认用 `hn`：诊断未明的患者无法事先指定
-   哪个区域未受累，而 `hn` 不需要这样的区域。
-2. **各脑区评分。** 在 17 个脑区内取图的平均值，左右分别计算：尾状核、壳核及其后部、
-   苍白球、丘脑、中脑、脑桥、小脑半球和蚓部、内侧与外侧额叶、中央周围区、顶叶、
-   楔前叶、后扣带回、颞叶外侧和枕叶皮层。评分 ≤ −2 记为代谢减低，≥ 2 记为代谢增高。
-   脑区至少有一半位于图像范围内才予评分。
-3. **换其他归一化方式再算一遍。** 默认用比例缩放（`ps`）；若建参考库时用了
-   `--stats-for white-matter`，还会用白质参考区（建议加上：它不依赖灰质）。
-   其他方式下不出现的发现会被标出。**增高**只有在每种归一化方式下都出现才算数，
-   因为全局均值缩放会让未受累的区域显得高代谢
-   （[Borghammer 等，2009](https://www.sciencedirect.com/science/article/abs/pii/S1053811908008896)）。
-4. **模式匹配**，每种模式 0 到 100 分：核心特征占 60%，支持特征占 40%。
+1. **生成与对照比较的偏离图。** 图像先转化为 [W 值图](#校正年龄和性别w-值)（未传 `--covariates` 时为 Z 值图），默认采用 `hn`：因为对于诊断未明的患者，无法提前指定哪个脑区未受累，而 `hn` 不需要预先指定参考区。
+2. **计算各脑区评分。** 在 17 个预设脑区上分别计算左右两侧的均值：尾状核、壳核及其后部、苍白球、丘脑、中脑、脑桥、小脑半球和蚓部、内侧与外侧额叶、中央周围区、顶叶、楔前叶、后扣带回、颞叶外侧和枕叶皮层。评分 ≤ −2 记为代谢减低，≥ 2 记为代谢增高。脑区至少有一半体积落在图像有效范围内才会参与评分。
+3. **跨归一化方式交叉核对。** 默认还会用比例缩放（`ps`）复核一遍；如果建参考库时加上了 `--stats-for white-matter`，还会一并用白质参考区核对（建议加上，它不依赖灰质假设）。其他方式下未能重现的异常会在报告中标出。其中，**代谢增高**只有在所有归一化方式下都成立时才会被采信，因为全局缩放很容易让未受累的正常脑区显得“相对高代谢”（[Borghammer 等，2009](https://www.sciencedirect.com/science/article/abs/pii/S1053811908008896)）。
+4. **模式匹配打分。** 每种模式按 0 ~ 100 分计，核心特征占 60%，支持特征占 40%。
 
 | 模式    | 核心特征 | 支持特征 |
 | ------- | -------- | -------- |
-| MSA-P   | 壳核 ↓（后部为著） | 脑桥 ↓、小脑 ↓ |
+| MSA-P   | 壳核 ↓（以后部为著） | 脑桥 ↓、小脑 ↓ |
 | MSA-C   | 小脑 ↓ | 脑桥 ↓、壳核 ↓ |
 | PSP     | 中脑 ↓、内侧额叶及前扣带回 ↓ | 尾状核 ↓、丘脑 ↓、额叶外侧 ↓ |
 | CBD/CBS | 一侧中央周围区和顶叶皮层 ↓，且明显重于对侧 | 同侧丘脑 ↓、壳核 ↓、额叶外侧 ↓ |
 | DLB     | 枕叶皮层 ↓ | 顶叶皮层 ↓、楔前叶 ↓、后扣带回相对保留（岛征） |
 | PD      | 壳核、苍白球、丘脑、脑桥、小脑、感觉运动皮层 ↑ | 纹状体、脑干、小脑无减低 |
 
-结论为以下之一：
+最终结论分为五种情况：
 
-* **某一模式**：某模式得分不低于 50，且领先下一种疾病至少 15 分
-  （得分 ≥ 70 且领先 ≥ 30 时置信度为“高”，否则为“中等”；MSA-P 与 MSA-C 视为同一种病）。
-  置信度只按在每种归一化方式下都成立的发现来定：仅凭这些发现得分不足 50 时，置信度为“低”，报告中会注明；
-* **无法区分**：两种疾病得分接近，两者都会列出；
-* **部分特征**：得分在 30 到 50 之间，不足以判定为该模式；
-* **PD 模式**：没有非典型帕金森综合征的模式，但有相对代谢增高；
-* **未见模式**：对帕金森综合征患者而言更倾向于 PD（其早期图像常接近正常）。
+* **某一模式**：某模式得分 ≥ 50，且领先次高疾病至少 15 分（得分 ≥ 70 且领先 ≥ 30 时置信度为“高”，否则为“中等”；MSA-P 与 MSA-C 视为同一种疾病）。置信度仅依据在所有归一化方式下都成立的发现来评定：如果仅靠这些稳健发现得分不足 50，置信度会降为“低”并在报告中注明；
+* **无法区分**：两种疾病得分接近，两者都会一并列出；
+* **部分特征**：得分在 30 到 50 之间，尚不足以判定为该模式；
+* **PD 模式**：未见非典型帕金森综合征的模式，但存在帕金森病典型的相对代谢增高；
+* **未见模式**：对于有帕金森症状的患者而言，这通常更倾向于 PD（早期 PD 图像常接近正常）。
 
 | 选项           | 默认值  | 含义                                                           |
 | -------------- | ------- | -------------------------------------------------------------- |
-| `-m`           | `hn`    | 分类所依据的归一化方式                                         |
-| `--check`      | `ps`，参考库有时加 `white-matter` | 用于核对的其他归一化方式，或 `none` |
-| `--covariates` | 无      | 含患者年龄、性别的表格：输出 W 值                              |
+| `-m`           | `hn`    | 分类所依据的主归一化方式                                       |
+| `--check`      | `ps`，参考库有时加 `white-matter` | 用于交叉核对的其他归一化方式，或设为 `none` |
+| `--covariates` | 无      | 含患者年龄、性别的表格（输出 W 值）                            |
 | `--lang`       | `en`    | 报告语言：`en` 或 `zh`                                         |
 
-对照应来自同一扫描仪和重建方式，采集条件与患者一致（同为睁眼或闭眼）；单例分析建议
-不少于 30 例，不足时报告中会注明。
+对照组应来自同一台扫描仪和重建方式，采集条件与患者一致（同为睁眼或闭眼）；单病例分析建议不少于 30 例，不足时报告中会给出提示。
 
-**为什么用规则，而不是训练好的分类器？** 经过验证的其他方法都依赖无法随软件分发的东西。
-疾病相关协方差模式（PDRP、MSARP、PSPRP；
-[Tang 等，2010](https://doi.org/10.1016/S1474-4422(10)70002-8)）不公开提供，
-需要在每台扫描仪上重新推导并验证；深度学习模型的权重不公开，且依赖扫描仪和重建方式。
-每个单位都能做到的，是把一位患者与本单位的对照比较，再对照已发表的模式来读图，
-这也正是目视判读[单例 SPM 图](https://doi.org/10.1111/ene.13269)的做法。
-本命令把这种读法固定下来，结果可重复，并列出所用的每一个数值。
+**为什么采用规则匹配，而不是训练好的分类器？** 现有的已验证算法大多依赖无法随开源软件分发的组件：疾病相关协方差模式（如 PDRP、MSARP、PSPRP；[Tang 等，2010](https://doi.org/10.1016/S1474-4422(10)70002-8)）不公开发布，且需要在每台扫描仪上重新推导与验证；深度学习模型的权重也大多未公开，且高度依赖扫描仪和重建参数。相比之下，每个中心都能独立完成的，是将单个患者与本中心的健康对照作比较，再对照已发表的典型模式来读片——这正是临床核医学科目视判读[单例 SPM 图](https://doi.org/10.1111/ene.13269)的常规做法。`sugar-pet classify` 只是把这一读片逻辑固化成可重复的量化流程，并把用到的每一个数值透明地列出来。
 
 ## 参考簇
 
-除了从图谱里选参考区，也可以让一组患者的数据自己指出哪些体素不受疾病影响
-（[Yakushev 等, 2009](https://doi.org/10.1016/j.neuroimage.2008.07.015)）。
-比例缩放之后，未受累的区域与对照相比会显得**高**代谢，因为病灶拉低了全脑均值。
-这些体素就作为参考区：
+除了从图谱里挑选参考区，还可以让一组患者的数据自己指出哪些体素未受疾病影响（[Yakushev 等, 2009](https://doi.org/10.1016/j.neuroimage.2008.07.015)）。做完比例缩放后，未受累的正常区域相对于对照会显得“高代谢”，因为病灶拉低了全脑均值。将这些体素提取出来就可以作为参考区：
 
 ```bash
 sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o cluster.nii.gz
 sugar-pet normalize patients/*.nii.gz -m region --mask cluster.nii.gz -o out/
 ```
 
-`--p-threshold`（默认 0.001，未校正）和 `--min-cluster`（默认 1 mL）决定保留哪些体素。
+通过 `--p-threshold`（默认 0.001，未校正）和 `--min-cluster`（默认 1 mL）可以控制保留哪些体素。
 
-参考簇依赖于生成它的那组患者。之后再拿同一组患者与对照比较属于循环论证：
-应当用另一批患者生成参考簇，或做交叉验证。
+需要注意，参考簇依赖于生成它的那组患者。如果再用同一批患者与对照组作比较就属于循环论证，应当用另一批独立患者提取参考簇，或者做交叉验证。
 
 ## 组间比较
 
@@ -389,36 +320,35 @@ sugar-pet normalize patients/*.nii.gz -m region --mask cluster.nii.gz -o out/
 sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r hc_reference/ -o stats/ --covariates participants.tsv
 ```
 
-这一条命令依次完成：
+运行这一条命令会自动完成下面几步：
 
-1. 用同一种方法把两组的每幅图像归一化；
-2. 平滑（默认 8 mm）；
-3. 在每个体素上做两样本 t 检验，模型里包含年龄和性别；
-4. 做多重比较校正，并列出通过校正的簇及其解剖位置。
+1. 用同一种方法归一化两组的所有图像；
+2. 空间平滑（默认 8 mm）；
+3. 在每个体素上执行纳入年龄和性别的双样本 t 检验；
+4. 进行多重比较校正，并输出通过校正的显著团块及其解剖脑区位置。
 
-统计部分由 [GrouVox](https://github.com/lijiaxiang63/GrouVox) 完成（见[安装](#安装)）。
-结果是“第 1 组减第 2 组”：把患者放在第 1 组时，**T 值为负表示低代谢**。
+统计检验由 [GrouVox](https://github.com/lijiaxiang63/GrouVox) 完成（安装方式见[安装](#安装)）。对比方向固定为“第 1 组减第 2 组”，因此把患者放在第 1 组时，**负 T 值代表低代谢**。
 
 | `stats/` 中的文件                        | 内容                                             |
 | ---------------------------------------- | ------------------------------------------------ |
-| `group1_vs_group2_T.nii.gz`              | 未设阈值的 T 值图                                |
-| `ClusterThresholded_group1_vs_group2_T.nii.gz` | 只保留通过校正的簇的 T 值图                |
-| `ClusterReport_group1_vs_group2_T.csv`   | 每个簇一行：大小、峰值、AAL 和 Harvard-Oxford 脑区 |
+| `group1_vs_group2_T.nii.gz`              | 未设阈值的原始 T 值图                            |
+| `ClusterThresholded_group1_vs_group2_T.nii.gz` | 仅保留通过校正的显著团块的 T 值图          |
+| `ClusterReport_group1_vs_group2_T.csv`   | 团块列表：体素数、峰值坐标、AAL 和 Harvard-Oxford 脑区 |
 | `group1_vs_group2_factors.tsv`           | 每幅图像的归一化因子                             |
-| `group1_vs_group2_mask.nii.gz`           | 参与检验的体素                                   |
-| `group1_vs_group2_beta.nii.gz`、`..._cohen_f2.nii.gz` | 模型系数与效应量                    |
+| `group1_vs_group2_mask.nii.gz`           | 实际参与检验的体素掩膜                           |
+| `group1_vs_group2_beta.nii.gz`、`..._cohen_f2.nii.gz` | 模型回归系数与效应量（Cohen's f²）  |
 
 | 选项               | 默认值             | 含义                                                     |
 | ------------------ | ------------------ | -------------------------------------------------------- |
-| `--covariates`     | 无                 | 一个或多个表格，需覆盖所有图像，例如患者一个、对照一个（[格式](#校正年龄和性别w-值)） |
-| `--adjust-for`     | `age,sex`          | 放进模型的列                                             |
-| `--correction`     | `grf`              | `grf`：簇水平校正（`--voxel-p 0.001`、`--cluster-p 0.05`）；`fdr`：体素水平（`--q 0.05`）；`none`。均为双侧 |
-| `--analysis-mask`  | `gray-matter`      | 参与检验的体素：内置掩膜或自己的文件                     |
-| `--fwhm`           | 与参考库相同       | 平滑核（mm）；图像已平滑过就设 0                         |
-| `--name`           | `group1_vs_group2` | 结果文件的前缀                                           |
-| `--keep-images`    | 关                 | 保留参与检验的归一化、平滑后的图像                       |
+| `--covariates`     | 无                 | 一个或多个协变量表，需覆盖所有图像，如患者和对照各一张表（[格式](#校正年龄和性别w-值)） |
+| `--adjust-for`     | `age,sex`          | 纳入回归模型的协变量列                                   |
+| `--correction`     | `grf`              | `grf`：团块水平校正（`--voxel-p 0.001`、`--cluster-p 0.05`）；`fdr`：体素水平（`--q 0.05`）；`none`。均为双侧检验 |
+| `--analysis-mask`  | `gray-matter`      | 参与检验的体素范围：内置掩膜或自定义文件                 |
+| `--fwhm`           | 与参考库相同       | 平滑核（mm）；图像已平滑过则设为 0                       |
+| `--name`           | `group1_vs_group2` | 输出文件的前缀                                           |
+| `--keep-images`    | 关                 | 保留参与检验的归一化、平滑后的中间图像                   |
 
-每个人只应出现一次：检验假设各受试者相互独立。
+注意不要重复纳入同一位受试者，双样本 t 检验要求样本之间相互独立。
 
 ## Python 接口
 
@@ -430,31 +360,31 @@ ref.save("hc_reference")
 
 res = normalize("sub-01_pet.nii.gz", method="ihn", reference=ref)
 print(res.factor)  # 归一化因子
-print(res.info)  # 所用体素数、被排除的比例等
+print(res.info)    # 所用体素数、被剔除的比例等
 res.save("sub-01_desc-ihn_pet.nii.gz")
-res.mask_image()  # 估计因子所用的体素
+res.mask_image()   # 估计因子所用的体素掩膜
 
-z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # NIfTI 图像
+z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # 返回 NIfTI 图像对象
 
-# W 值：建参考库时给出对照的协变量，算图时给出患者的
+# W 值：建库时传入对照协变量，算图时传入患者协变量
 ref = Reference.build(control_files, covariates={"age": ages, "sex": sexes})
 w = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref, covariates={"age": 63, "sex": "F"})
 ```
 
-对一位患者做[分类](#帕金森综合征分类)：
+对单个患者做[帕金森综合征分类](#帕金森综合征分类)：
 
 ```python
 from sugar_pet import classify
 
 res = classify("sub-01_pet.nii.gz", reference=ref, covariates={"age": 63, "sex": "F"})
-res.conclusion  # {'category': 'pattern', 'pattern': 'msa-p', 'confidence': 'high', ...}
-res.result["regions"]  # 每个脑区、每一侧在各归一化方式下的评分
+res.conclusion          # {'category': 'pattern', 'pattern': 'msa-p', 'confidence': 'high', ...}
+res.result["regions"]   # 每个脑区、左右两侧在各归一化方式下的评分
 res.result["patterns"]  # 与每种模式的匹配度及其依据
-res.zmap  # 图，NIfTI 图像
-res.save("reports", "sub-01", lang="zh")  # 图、报告和数据
+res.zmap                # 偏离图（NIfTI 图像对象）
+res.save("reports", "sub-01", lang="zh")  # 保存图、报告与数据
 ```
 
-参考区可以是内置掩膜、自己的文件，或内置图谱的任意标签组合：
+参考区支持内置掩膜、自定义文件或内置图谱的任意标签组合：
 
 ```python
 from sugar_pet import atlas_labels, labels_mask, reference_cluster
@@ -468,7 +398,7 @@ cluster = reference_cluster(patient_files, ref)
 res = normalize(img, "region", mask=cluster)
 ```
 
-组间比较（需要 GrouVox）：
+组间比较（需要安装 GrouVox）：
 
 ```python
 from sugar_pet import compare_groups
@@ -480,53 +410,34 @@ print(res.n_clusters, res.files["cluster_report"])
 
 ## 内置掩膜
 
-`gray-matter`、`parenchyma`、`cerebellum`、`cerebellar-gm`、`pons`、`white-matter`、
-`occipital`、`sensorimotor`、`brainstem`、`temporal-left`、`temporal-right`。
-`sugar-pet masks -o masks/` 可把它们导出成 NIfTI 文件以便查看，
-`sugar-pet labels` 列出 `--labels` 可用的图谱标签。
+内置掩膜包括：`gray-matter`、`parenchyma`、`cerebellum`、`cerebellar-gm`、`pons`、`white-matter`、`occipital`、`sensorimotor`、`brainstem`、`temporal-left`、`temporal-right`。运行 `sugar-pet masks -o masks/` 可以将它们导出为 NIfTI 文件方便查看，`sugar-pet labels` 则列出 `--labels` 可用的全部图谱标签。
 
-掩膜来自两个可自由再分发的 MNI 资源（重采样到 2 mm）：ICBM 2009c 组织概率图和
-[CerebrA 图谱](https://doi.org/10.1038/s41597-020-0557-9)，使用时会自动重采样到每幅图像的网格。
+这些掩膜制作自两个可自由再分发的 MNI 资源（已重采样到 2 mm）：ICBM 2009c 组织概率图和 [CerebrA 图谱](https://doi.org/10.1038/s41597-020-0557-9)，使用时会自动重采样到每幅输入图像的网格。
 
-脑桥掩膜取 CerebrA 脑干在 z = −44 到 −26 mm 之间的部分并在层面内腐蚀，
-是一个实用的脑桥中央区，而非解剖金标准。`occipital` 是整个枕叶皮层；
-只要枕叶外侧皮层时用 `--labels 34,85`。使用其他 MNI 版本或图谱时请传入自己的掩膜。
+其中，脑桥掩膜取自 CerebrA 脑干在 z = −44 到 −26 mm 之间的部分并做了层面内腐蚀，是一个实用的脑桥中央区，而非解剖学金标准；`occipital` 覆盖整个枕叶皮层，如果只需要枕叶外侧皮层，请用 `--labels 34,85`。如果你的研究使用其他 MNI 版本或图谱，建议传入自定义的掩膜文件。
 
 ## 图像还不在 MNI 空间？
 
-任何空间标准化方法都可以（SPM、ANTs 等）。如果只有 PET 且装有 SPM，
-可以用自带的小封装（SPM “Old Normalise” + PET 模板，需要 MATLAB）：
+你可以用任何顺手的工具做空间标准化（SPM、ANTs 等）。如果手头只有 PET（没有配套 MRI）且本机装有 SPM，可以直接使用包里自带的小封装（底层调用 SPM “Old Normalise” + PET 模板，需要 MATLAB）：
 
 ```bash
 sugar-pet spatial-norm raw/*_pet.nii.gz -o mni/ --spm-path /path/to/spm12 --jobs 4
 ```
 
-它会围绕头部裁剪、把原点移到脑中心，输出 2 mm 的 MNI 空间图像。结果请务必目视检查。
-桌面应用的**空间标准化**页面做的是同一件事。
+它会自动围绕头部裁剪图像、将原点移到大脑中心，然后输出 2 mm 的 MNI 空间图像。配准完成后请务必逐幅目视检查。桌面端的**空间标准化**页面执行的是完全相同的流程。
 
 ## 实现说明及与原文的差异
 
-* **HN。** 在灰质掩膜内计算比值图（受试者 / 模板），其直方图的峰值就是因子。
-  直接取直方图最大值会随分箱宽度变化，因此先用高斯核平滑直方图（核密度估计）再找峰。
-* **找异常体素。** 原文用 SPM 的两样本 t 检验（单个患者对照组）。sugar-pet 直接计算等价的
-  等方差 t 统计量 `t = (x − 均值) / (标准差 · √(1 + 1/n))`，自由度 n − 1，不需要 SPM。
-* **iPS。** 去掉部分体素后，剩余体素在对照中的均值也不再是 1。
-  因此 sugar-pet 用受试者均值除以对照模板在**同一批体素**上的均值。
-  `--literal-ips` 则按原文字面做法直接取均值。
-* **iHN ≈ HN。** 低代谢体素位于比值直方图的尾部，离峰很远，去掉它们几乎不移动峰的位置。
-  所以 `hn` 和 `ihn` 的因子通常只差千分之几，这种稳健性正是 HN 好用的原因。
-* **统一的尺度。** `ps`、`ips`、`hn`、`ihn` 都按“健康大脑灰质掩膜均值约为 1”来定标。
-* **参考簇。** 两样本 t 检验（患者 > 对照，等方差）直接由患者图像和参考库里保存的
-  均值、标准差算出，不需要再读对照图像。
-* **W 值。** 在每个体素上，把归一化后的对照对协变量做普通最小二乘回归。
-  与 [La Joie 等, 2012](https://doi.org/10.1523/JNEUROSCI.2170-12.2012) 一样，
-  残差除以对照的残差标准差，不另加预测不确定性那一项。
-* **有意不做的。** 把图像标准化成零均值、单位方差（深度学习前常用）既平移又缩放，
-  摄取比值就丢了。SSM/PCA 协方差分析里的对数变换和双中心化属于那种分析本身，
-  而且事先怎么缩放都不影响它的结果。
+* **HN。** 在灰质掩膜内计算比值图（受试者 / 模板），取比值直方图的峰值作为因子。由于直接取直方图最大值会受分箱宽度影响，程序会先用高斯核平滑直方图（核密度估计）再找峰。
+* **剔除异常体素。** 原文使用 SPM 的双样本 t 检验（单个患者 vs. 对照组）。`sugar-pet` 直接计算等价的等方差 t 统计量 `t = (x − 均值) / (标准差 · √(1 + 1/n))`（自由度 n − 1），因此无需依赖 SPM。
+* **iPS。** 剔除部分体素后，剩余体素在对照组中的均值通常不再严格等于 1。因此 `sugar-pet` 用受试者均值除以对照模板在**同一批剩余体素**上的均值。如果想严格按原文字面公式直接取均值，可以加上 `--literal-ips`。
+* **iHN ≈ HN。** 低代谢体素大多落在比值直方图的尾部，离主峰很远，去掉它们几乎不移动峰的位置。因此 `hn` 和 `ihn` 的因子通常只差千分之几，这种抗干扰性正是 HN 好用的原因。
+* **尺度统一。** `ps`、`ips`、`hn` 和 `ihn` 都标定在“健康大脑灰质掩膜均值约为 1”的尺度上。
+* **参考簇。** 双样本 t 检验（患者 > 对照，等方差）直接利用患者图像和参考库里保存的均值、标准差计算，无需重复读取对照图像。
+* **W 值。** 在每个体素上，将归一化后的对照图像对协变量做普通最小二乘回归。与 [La Joie 等, 2012](https://doi.org/10.1523/JNEUROSCI.2170-12.2012) 一致，残差直接除以对照组的残差标准差，不额外加入预测不确定性项。
+* **为什么不做零均值单位方差标准化？** 深度学习预处理常用的 z-score 标准化既平移又缩放，会破坏 PET 的摄取比值。至于 SSM/PCA 协方差分析中的对数变换和双中心化，本身就属于该分析方法的一部分，且事先怎么做线性缩放都不会影响最终结果。
 
-在模拟图像中（大范围皮层病灶、代谢下降 40%，见 `tests/`），因子的误差为：
-`ps` −3.7%，`ips` −0.5%，`hn` 和 `ihn` 小于 0.1%，排序与原文一致。
+在模拟图像测试中（大范围皮层病灶、代谢下降 40%，见 `tests/`），各方法的因子误差分别为：`ps` −3.7%，`ips` −0.5%，`hn` 和 `ihn` 均小于 0.1%，排序与原文报告一致。
 
 ## 开发
 
@@ -536,12 +447,20 @@ uv run pytest
 uv run ruff check .
 ```
 
-`scripts/build_atlas.py` 用于从 MNI 原始下载文件重新生成内置图谱。
-`scripts/classify_flowchart.py` 用于重画分类流程图（`docs/classify-flow-en.svg` 和 `-zh.svg`）；
-图中的阈值是写在脚本里的，`classify.py` 中的阈值改动后要在脚本里同步修改。
+* `scripts/build_atlas.py`：用于从 MNI 原始下载文件重新生成内置图谱。
+* `scripts/classify_flowchart.py`：用于重绘分类流程图（`docs/classify-flow-en.svg` 和 `-zh.svg`）；图中的阈值硬编码在脚本里，修改 `classify.py` 中的阈值后记得同步更新。
+* 分类报告的文案和样式表（`classify_text.json`、`report.css`）位于 `src/sugar_pet/data`，桌面端在 `app/core/data` 下有一份副本；两者不一致时测试会报错。
 
-分类报告的文字和样式表（`classify_text.json`、`report.css`）放在 `src/sugar_pet/data`，
-桌面应用在 `app/core/data` 里另有一份副本；两者不一致时测试会失败。
+[使用文档](https://lijiaxiang63.github.io/sugar-pet/zh/)是位于 [`docs/`](docs) 的 VitePress 站点，包含英文和中文（`docs/zh`）两个版本：
+
+```bash
+cd docs
+npm install
+npm run dev               # 在 http://localhost:5173/sugar-pet/ 本地预览
+sh scripts/screenshots.sh # 调用桌面应用重新截取文档截图（需要 Go 和 pngquant）
+```
+
+向 `main` 分支推送涉及 `docs/` 的改动时，GitHub Actions 会自动构建并部署到 GitHub Pages（[`docs.yml`](.github/workflows/docs.yml)）。
 
 ## 参考文献
 
@@ -583,6 +502,4 @@ uv run ruff check .
 
 ## 许可
 
-代码采用 MIT 许可。内置图谱文件适用
-[`src/sugar_pet/data/LICENSE-MNI`](src/sugar_pet/data/LICENSE-MNI) 中的 MNI 许可。
-仅供科研使用，不是医疗器械。
+代码部分采用 MIT 许可；内置图谱文件适用 [`src/sugar_pet/data/LICENSE-MNI`](src/sugar_pet/data/LICENSE-MNI) 中的 MNI 许可。本工具仅供科研使用，不作为医疗器械。

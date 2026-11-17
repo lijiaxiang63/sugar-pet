@@ -2,20 +2,21 @@
 
 **S**tandardized **U**ptake **G**lobal **A**nd **R**egional-normalization for brain FDG-**PET**.
 
-[中文说明](README_zh.md)
+[中文说明](README_zh.md) · [User guide](https://lijiaxiang63.github.io/sugar-pet/)
 
-FDG-PET voxel values depend on the injected dose, blood glucose, body weight and
-more, so two scans cannot be compared directly. *Intensity normalisation* fixes
-this by dividing each image by one number, the **normalisation factor**.
-sugar-pet estimates that factor with the methods people actually use, including
-the histogram-based methods of
+Raw FDG-PET voxel values depend on injected dose, blood glucose, body weight,
+and other scan-specific factors, so two scans cannot be compared directly.
+*Intensity normalisation* addresses this by dividing each image by a single
+number, the **normalisation factor**. `sugar-pet` estimates that factor using
+standard reference-region and global methods as well as the histogram-based
+methods of
 [López-González et al., NeuroImage 2020](https://doi.org/10.1016/j.neuroimage.2020.117229):
 
 ```
 normalised image = image / factor
 ```
 
-Everything else is just a different way of finding `factor`.
+The only difference between methods is how `factor` is estimated.
 
 ## Install
 
@@ -46,6 +47,9 @@ program (about 12 MB) for macOS, Windows and Linux, written in Go with
 [MyGo](https://github.com/egoist/mygo)'s native UI, in English and Chinese.
 
 ![SUGAR-PET](app/screenshots/normalize-en.png)
+
+The [user guide](https://lijiaxiang63.github.io/sugar-pet/) walks through the
+app step by step, with screenshots of every page.
 
 Its pages follow the workflow below: **Spatial Normalisation**,
 **Intensity Normalisation**, **Reference**, **Z-score Maps**,
@@ -633,6 +637,19 @@ written out in it, so change them there when they change in `classify.py`.
 The wording and the style sheet of the classification report
 (`classify_text.json`, `report.css`) live in `src/sugar_pet/data` and, as a
 copy for the desktop app, in `app/core/data`; a test fails when the two differ.
+
+The [user guide](https://lijiaxiang63.github.io/sugar-pet/) is a VitePress site
+in [`docs/`](docs), in English and Chinese (`docs/zh`):
+
+```bash
+cd docs
+npm install
+npm run dev               # the guide on http://localhost:5173/sugar-pet/
+sh scripts/screenshots.sh # redraw its screenshots from the app (needs Go and pngquant)
+```
+
+A push to `main` that touches `docs/` publishes it on GitHub Pages
+([`docs.yml`](.github/workflows/docs.yml)).
 
 ## References
 

@@ -14,3 +14,8 @@ work/
 *.nii
 !src/sugar_pet/data/*.nii.gz
 .DS_Store
+
+# the user guide (docs/, VitePress)
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

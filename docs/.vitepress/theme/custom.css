@@ -1,0 +1,139 @@
+/* The blue of the app's buttons for links, the colours of its icon for the
+   name on the home page. */
+:root {
+  --vp-c-brand-1: #1d5fd6;
+  --vp-c-brand-2: #2f74ea;
+  --vp-c-brand-3: #2563eb;
+  --vp-c-brand-soft: rgba(37, 99, 235, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #ffb020 10%, #ff5a3c 50%, #d12f8f 90%);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #ffb02055 30%, #d12f8f44 70%);
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-brand-1: #7aa7ff;
+  --vp-c-brand-2: #5a8ff5;
+  --vp-c-brand-3: #2f6fe6;
+}
+
+/* The screenshot on the home page: let it look like a window. */
+.VPHero .image-src {
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  max-width: min(560px, 92vw);
+  max-height: none;
+}
+
+@media (min-width: 960px) {
+  .VPHero .image-container {
+    transform: none;
+  }
+  .VPHero .image-src {
+    max-width: 560px;
+  }
+}
+
+/* The numbered list under a screenshot: numbers that look like its marks. */
+.vp-doc ol.steps {
+  list-style: none;
+  padding-left: 0;
+  counter-reset: step var(--start, 0);
+}
+
+.vp-doc ol.steps > li {
+  position: relative;
+  padding-left: 38px;
+  counter-increment: step;
+}
+
+.vp-doc ol.steps > li + li {
+  margin-top: 14px;
+}
+
+.vp-doc ol.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e5484d;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* The workflow on the tutorial's first page. */
+.flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.flow a {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s;
+}
+
+.flow a:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+.flow .n {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+}
+
+.flow .t {
+  display: block;
+  margin: 2px 0 4px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.flow .d {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--vp-c-text-2);
+}
+
+/* Room for the screenshots and tables: a wider column on wide screens. */
+:root {
+  --vp-layout-max-width: 1600px;
+}
+
+@media (min-width: 1280px) {
+  .VPDoc.has-aside .container {
+    max-width: 1232px !important;
+  }
+  .VPDoc.has-aside .content-container {
+    max-width: 848px !important;
+  }
+}
+
+/* The line under the name on the home page, on one line in Chinese too. */
+@media (min-width: 960px) {
+  .VPHero .text {
+    font-size: 46px;
+    line-height: 1.2;
+  }
+}
+
+/* Pictures in the text (the flowchart of the classification has a white
+   background of its own). */
+.vp-doc p > img {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+}

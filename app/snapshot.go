@@ -91,16 +91,34 @@ func (a *app) demo() {
 	a.norm.methods["cerebellum"] = true
 	a.setReference("/Users/ada/study/hc_reference")
 	a.norm.output = "/Users/ada/study/normalised"
+	a.norm.outDir = a.norm.output
+	for i, f := range [][2]string{{"5.81437", "5.42206"}, {"6.20915", "5.96384"}, {"4.97203", "4.51870"}, {"5.53866", "5.30129"}, {"6.74052", "6.18845"}, {"5.12790", "4.89317"}} {
+		image := filepath.Base(patient(i + 1))
+		a.norm.rows = append(a.norm.rows,
+			normRow{image: image, method: "hn", factor: f[0], voxels: "193204"},
+			normRow{image: image, method: "cerebellum", factor: f[1], voxels: "22750"})
+	}
+	a.norm.st.ok = Tf("%d image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅图像 × %d 种方法。", 6, 2)
 
-	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"cerebellum"}}
+	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"occipital", "white-matter"}}
 	info.Covariates = []struct {
 		Name string `json:"name"`
 	}{{"age"}, {"sex"}}
 	a.ref.current, a.ref.info = a.norm.reference, info
 	a.ref.output = "/Users/ada/study/hc_reference"
+	a.ref.statsFor["occipital"], a.ref.statsFor["white-matter"] = true, true
+	a.ref.cov.path = "/Users/ada/study/participants.tsv"
+	a.ref.cov.table = &core.Table{Path: a.ref.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 28)}
+	a.ref.cov.adjust = map[string]bool{"age": true, "sex": true}
 	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
 	a.zmap.covTable = "/Users/ada/study/participants.tsv"
 	a.zmap.output = "/Users/ada/study/zmaps"
+	a.zmap.outDir = a.zmap.output
+	for i, r := range [][2]string{{"-6.41", "9.8%"}, {"-5.07", "6.3%"}, {"-3.12", "2.6%"}, {"-7.85", "12.4%"}, {"-4.66", "5.1%"}, {"-5.93", "8.7%"}} {
+		image := filepath.Base(patient(i + 1))
+		a.zmap.rows = append(a.zmap.rows, zmapRow{image: image, method: "hn", file: core.OutputName(image, "hn", "wmap"), lowest: r[0], share: r[1]})
+	}
+	a.zmap.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", 6)
 
 	cl := &a.classify
 	cl.files.files = a.zmap.files.files[:3]

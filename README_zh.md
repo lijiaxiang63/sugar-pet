@@ -118,13 +118,13 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 **1. 患者和对照用同样的方式处理。** 尽量来自同一台扫描仪、同样的重建参数，
 用同一套空间标准化，并且每幅标准化后的图像都目视检查一遍。
 
-**2. 用全部对照建一个参考库，**同时提供他们的年龄和性别：
+**2. 用全部对照建一个参考库**，同时提供他们的年龄和性别：
 
 ```bash
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates participants.tsv --stats-for occipital,white-matter
 ```
 
-**3. 用 `hn` 做归一化。**这是主分析。
+**3. 用 `hn` 做归一化**，这是主分析。
 
 ```bash
 sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -o normalised/
@@ -134,7 +134,7 @@ sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -
 统计软件里的全局缩放要关掉（SPM 里不选 proportional scaling，也不选 ANCOVA），
 因为图像已经归一化过了。
 
-**4. 看单个患者时，生成 W 值图，**它校正了年龄和性别：
+**4. 看单个患者时，生成 W 值图**，它校正了年龄和性别：
 
 ```bash
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
@@ -148,10 +148,10 @@ sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates p
 如果结论不变，就报告 `hn` 的结果并说明做过这项检查；如果结论变了，要如实写出来：
 依赖于归一化方法的结果是不稳健的。
 
-**论文里应写明：**所用方法（`hn`），对照的例数、年龄范围和性别构成，
+**论文里应写明**：所用方法（`hn`），对照的例数、年龄范围和性别构成，
 平滑核（默认 8 mm），以及 sugar-pet 的版本。
 
-**应避免：**
+**应避免**：
 
 * 用疾病会累及的区域作参考区（MSA 的小脑和脑桥、PSP 的脑桥、CBS 的感觉运动皮层）；
 * 患者和对照用不同的方法归一化；

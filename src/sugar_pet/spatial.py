@@ -163,6 +163,10 @@ def spatial_normalize(
     matlab = matlab or find_matlab()
     if not matlab:
         raise RuntimeError("MATLAB was not found; pass its path with matlab=...")
+    # MATLAB runs in the work folder, where a path relative to this one is not found.
+    found = shutil.which(matlab)
+    if found:
+        matlab = str(Path(found).absolute())
 
     cleanup = work_dir is None
     work = Path(tempfile.mkdtemp(prefix="sugarpet_")) if cleanup else Path(work_dir)
@@ -178,6 +182,9 @@ def spatial_normalize(
         native = []
         for i, src in enumerate(inputs):
             dst = work / f"img{i:05d}.nii"
+            # A work folder that is kept may hold the warped image of an earlier
+            # run, of another subject perhaps: it must not pass for this one's.
+            dst.with_name("w" + dst.name).unlink(missing_ok=True)
             prepare_native(Path(src), dst)
             native.append(dst)
 

@@ -18,6 +18,14 @@ func Tf(en, zh string, args ...any) string { return fmt.Sprintf(T(en, zh), args.
 
 func toString(v any) string { return fmt.Sprint(v) }
 
+// uiLang is the language of the app, as the reports name it.
+func uiLang() string {
+	if chinese {
+		return "zh"
+	}
+	return "en"
+}
+
 type label struct{ en, zh string }
 
 func (l label) String() string { return T(l.en, l.zh) }

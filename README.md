@@ -49,10 +49,11 @@ program (about 12 MB) for macOS, Windows and Linux, written in Go with
 
 Its pages follow the workflow below: **Spatial Normalisation**,
 **Intensity Normalisation**, **Reference**, **Z-score Maps**,
-**Compare Groups**, **Reference Cluster**, and the built-in
+**Classify Parkinsonism**, **Compare Groups**, **Reference Cluster**, and the built-in
 **Masks & Atlas**. Files can be dropped onto the lists. The app reads and
 writes the same files as the command line (reference folders, `factors.tsv`,
-output names, cluster reports), so the two can be mixed.
+output names, cluster reports, classification reports), so the two can be
+mixed.
 
 The two normalisations are different steps. *Spatial* normalisation warps a
 native-space PET into MNI space; it is `sugar-pet spatial-norm`, needs
@@ -204,6 +205,10 @@ sex:
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
 ```
 
+For a patient whose diagnosis is open, `sugar-pet classify` reads such a map
+against the patterns of MSA, PSP, CBD, DLB and PD and writes a report: see
+[Classifying parkinsonism](#classifying-parkinsonism).
+
 **5. Repeat steps 3 and 4 with two other references** (`-m occipital`, then
 `-m white-matter`) as a sensitivity analysis:
 
@@ -314,6 +319,100 @@ default; any column works if it is numeric or has exactly two values. Age
 enters as a straight line, and you get a warning when a patient is older or
 younger than every control.
 
+## Classifying parkinsonism
+
+Given the scan of one patient whose diagnosis is open, `sugar-pet classify`
+finds where uptake is lower or higher than in the controls, says which of the
+parkinsonian syndromes that pattern looks like, and writes a report:
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates controls.tsv --stats-for white-matter
+sugar-pet classify sub-01_pet.nii.gz -r hc_reference/ -o reports/ --covariates patients.tsv --lang zh
+```
+
+| File in `reports/`               | Content                                                     |
+| -------------------------------- | ----------------------------------------------------------- |
+| `sub-01_report.html`             | The report, in English or Chinese (`--lang`). One page that needs no other file; print it to PDF from a browser |
+| `sub-01_desc-hn_wmap.nii.gz`     | The map the report rests on (`_zmap` without `--covariates`) |
+| `sub-01_classification.json`     | Every number of the report: regions, patterns, conclusion   |
+| `classification.tsv`             | One row per image: conclusion and the match with each pattern |
+
+**It is decision support, not a diagnosis.** The diagnostic criteria (MSA 2022,
+PSP 2017, DLB 2017) count FDG-PET as supportive only, and the rules below come
+from the literature: they were not fitted to or validated on your patients.
+Read the result with the clinical findings, MRI and dopamine-transporter
+imaging.
+
+The whole procedure at a glance:
+
+![How sugar-pet classify gets from one image to a conclusion](docs/classify-flow-en.svg)
+
+The steps in words:
+
+1. **A map against the controls.** The image becomes a [W-score map](#adjusting-for-age-and-sex-w-scores)
+   (a z-score map without `--covariates`), with `hn` by default: for a patient
+   without a diagnosis you cannot say which region the disease spares, and
+   `hn` does not need one.
+2. **Regional scores.** The map is averaged over 17 regions, left and right on
+   their own: caudate, putamen and its posterior part, pallidum, thalamus,
+   midbrain, pons, cerebellar hemispheres and vermis, medial and lateral
+   frontal, peri-central, parietal, precuneus, posterior cingulate, lateral
+   temporal and occipital cortex. From −2 a region counts as hypometabolic,
+   from 2 as hypermetabolic.
+3. **The same under other normalisations.** By default proportional scaling
+   (`ps`), and a white-matter reference if the reference was built with
+   `--stats-for white-matter` (recommended: it does not rest on gray matter).
+   A finding the others do not show is marked. An *increase* counts only if
+   every normalisation shows it, because global scaling makes spared regions
+   look hypermetabolic ([Borghammer et al., 2009](https://www.sciencedirect.com/science/article/abs/pii/S1053811908008896)).
+4. **Pattern match**, from 0 to 100 for each pattern: 60% for its core
+   features, 40% for the supportive ones.
+
+| Pattern | Core features | Supportive features |
+| ------- | ------------- | ------------------- |
+| MSA-P   | putamen ↓ (posterior part first) | pons ↓, cerebellum ↓ |
+| MSA-C   | cerebellum ↓ | pons ↓, putamen ↓ |
+| PSP     | midbrain ↓, medial frontal cortex and anterior cingulate ↓ | caudate ↓, thalamus ↓, lateral frontal cortex ↓ |
+| CBD/CBS | peri-central and parietal cortex ↓ on one side, clearly more than on the other | thalamus ↓, putamen ↓, lateral frontal cortex ↓ on that side |
+| DLB     | occipital cortex ↓ | parietal cortex ↓, precuneus ↓, posterior cingulate preserved (island sign) |
+| PD      | putamen, pallidum, thalamus, pons, cerebellum, sensorimotor cortex ↑ | no decrease in striatum, brainstem or cerebellum |
+
+The conclusion is one of:
+
+* **a pattern**, when one scores at least 50 and leads the next disease by 15
+  (confidence *high* from 70 with a lead of 30, else *moderate*; MSA-P and
+  MSA-C count as one disease). The confidence goes by the findings that hold
+  under every normalisation: if those alone score below 50, it is *low*, and
+  the report says so;
+* **indeterminate**, when two diseases score alike: both are named;
+* **partial features** of a pattern (30 to 50), which is not enough to assign it;
+* **PD pattern**, when no pattern of atypical parkinsonism is there but the
+  relative increase is;
+* **no pattern**: in a patient with parkinsonism this favours PD, whose scan
+  is often close to normal early on.
+
+| Option         | Default | Meaning                                                        |
+| -------------- | ------- | -------------------------------------------------------------- |
+| `-m`           | `hn`    | Normalisation the classification rests on                      |
+| `--check`      | `ps`, and `white-matter` if the reference has it | Other normalisations to check with, or `none` |
+| `--covariates` | none    | Table with the age and sex of the patients: W-scores           |
+| `--lang`       | `en`    | Language of the report: `en` or `zh`                           |
+
+Use controls from the same scanner and reconstruction, scanned like the
+patients (eyes open or closed alike); 30 or more are recommended for the map
+of a single patient, and the report says so when there are fewer.
+
+**Why rules and not a trained classifier?** The validated alternatives need
+things that cannot be shipped. Disease-related covariance patterns (PDRP,
+MSARP, PSPRP; [Tang et al., 2010](https://doi.org/10.1016/S1474-4422(10)70002-8))
+are not distributed and must be derived again and validated on each scanner;
+deep-learning models keep their weights private and depend on scanner and
+reconstruction. What every site can do is compare one patient with its own
+controls and read the map against the published patterns, which is how
+[single-subject SPM maps](https://doi.org/10.1111/ene.13269) are read by eye.
+This command does that reading in a fixed, reproducible way and shows every
+number it used.
+
 ## Reference cluster
 
 Instead of choosing a reference region from an atlas, you can let a patient
@@ -393,6 +492,19 @@ z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # a NIfTI image
 # W-scores: build the reference with the controls' covariates, then pass the patient's
 ref = Reference.build(control_files, covariates={"age": ages, "sex": sexes})
 w = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref, covariates={"age": 63, "sex": "F"})
+```
+
+[Classifying](#classifying-parkinsonism) one patient:
+
+```python
+from sugar_pet import classify
+
+res = classify("sub-01_pet.nii.gz", reference=ref, covariates={"age": 63, "sex": "F"})
+res.conclusion  # {'category': 'pattern', 'pattern': 'msa-p', 'confidence': 'high', ...}
+res.result["regions"]  # the score of every region, each side, under each normalisation
+res.result["patterns"]  # the match with each pattern and the features behind it
+res.zmap  # the map, a NIfTI image
+res.save("reports", "sub-01", lang="zh")  # map, report and numbers
 ```
 
 A reference region can be a built-in mask, your own file, or any set of labels
@@ -500,7 +612,13 @@ uv run ruff check .
 ```
 
 `scripts/build_atlas.py` regenerates the bundled atlas files from the original
-MNI downloads.
+MNI downloads. `scripts/classify_flowchart.py` redraws the flowchart of the
+classification (`docs/classify-flow-en.svg` and `-zh.svg`); the thresholds are
+written out in it, so change them there when they change in `classify.py`.
+
+The wording and the style sheet of the classification report
+(`classify_text.json`, `report.css`) live in `src/sugar_pet/data` and, as a
+copy for the desktop app, in `app/core/data`; a test fails when the two differ.
 
 ## References
 
@@ -517,6 +635,28 @@ MNI downloads.
   *Sci Data* 2020;7:237.
 * Fonov V, Evans AC, Botteron K, et al. Unbiased average age-appropriate
   atlases for pediatric studies. *NeuroImage* 2011;54:313–327.
+* Meyer PT, Frings L, Rücker G, Hellwig S. 18F-FDG PET in parkinsonism:
+  differential diagnosis and evaluation of cognitive impairment.
+  *J Nucl Med* 2017;58:1888–1898.
+* Caminiti SP, Alongi P, Majno L, et al. Evaluation of an optimized
+  [18F]fluoro-deoxy-glucose positron emission tomography voxel-wise method to
+  early support differential diagnosis in atypical Parkinsonian disorders.
+  *Eur J Neurol* 2017;24:687–e26.
+* Tang CC, Poston KL, Eckert T, et al. Differential diagnosis of parkinsonism:
+  a metabolic imaging study using pattern analysis. *Lancet Neurol* 2010;9:149–158.
+* Niethammer M, Tang CC, Feigin A, et al. A disease-specific metabolic brain
+  network associated with corticobasal degeneration. *Brain* 2014;137:3036–3046.
+* Borghammer P, Cumming P, Aanerud J, Gjedde A. Artefactual subcortical
+  hyperperfusion in PET studies normalized to global mean: lessons from
+  Parkinson's disease. *NeuroImage* 2009;45:249–257.
+* Wenning GK, Stankovic I, Vignatelli L, et al. The Movement Disorder Society
+  criteria for the diagnosis of multiple system atrophy. *Mov Disord* 2022;37:1131–1148.
+* Höglinger GU, Respondek G, Stamelou M, et al. Clinical diagnosis of
+  progressive supranuclear palsy: the Movement Disorder Society criteria.
+  *Mov Disord* 2017;32:853–864.
+* McKeith IG, Boeve BF, Dickson DW, et al. Diagnosis and management of dementia
+  with Lewy bodies: fourth consensus report of the DLB Consortium.
+  *Neurology* 2017;89:88–100.
 
 ## License
 

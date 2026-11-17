@@ -46,6 +46,16 @@ def zmap(
 
     Voxels outside the brain, or not covered by the image, are set to 0.
     """
+    z, _brain, res, row, ref = _zmap(image, method, reference, covariates, p_threshold, exclude, max_iter)
+    out = nib.Nifti1Image(z, res.image.affine)
+    out.header.set_xyzt_units("mm")
+    kind = "z-score" if row is None else "w-score"
+    out.header["descrip"] = f"sugar-pet {kind} {method} factor={res.factor:.6g} n={ref.n}"[:79]
+    return out
+
+
+def _zmap(image, method, reference, covariates, p_threshold, exclude, max_iter):
+    """The work of :func:`zmap`: the scores, the voxels that were scored, and how they came about."""
     ref = reference if isinstance(reference, Reference) else Reference.load(reference)
     ref.control_stats(method)  # fail before doing any work
     row = None
@@ -53,7 +63,7 @@ def zmap(
         ref.control_model(method)
         row, notes = design_row(ref.meta["covariates"], covariates)
         for note in notes:
-            warnings.warn(note, stacklevel=2)
+            warnings.warn(note, stacklevel=3)
     res = normalize(image, method, reference=ref, p_threshold=p_threshold, exclude=exclude, max_iter=max_iter)
     ref = ref.on_grid(res.image)
     if row is None:
@@ -68,9 +78,4 @@ def zmap(
     data = smooth(data, res.image.affine, ref.fwhm)
     z = np.zeros(data.shape, dtype=np.float32)
     z[brain] = (data[brain] - mean[brain]) / std[brain]
-
-    out = nib.Nifti1Image(z, res.image.affine)
-    out.header.set_xyzt_units("mm")
-    kind = "z-score" if row is None else "w-score"
-    out.header["descrip"] = f"sugar-pet {kind} {method} factor={res.factor:.6g} n={ref.n}"[:79]
-    return out
+    return z, brain, res, row, ref

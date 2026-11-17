@@ -42,13 +42,14 @@ type app struct {
 	// reveal is the page whose results are new and should come into view.
 	reveal string
 
-	spatial spatialPage
-	norm    normPage
-	ref     refPage
-	zmap    zmapPage
-	cmp     comparePage
-	cluster clusterPage
-	masks   masksPage
+	spatial  spatialPage
+	norm     normPage
+	ref      refPage
+	zmap     zmapPage
+	classify classifyPage
+	cmp      comparePage
+	cluster  clusterPage
+	masks    masksPage
 
 	settingsPath string
 }
@@ -69,6 +70,7 @@ func newApp() *app {
 	a.norm.init()
 	a.ref.init()
 	a.zmap.init()
+	a.classify.init()
 	a.cmp.init()
 	a.cluster.init()
 	return a
@@ -126,7 +128,8 @@ func (a *app) saveSettings() {
 // setReference makes a reference folder the one every page uses.
 func (a *app) setReference(path string) {
 	a.norm.reference, a.zmap.reference, a.cmp.reference, a.cluster.reference = path, path, path, path
-	a.zmap.loadedFrom = ""
+	a.classify.reference = path
+	a.zmap.loadedFrom, a.classify.loadedFrom = "", ""
 	a.cmp.fwhmKnown = false
 }
 
@@ -141,6 +144,7 @@ var pages = []pageInfo{
 	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
 	{"reference", "Reference", "参考库", iconLayers},
 	{"zmap", "Z-score Maps", "Z 值图", iconCurve},
+	{"classify", "Classify Parkinsonism", "帕金森综合征分类", iconReport},
 	{"compare", "Compare Groups", "组间比较", iconCompare},
 	{"cluster", "Reference Cluster", "参考簇", iconTarget},
 	{"masks", "Masks & Atlas", "掩膜与图谱", iconGrid},
@@ -170,6 +174,8 @@ func (a *app) view(c *ui.Context) {
 				a.referenceView(c)
 			case "zmap":
 				a.zmapView(c)
+			case "classify":
+				a.classifyView(c)
 			case "compare":
 				a.compareView(c)
 			case "cluster":

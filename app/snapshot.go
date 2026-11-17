@@ -102,6 +102,21 @@ func (a *app) demo() {
 	a.zmap.covTable = "/Users/ada/study/participants.tsv"
 	a.zmap.output = "/Users/ada/study/zmaps"
 
+	cl := &a.classify
+	cl.files.files = a.zmap.files.files[:3]
+	cl.loadedFrom, cl.info = cl.reference, info
+	cl.covTable, cl.output, cl.outDir = a.zmap.covTable, "/Users/ada/study/reports", "/Users/ada/study/reports"
+	for i, r := range [][2]string{
+		{core.ReportText("name-msa-p", uiLang()), Tf("Pattern match %d/100, confidence %s", "模式匹配度 %d/100，置信度%s", 84, core.ReportText("confidence-high", uiLang()))},
+		{Tf("%s or %s", "%s 或 %s", core.ReportText("name-psp", uiLang()), core.ReportText("name-cbd", uiLang())),
+			Tf("Cannot be told apart: %d/100 and %d/100", "无法可靠区分：%d/100 与 %d/100", 62, 55)},
+		{T("No pattern of atypical parkinsonism", "未见非典型帕金森综合征的模式"), T("Favours Parkinson's disease in a patient with parkinsonism", "对帕金森综合征患者而言更倾向于帕金森病")},
+	} {
+		image := filepath.Base(cl.files.files[i])
+		cl.rows = append(cl.rows, classifyRow{image: image, reading: r[0], detail: r[1], report: filepath.Join(cl.output, core.ReportStem(image)+"_report.html")})
+	}
+	cl.st.ok = Tf("%d report(s) written.", "已生成 %d 份报告。", 3)
+
 	a.cmp.output = "/Users/ada/study/compare"
 	a.cmp.name = "patients_vs_controls"
 	a.cmp.how = Tf("GRF correction: voxel p < %g, cluster p < %g, clusters of at least %d voxels (|z| > %.2f).",

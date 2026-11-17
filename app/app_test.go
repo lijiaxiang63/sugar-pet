@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,8 +68,8 @@ func makeImages(t *testing.T, dir string, controls, patients int) (hc, pt []stri
 }
 
 // TestWorkflow goes through the app as a user does, pressing its buttons:
-// build a reference, normalise, make z-score maps, compare two groups and
-// find a reference cluster.
+// build a reference, normalise, make z-score maps, classify patients,
+// compare two groups and find a reference cluster.
 func TestWorkflow(t *testing.T) {
 	if testing.Short() {
 		t.Skip("works on whole images")
@@ -161,6 +162,36 @@ func TestWorkflow(t *testing.T) {
 	maps, _ := filepath.Glob(filepath.Join(zdir, "*.nii.gz"))
 	if len(maps) != 6 {
 		t.Fatalf("%d files in %s, want 6", len(maps), zdir)
+	}
+
+	// A report for each of two patients, in the language of the app.
+	reports := filepath.Join(dir, "reports")
+	a.classify.files.files, a.classify.output, a.classify.covTable = pt[:2], reports, table
+	press("classify", "开始分类", &a.classify.st)
+	if len(a.classify.rows) != 2 || a.classify.rows[0].reading == "" {
+		t.Fatalf("classified %+v, notes %v", a.classify.rows, a.classify.notes)
+	}
+	page, err := os.ReadFile(a.classify.rows[1].report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"<!doctype html>", "帕金森综合征代谢模式分析报告", "W 值", "data:image/png;base64,", filepath.Base(pt[1])} {
+		if !strings.Contains(string(page), want) {
+			t.Fatalf("the report lacks %q", want)
+		}
+	}
+	summary, err := os.ReadFile(filepath.Join(reports, "classification.tsv"))
+	if err != nil || len(strings.Split(strings.TrimSpace(string(summary)), "\n")) != 3 {
+		t.Fatalf("classification.tsv: %v, %q", err, summary)
+	}
+	exists(filepath.Join(reports, "sub-pt00_classification.json"))
+	exists(filepath.Join(reports, "sub-pt00_desc-hn_wmap.nii.gz"))
+	if !tt.HasText("打开报告") {
+		t.Fatalf("no button opens the report: %q", tt.Texts())
+	}
+	// The cerebellum's statistics are in the reference, so the map can rest on it.
+	if got := a.classify.methods(); got[len(got)-1] != "cerebellum" || len(a.classify.checks()) != 1 {
+		t.Fatalf("methods %v, checks %v", got, a.classify.checks())
 	}
 
 	// The patients against the controls: the cortex takes up less.

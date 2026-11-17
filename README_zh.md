@@ -44,9 +44,9 @@ Windows 和 Linux，用 Go 和 [MyGo](https://github.com/egoist/mygo) 的原生�
 ![SUGAR-PET](app/screenshots/normalize-zh.png)
 
 页面按下文的推荐流程排列：**空间标准化**、**强度归一化**、**参考库**、**Z 值图**、
-**组间比较**、**参考簇**，以及内置的**掩膜与图谱**。文件可以直接拖到列表里。
+**帕金森综合征分类**、**组间比较**、**参考簇**，以及内置的**掩膜与图谱**。文件可以直接拖到列表里。
 应用读写的文件与命令行完全一致（参考库文件夹、`factors.tsv`、输出文件名、
-团块报告），两者可以混用。
+团块报告、分类报告），两者可以混用。
 
 两个“normalisation”是不同的步骤。**空间标准化**把原始空间的 PET 配准到 MNI 空间，
 即 `sugar-pet spatial-norm`，需要 MATLAB 和 SPM12/SPM25（应用会自动查找 MATLAB，
@@ -179,6 +179,9 @@ sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
 ```
 
+对诊断未明的患者，`sugar-pet classify` 会把这样的图与 MSA、PSP、CBD、DLB 和 PD 的
+代谢模式逐一比对，并生成报告，见[帕金森综合征分类](#帕金森综合征分类)。
+
 **5. 换两种参考区把第 3、4 步重做一遍**（先 `-m occipital`，再 `-m white-matter`），作为敏感性分析：
 
 * `occipital`：解剖参考区，MSA、PSP、CBS 通常不累及枕叶。
@@ -274,6 +277,83 @@ sub-02	58	M
 默认 `--adjust-for age,sex`；任何数值列或恰好两种取值的列都可以。
 年龄按线性关系处理；患者年龄超出对照的年龄范围时会给出警告。
 
+## 帕金森综合征分类
+
+对一位诊断未明的患者，`sugar-pet classify` 找出其摄取低于或高于对照的脑区，
+判断这种分布像哪一种帕金森综合征，并生成报告：
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates controls.tsv --stats-for white-matter
+sugar-pet classify sub-01_pet.nii.gz -r hc_reference/ -o reports/ --covariates patients.tsv --lang zh
+```
+
+| `reports/` 中的文件              | 内容                                                        |
+| -------------------------------- | ----------------------------------------------------------- |
+| `sub-01_report.html`             | 报告，中文或英文（`--lang`）。单个网页，不依赖其他文件；在浏览器中可打印为 PDF |
+| `sub-01_desc-hn_wmap.nii.gz`     | 报告所依据的图（不给 `--covariates` 时为 `_zmap`）          |
+| `sub-01_classification.json`     | 报告中的全部数值：脑区、模式、结论                          |
+| `classification.tsv`             | 每幅图像一行：结论及与各模式的匹配度                        |
+
+**它是辅助决策工具，不是诊断。** 诊断标准（MSA 2022、PSP 2017、DLB 2017）只把
+FDG-PET 列为支持性证据；下面的规则来自文献，没有用你的患者数据拟合或验证过。
+结果须结合临床表现、MRI 和多巴胺转运体显像来判断。
+
+整个流程一图看懂：
+
+![sugar-pet classify 如何从一幅图像得出结论](docs/classify-flow-zh.svg)
+
+各步骤的文字说明：
+
+1. **与对照比较得到一幅图。** 图像先变成 [W 值图](#校正年龄和性别w-值)
+   （不给 `--covariates` 时为 Z 值图），默认用 `hn`：诊断未明的患者无法事先指定
+   哪个区域未受累，而 `hn` 不需要这样的区域。
+2. **各脑区评分。** 在 17 个脑区内取图的平均值，左右分别计算：尾状核、壳核及其后部、
+   苍白球、丘脑、中脑、脑桥、小脑半球和蚓部、内侧与外侧额叶、中央周围区、顶叶、
+   楔前叶、后扣带回、颞叶外侧和枕叶皮层。评分 ≤ −2 记为代谢减低，≥ 2 记为代谢增高。
+3. **换其他归一化方式再算一遍。** 默认用比例缩放（`ps`）；若建参考库时用了
+   `--stats-for white-matter`，还会用白质参考区（建议加上：它不依赖灰质）。
+   其他方式下不出现的发现会被标出。**增高**只有在每种归一化方式下都出现才算数，
+   因为全局均值缩放会让未受累的区域显得高代谢
+   （[Borghammer 等，2009](https://www.sciencedirect.com/science/article/abs/pii/S1053811908008896)）。
+4. **模式匹配**，每种模式 0 到 100 分：核心特征占 60%，支持特征占 40%。
+
+| 模式    | 核心特征 | 支持特征 |
+| ------- | -------- | -------- |
+| MSA-P   | 壳核 ↓（后部为著） | 脑桥 ↓、小脑 ↓ |
+| MSA-C   | 小脑 ↓ | 脑桥 ↓、壳核 ↓ |
+| PSP     | 中脑 ↓、内侧额叶及前扣带回 ↓ | 尾状核 ↓、丘脑 ↓、额叶外侧 ↓ |
+| CBD/CBS | 一侧中央周围区和顶叶皮层 ↓，且明显重于对侧 | 同侧丘脑 ↓、壳核 ↓、额叶外侧 ↓ |
+| DLB     | 枕叶皮层 ↓ | 顶叶皮层 ↓、楔前叶 ↓、后扣带回相对保留（岛征） |
+| PD      | 壳核、苍白球、丘脑、脑桥、小脑、感觉运动皮层 ↑ | 纹状体、脑干、小脑无减低 |
+
+结论为以下之一：
+
+* **某一模式**：某模式得分不低于 50，且领先下一种疾病至少 15 分
+  （得分 ≥ 70 且领先 ≥ 30 时置信度为“高”，否则为“中等”；MSA-P 与 MSA-C 视为同一种病）。
+  置信度只按在每种归一化方式下都成立的发现来定：仅凭这些发现得分不足 50 时，置信度为“低”，报告中会注明；
+* **无法区分**：两种疾病得分接近，两者都会列出；
+* **部分特征**：得分在 30 到 50 之间，不足以判定为该模式；
+* **PD 模式**：没有非典型帕金森综合征的模式，但有相对代谢增高；
+* **未见模式**：对帕金森综合征患者而言更倾向于 PD（其早期图像常接近正常）。
+
+| 选项           | 默认值  | 含义                                                           |
+| -------------- | ------- | -------------------------------------------------------------- |
+| `-m`           | `hn`    | 分类所依据的归一化方式                                         |
+| `--check`      | `ps`，参考库有时加 `white-matter` | 用于核对的其他归一化方式，或 `none` |
+| `--covariates` | 无      | 含患者年龄、性别的表格：输出 W 值                              |
+| `--lang`       | `en`    | 报告语言：`en` 或 `zh`                                         |
+
+对照应来自同一扫描仪和重建方式，采集条件与患者一致（同为睁眼或闭眼）；单例分析建议
+不少于 30 例，不足时报告中会注明。
+
+**为什么用规则，而不是训练好的分类器？** 经过验证的其他方法都依赖无法随软件分发的东西。
+疾病相关协方差模式（PDRP、MSARP、PSPRP；
+[Tang 等，2010](https://doi.org/10.1016/S1474-4422(10)70002-8)）不公开提供，
+需要在每台扫描仪上重新推导并验证；深度学习模型的权重不公开，且依赖扫描仪和重建方式。
+每个单位都能做到的，是把一位患者与本单位的对照比较，再对照已发表的模式来读图，
+这也正是目视判读[单例 SPM 图](https://doi.org/10.1111/ene.13269)的做法。
+本命令把这种读法固定下来，结果可重复，并列出所用的每一个数值。
+
 ## 参考簇
 
 除了从图谱里选参考区，也可以让一组患者的数据自己指出哪些体素不受疾病影响
@@ -347,6 +427,19 @@ z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # NIfTI 图像
 # W 值：建参考库时给出对照的协变量，算图时给出患者的
 ref = Reference.build(control_files, covariates={"age": ages, "sex": sexes})
 w = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref, covariates={"age": 63, "sex": "F"})
+```
+
+对一位患者做[分类](#帕金森综合征分类)：
+
+```python
+from sugar_pet import classify
+
+res = classify("sub-01_pet.nii.gz", reference=ref, covariates={"age": 63, "sex": "F"})
+res.conclusion  # {'category': 'pattern', 'pattern': 'msa-p', 'confidence': 'high', ...}
+res.result["regions"]  # 每个脑区、每一侧在各归一化方式下的评分
+res.result["patterns"]  # 与每种模式的匹配度及其依据
+res.zmap  # 图，NIfTI 图像
+res.save("reports", "sub-01", lang="zh")  # 图、报告和数据
 ```
 
 参考区可以是内置掩膜、自己的文件，或内置图谱的任意标签组合：
@@ -432,6 +525,11 @@ uv run ruff check .
 ```
 
 `scripts/build_atlas.py` 用于从 MNI 原始下载文件重新生成内置图谱。
+`scripts/classify_flowchart.py` 用于重画分类流程图（`docs/classify-flow-en.svg` 和 `-zh.svg`）；
+图中的阈值是写在脚本里的，`classify.py` 中的阈值改动后要在脚本里同步修改。
+
+分类报告的文字和样式表（`classify_text.json`、`report.css`）放在 `src/sugar_pet/data`，
+桌面应用在 `app/core/data` 里另有一份副本；两者不一致时测试会失败。
 
 ## 参考文献
 
@@ -448,6 +546,28 @@ uv run ruff check .
   *Sci Data* 2020;7:237.
 * Fonov V, Evans AC, Botteron K, et al. Unbiased average age-appropriate
   atlases for pediatric studies. *NeuroImage* 2011;54:313–327.
+* Meyer PT, Frings L, Rücker G, Hellwig S. 18F-FDG PET in parkinsonism:
+  differential diagnosis and evaluation of cognitive impairment.
+  *J Nucl Med* 2017;58:1888–1898.
+* Caminiti SP, Alongi P, Majno L, et al. Evaluation of an optimized
+  [18F]fluoro-deoxy-glucose positron emission tomography voxel-wise method to
+  early support differential diagnosis in atypical Parkinsonian disorders.
+  *Eur J Neurol* 2017;24:687–e26.
+* Tang CC, Poston KL, Eckert T, et al. Differential diagnosis of parkinsonism:
+  a metabolic imaging study using pattern analysis. *Lancet Neurol* 2010;9:149–158.
+* Niethammer M, Tang CC, Feigin A, et al. A disease-specific metabolic brain
+  network associated with corticobasal degeneration. *Brain* 2014;137:3036–3046.
+* Borghammer P, Cumming P, Aanerud J, Gjedde A. Artefactual subcortical
+  hyperperfusion in PET studies normalized to global mean: lessons from
+  Parkinson's disease. *NeuroImage* 2009;45:249–257.
+* Wenning GK, Stankovic I, Vignatelli L, et al. The Movement Disorder Society
+  criteria for the diagnosis of multiple system atrophy. *Mov Disord* 2022;37:1131–1148.
+* Höglinger GU, Respondek G, Stamelou M, et al. Clinical diagnosis of
+  progressive supranuclear palsy: the Movement Disorder Society criteria.
+  *Mov Disord* 2017;32:853–864.
+* McKeith IG, Boeve BF, Dickson DW, et al. Diagnosis and management of dementia
+  with Lewy bodies: fourth consensus report of the DLB Consortium.
+  *Neurology* 2017;89:88–100.
 
 ## 许可
 

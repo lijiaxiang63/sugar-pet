@@ -7,6 +7,7 @@ try:
 except PackageNotFoundError:  # running from a source tree without installing
     __version__ = "0.0.0"
 
+from .classify import Classification, classify
 from .cluster import reference_cluster
 from .compare import GroupComparison, compare_groups
 from .masks import MASKS, atlas_labels, builtin_mask, labels_mask
@@ -17,11 +18,13 @@ from .zscore import zmap
 __all__ = [
     "MASKS",
     "METHODS",
+    "Classification",
     "GroupComparison",
     "NormResult",
     "Reference",
     "atlas_labels",
     "builtin_mask",
+    "classify",
     "compare_groups",
     "labels_mask",
     "normalize",

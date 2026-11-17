@@ -1,0 +1,360 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1900" width="1200" height="1900"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#5d6b78"/></marker></defs><rect width="1200" height="1900" fill="#ffffff"/><path d="M62 54 L62 1792" stroke="#0f766e" stroke-width="2.4" stroke-opacity="0.35"/>
+<circle cx="62" cy="54" r="9" fill="#ffffff" stroke="#0f766e" stroke-width="2.4"/>
+<text x="92.0" y="60.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>输入</tspan></text>
+<text x="92.0" y="84.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>一位诊断未明的患者，</tspan></text>
+<text x="92.0" y="102.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>以及本机构同一台扫描仪的</tspan></text>
+<text x="92.0" y="120.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>健康对照。</tspan></text>
+<rect x="350.0" y="36.0" width="390.0" height="84.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<ellipse cx="394" cy="78" rx="21.0" ry="26.0" fill="#e9edf1" stroke="#9aa5b1" stroke-width="1.2"/>
+<ellipse cx="394" cy="78" rx="16.0" ry="21.0" fill="#f9fafb"/>
+<path d="M394.0 55.0 L394.0 101.0" fill="none" stroke="#c3cbd3" stroke-width="1"/>
+<ellipse cx="386.5" cy="79" rx="3.6" ry="7.5" fill="#d5dbe1" transform="rotate(14 386.5 79)"/>
+<ellipse cx="401.5" cy="79" rx="3.6" ry="7.5" fill="#d5dbe1" transform="rotate(-14 401.5 79)"/>
+<text x="434.0" y="67.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>患者 FDG-PET 图像</tspan></text>
+<text x="434.0" y="88.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>已配准到 MNI 空间</tspan></text>
+<text x="434.0" y="105.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>年龄、性别（可选）</tspan></text>
+<rect x="770.0" y="36.0" width="390.0" height="84.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<rect x="792.0" y="56.0" width="34.0" height="30.0" rx="4" fill="#f9fafb" stroke="#9aa5b1" stroke-width="1.2"/>
+<rect x="799.0" y="63.0" width="34.0" height="30.0" rx="4" fill="#f9fafb" stroke="#9aa5b1" stroke-width="1.2"/>
+<rect x="806.0" y="70.0" width="34.0" height="30.0" rx="4" fill="#f9fafb" stroke="#9aa5b1" stroke-width="1.2"/>
+<text x="862.0" y="67.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>健康对照参考库</tspan></text>
+<text x="862.0" y="88.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>同一扫描仪的对照 30 例以上：</tspan></text>
+<text x="862.0" y="105.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>体素均值、标准差、年龄性别模型</tspan></text>
+<path d="M545.0 120.0 L545.0 136.0 L965.0 136.0 L965.0 120.0" fill="none" stroke="#5d6b78" stroke-width="1.4"/>
+<path d="M478.0 136.0 L1032.0 136.0" fill="none" stroke="#5d6b78" stroke-width="1.4"/>
+<circle cx="62" cy="182" r="15" fill="#0f766e"/>
+<text x="62.0" y="187.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>1</tspan></text>
+<text x="92.0" y="188.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>强度归一化</tspan></text>
+<text x="92.0" y="212.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>三种方式并行：</tspan></text>
+<text x="92.0" y="230.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>一种用于分类，</tspan></text>
+<text x="92.0" y="248.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>两种用于交叉核对。</tspan></text>
+<path d="M478.0 136.0 L478.0 161.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="164.0" width="256.0" height="76.0" rx="8" fill="#e0f2ef" stroke="#0f766e" stroke-width="1.8"/>
+<text x="366.0" y="192.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="15" font-weight="700" fill="#0f766e" text-anchor="start"><tspan>hn</tspan></text>
+<text x="366.0" y="212.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="400" fill="#17202a" text-anchor="start"><tspan>直方图归一化</tspan></text>
+<text x="366.0" y="229.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>无需指定未受累区域</tspan></text>
+<rect x="542.5" y="176.0" width="51.5" height="21.0" rx="10.5" fill="#0f766e" stroke="#0f766e" stroke-width="1"/>
+<text x="568.2" y="191.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>主方法</tspan></text>
+<path d="M755.0 136.0 L755.0 161.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="627.0" y="164.0" width="256.0" height="76.0" rx="8" fill="#ffffff" stroke="#5d6b78" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="643.0" y="192.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="15" font-weight="700" fill="#17202a" text-anchor="start"><tspan>ps</tspan></text>
+<text x="643.0" y="212.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="400" fill="#17202a" text-anchor="start"><tspan>全局均值缩放</tspan></text>
+<text x="643.0" y="229.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>经典做法</tspan></text>
+<rect x="832.0" y="176.0" width="39.0" height="21.0" rx="10.5" fill="#ffffff" stroke="#5d6b78" stroke-width="1"/>
+<text x="851.5" y="191.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>核对</tspan></text>
+<path d="M1032.0 136.0 L1032.0 161.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="904.0" y="164.0" width="256.0" height="76.0" rx="8" fill="#ffffff" stroke="#5d6b78" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="920.0" y="192.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="15" font-weight="700" fill="#17202a" text-anchor="start"><tspan>white-matter</tspan></text>
+<text x="920.0" y="212.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="400" fill="#17202a" text-anchor="start"><tspan>白质参考区</tspan></text>
+<text x="920.0" y="229.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>不依赖灰质</tspan></text>
+<rect x="1109.0" y="176.0" width="39.0" height="21.0" rx="10.5" fill="#ffffff" stroke="#5d6b78" stroke-width="1"/>
+<text x="1128.5" y="191.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>核对</tspan></text>
+<circle cx="62" cy="292" r="15" fill="#0f766e"/>
+<text x="62.0" y="297.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>2</tspan></text>
+<text x="92.0" y="298.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>与对照比较成图</tspan></text>
+<text x="92.0" y="322.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>每个体素：与同年龄、同性别者</tspan></text>
+<text x="92.0" y="340.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>的预期值相差多少个对照标准差</tspan></text>
+<text x="92.0" y="358.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>（W 值；不校正年龄性别时</tspan></text>
+<text x="92.0" y="376.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>为 Z 值）。</tspan></text>
+<path d="M478.0 240.0 L478.0 271.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="274.0" width="256.0" height="84.0" rx="8" fill="#e0f2ef" stroke="#0f766e" stroke-width="1.8"/>
+<ellipse cx="394" cy="316" rx="21.0" ry="26.0" fill="#e9edf1" stroke="#9aa5b1" stroke-width="1.2"/>
+<ellipse cx="394" cy="316" rx="16.0" ry="21.0" fill="#f9fafb"/>
+<path d="M394.0 293.0 L394.0 339.0" fill="none" stroke="#c3cbd3" stroke-width="1"/>
+<ellipse cx="386.5" cy="317" rx="3.6" ry="7.5" fill="#2166ac" transform="rotate(14 386.5 317)"/>
+<ellipse cx="401.5" cy="317" rx="3.6" ry="7.5" fill="#2166ac" transform="rotate(-14 401.5 317)"/>
+<text x="432.0" y="312.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#17202a" text-anchor="start"><tspan>W 值图</tspan></text>
+<text x="432.0" y="332.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>hn</tspan></text>
+<path d="M755.0 240.0 L755.0 271.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="627.0" y="274.0" width="256.0" height="84.0" rx="8" fill="#ffffff" stroke="#5d6b78" stroke-width="1.3" stroke-dasharray="5 4"/>
+<ellipse cx="671" cy="316" rx="21.0" ry="26.0" fill="#e9edf1" stroke="#9aa5b1" stroke-width="1.2"/>
+<ellipse cx="671" cy="316" rx="16.0" ry="21.0" fill="#f9fafb"/>
+<path d="M671.0 293.0 L671.0 339.0" fill="none" stroke="#c3cbd3" stroke-width="1"/>
+<ellipse cx="663.5" cy="317" rx="3.6" ry="7.5" fill="#7fa8d4" transform="rotate(14 663.5 317)"/>
+<ellipse cx="678.5" cy="317" rx="3.6" ry="7.5" fill="#7fa8d4" transform="rotate(-14 678.5 317)"/>
+<text x="709.0" y="312.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#17202a" text-anchor="start"><tspan>W 值图</tspan></text>
+<text x="709.0" y="332.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>ps</tspan></text>
+<path d="M1032.0 240.0 L1032.0 271.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="904.0" y="274.0" width="256.0" height="84.0" rx="8" fill="#ffffff" stroke="#5d6b78" stroke-width="1.3" stroke-dasharray="5 4"/>
+<ellipse cx="948" cy="316" rx="21.0" ry="26.0" fill="#e9edf1" stroke="#9aa5b1" stroke-width="1.2"/>
+<ellipse cx="948" cy="316" rx="16.0" ry="21.0" fill="#f9fafb"/>
+<path d="M948.0 293.0 L948.0 339.0" fill="none" stroke="#c3cbd3" stroke-width="1"/>
+<ellipse cx="940.5" cy="317" rx="3.6" ry="7.5" fill="#7fa8d4" transform="rotate(14 940.5 317)"/>
+<ellipse cx="955.5" cy="317" rx="3.6" ry="7.5" fill="#7fa8d4" transform="rotate(-14 955.5 317)"/>
+<text x="986.0" y="312.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#17202a" text-anchor="start"><tspan>W 值图</tspan></text>
+<text x="986.0" y="332.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>white-matter</tspan></text>
+<circle cx="62" cy="410" r="15" fill="#0f766e"/>
+<text x="62.0" y="415.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>3</tspan></text>
+<text x="92.0" y="416.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>各脑区评分</tspan></text>
+<text x="92.0" y="440.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>每幅图在 17 个脑区内取平均，</tspan></text>
+<text x="92.0" y="458.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>左右分别计算。</tspan></text>
+<path d="M478.0 358.0 L478.0 389.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M755.0 358.0 L755.0 389.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M1032.0 358.0 L1032.0 389.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="392.0" width="810.0" height="232.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="372.0" y="422.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#17202a" text-anchor="start"><tspan>纹状体与丘脑</tspan></text>
+<text x="372.0" y="441.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>尾状核 · 壳核 · 壳核后部</tspan></text>
+<text x="372.0" y="458.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>苍白球 · 丘脑</tspan></text>
+<text x="372.0" y="490.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#17202a" text-anchor="start"><tspan>脑干与小脑</tspan></text>
+<text x="372.0" y="509.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>中脑 · 脑桥</tspan></text>
+<text x="372.0" y="526.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>小脑半球 · 小脑蚓部</tspan></text>
+<text x="372.0" y="558.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#17202a" text-anchor="start"><tspan>皮层</tspan></text>
+<text x="372.0" y="577.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>内侧额叶 · 外侧额叶 · 中央周围区</tspan></text>
+<text x="372.0" y="594.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>顶叶 · 楔前叶 · 后扣带回</tspan></text>
+<text x="372.0" y="612.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>颞叶外侧 · 枕叶</tspan></text>
+<rect x="770.0" y="406.0" width="376.0" height="204.0" rx="8" fill="#ffffff" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="784.0" y="426.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="700" fill="#5d6b78" text-anchor="start"><tspan>示例</tspan></text>
+<rect x="890" y="430" width="68.0" height="118" fill="#dce9f6"/>
+<rect x="1094.0" y="430" width="34.0" height="118" fill="#f9e1dd"/>
+<path d="M958.0 430.0 L958.0 548.0" fill="none" stroke="#2166ac" stroke-width="1.2" stroke-dasharray="4 3"/>
+<path d="M1094.0 430.0 L1094.0 548.0" fill="none" stroke="#c0392b" stroke-width="1.2" stroke-dasharray="4 3"/>
+<path d="M1026.0 430.0 L1026.0 548.0" fill="none" stroke="#9aa5b1" stroke-width="1"/>
+<text x="882.0" y="446.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#17202a" text-anchor="end"><tspan>壳核</tspan></text>
+<rect x="920.6" y="436.5" width="105.4" height="11" rx="2" fill="#2166ac"/>
+<text x="1032.0" y="446.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>−3.1</tspan></text>
+<text x="882.0" y="464.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#17202a" text-anchor="end"><tspan>脑桥</tspan></text>
+<rect x="951.2" y="454.5" width="74.8" height="11" rx="2" fill="#2166ac"/>
+<text x="1032.0" y="464.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>−2.2</tspan></text>
+<text x="882.0" y="482.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#17202a" text-anchor="end"><tspan>小脑</tspan></text>
+<rect x="968.2" y="472.5" width="57.8" height="11" rx="2" fill="#8fb4dc"/>
+<text x="1032.0" y="482.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>−1.7</tspan></text>
+<text x="882.0" y="500.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#17202a" text-anchor="end"><tspan>丘脑</tspan></text>
+<rect x="1012.4" y="490.5" width="13.6" height="11" rx="2" fill="#aab4bf"/>
+<text x="1032.0" y="500.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>−0.4</tspan></text>
+<text x="882.0" y="518.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#17202a" text-anchor="end"><tspan>顶叶</tspan></text>
+<rect x="1026.0" y="508.5" width="10.2" height="11" rx="2" fill="#aab4bf"/>
+<text x="1020.0" y="518.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="end"><tspan>0.3</tspan></text>
+<text x="882.0" y="536.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#17202a" text-anchor="end"><tspan>枕叶</tspan></text>
+<rect x="1026.0" y="526.5" width="20.4" height="11" rx="2" fill="#aab4bf"/>
+<text x="1020.0" y="536.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="end"><tspan>0.6</tspan></text>
+<text x="890.0" y="562.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>−4</tspan></text>
+<text x="958.0" y="562.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>−2</tspan></text>
+<text x="1026.0" y="562.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>0</tspan></text>
+<text x="1094.0" y="562.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>2</tspan></text>
+<text x="890.0" y="584.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#2166ac" text-anchor="start"><tspan>≤ −2 代谢减低</tspan></text>
+<text x="1128.0" y="584.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#c0392b" text-anchor="end"><tspan>≥ 2 代谢增高</tspan></text>
+<circle cx="62" cy="676" r="15" fill="#0f766e"/>
+<text x="62.0" y="681.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>4</tspan></text>
+<text x="92.0" y="682.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>换一种归一化还成立吗？</tspan></text>
+<text x="92.0" y="706.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>只在一种归一化下出现的发现</tspan></text>
+<text x="92.0" y="724.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>会被标出，且不能作为</tspan></text>
+<text x="92.0" y="742.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>结论的依据。</tspan></text>
+<path d="M755.0 624.0 L755.0 655.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="658.0" width="810.0" height="172.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<rect x="364.0" y="672.0" width="392.0" height="66.0" rx="8" fill="#ffffff" stroke="#c9d1d9" stroke-width="1.2"/>
+<rect x="364" y="672" width="92" height="66" rx="8" fill="#dce9f6"/>
+<text x="410.0" y="710.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>减低 ↓</tspan></text>
+<text x="470.0" y="700.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>两种核对方式下也出现才算稳定：</tspan></text>
+<text x="470.0" y="718.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>方向相同，且 |评分| ≥ 1</tspan></text>
+<rect x="364.0" y="746.0" width="392.0" height="66.0" rx="8" fill="#ffffff" stroke="#c9d1d9" stroke-width="1.2"/>
+<rect x="364" y="746" width="92" height="66" rx="8" fill="#f9e1dd"/>
+<text x="410.0" y="784.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#c0392b" text-anchor="middle"><tspan>增高 ↑</tspan></text>
+<text x="470.0" y="774.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>每种归一化下都出现才算数：</tspan></text>
+<text x="470.0" y="792.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>取各方式中最低的评分</tspan></text>
+<rect x="770.0" y="672.0" width="376.0" height="144.0" rx="8" fill="#ffffff" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="948.0" y="698.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="11.5" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>hn</tspan></text>
+<text x="1000.0" y="698.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="11.5" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>ps</tspan></text>
+<text x="1066.0" y="698.0" font-family="'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace" font-size="11.5" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>white-matter</tspan></text>
+<path d="M784.0 710.0 L1132.0 710.0" fill="none" stroke="#c9d1d9" stroke-width="1"/>
+<text x="784.0" y="732.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>壳核，病例 1</tspan></text>
+<text x="948.0" y="732.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>−2.7</tspan></text>
+<text x="1000.0" y="732.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>−2.1</tspan></text>
+<text x="1066.0" y="732.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>−1.8</tspan></text>
+<text x="1132.0" y="753.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#1a7f37" text-anchor="end"><tspan>✓ 稳定</tspan></text>
+<path d="M784.0 760.0 L1132.0 760.0" fill="none" stroke="#c9d1d9" stroke-width="1"/>
+<text x="784.0" y="782.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>壳核，病例 2</tspan></text>
+<text x="948.0" y="782.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>−2.7</tspan></text>
+<text x="1000.0" y="782.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>−2.1</tspan></text>
+<text x="1066.0" y="782.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#c0392b" text-anchor="middle"><tspan>5.4</tspan></text>
+<text x="1132.0" y="803.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#8a5a00" text-anchor="end"><tspan>✗ 不稳定</tspan></text>
+<circle cx="62" cy="882" r="15" fill="#0f766e"/>
+<text x="62.0" y="887.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>5</tspan></text>
+<text x="92.0" y="888.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>模式匹配度（0–100）</tspan></text>
+<text x="92.0" y="912.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>各脑区评分在多大程度上</tspan></text>
+<text x="92.0" y="930.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>呈现文献报道的某种模式。</tspan></text>
+<text x="92.0" y="948.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>计算两次：</tspan></text>
+<text x="92.0" y="966.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan font-weight="700">S</tspan><tspan> 用全部发现，</tspan></text>
+<text x="92.0" y="984.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan font-weight="700">R</tspan><tspan> 只用稳定的发现。</tspan></text>
+<path d="M755.0 830.0 L755.0 861.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="864.0" width="810.0" height="502.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<rect x="364.0" y="878.0" width="262.0" height="474.0" rx="8" fill="#ffffff" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="380.0" y="904.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#17202a" text-anchor="start"><tspan>减低的证据强度</tspan></text>
+<path d="M406.0 926.0 L406.0 1022.0 L602.0 1022.0" fill="none" stroke="#9aa5b1" stroke-width="1.2"/>
+<path d="M406.0 1022.0 L462.0 1022.0 L546.0 926.0 L602.0 926.0" fill="none" stroke="#2166ac" stroke-width="2.6"/>
+<path d="M462.0 1022.0 L462.0 1027.0" fill="none" stroke="#9aa5b1" stroke-width="1.2"/>
+<text x="462.0" y="1041.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>−1</tspan></text>
+<path d="M546.0 1022.0 L546.0 1027.0" fill="none" stroke="#9aa5b1" stroke-width="1.2"/>
+<text x="546.0" y="1041.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>−2.5</tspan></text>
+<path d="M546.0 926.0 L546.0 1022.0" fill="none" stroke="#c9d1d9" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="398.0" y="930.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="end"><tspan>1</tspan></text>
+<text x="398.0" y="1026.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="end"><tspan>0</tspan></text>
+<text x="602.0" y="1059.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="end"><tspan>脑区评分 →</tspan></text>
+<rect x="380" y="1096" width="138" height="30" rx="5" fill="#2166ac"/>
+<rect x="518" y="1096" width="92" height="30" rx="5" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<text x="449.0" y="1116.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>核心特征 60%</tspan></text>
+<text x="564.0" y="1116.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="700" fill="#2166ac" text-anchor="middle"><tspan>支持特征 40%</tspan></text>
+<path d="M380.0 1148.0 L610.0 1148.0" fill="none" stroke="#c9d1d9" stroke-width="1"/>
+<text x="380.0" y="1174.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>以上面的示例算 MSA-P：</tspan></text>
+<text x="380.0" y="1194.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>核心 1.0，支持 0.63</tspan></text>
+<text x="380.0" y="1214.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>匹配度 = 60 + 0.63 × 40 = </tspan><tspan font-weight="700">85</tspan></text>
+<path d="M380.0 1232.0 L610.0 1232.0" fill="none" stroke="#c9d1d9" stroke-width="1"/>
+<text x="380.0" y="1262.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#0f766e" text-anchor="start"><tspan>S</tspan></text>
+<rect x="400" y="1252" width="170" height="12" rx="6" fill="#e9edf1"/>
+<rect x="400" y="1252" width="144.5" height="12" rx="6" fill="#0f766e"/>
+<text x="610.0" y="1262.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#17202a" text-anchor="end"><tspan>85</tspan></text>
+<text x="400.0" y="1281.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>全部发现</tspan></text>
+<text x="380.0" y="1305.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#0f766e" text-anchor="start"><tspan>R</tspan></text>
+<rect x="400" y="1295" width="170" height="12" rx="6" fill="#e9edf1"/>
+<rect x="400" y="1295" width="42.5" height="12" rx="6" fill="#0f766e"/>
+<text x="610.0" y="1305.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13" font-weight="700" fill="#17202a" text-anchor="end"><tspan>25</tspan></text>
+<text x="400.0" y="1324.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>只用稳定的发现：这里假设</tspan></text>
+<text x="400.0" y="1339.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>壳核的减低不稳定</tspan></text>
+<rect x="640.0" y="878.0" width="506.0" height="474.0" rx="8" fill="#ffffff" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="872.0" y="906.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>MSA-P</tspan></text>
+<text x="920.0" y="906.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>MSA-C</tspan></text>
+<text x="968.0" y="906.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>PSP</tspan></text>
+<text x="1016.0" y="906.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>CBD</tspan></text>
+<text x="1064.0" y="906.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>DLB</tspan></text>
+<text x="1112.0" y="906.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>PD</tspan></text>
+<path d="M652.0 920.0 L1134.0 920.0" fill="none" stroke="#9aa5b1" stroke-width="1.2"/>
+<rect x="652" y="921" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="937.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>壳核（后部优先）</tspan></text>
+<circle cx="872.0" cy="933" r="6.2" fill="#2166ac"/>
+<circle cx="920.0" cy="933" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<circle cx="1016.0" cy="933" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<path d="M1112.0 926.3 L1119.0 938.4000000000001 L1105.0 938.4000000000001 Z" fill="#c0392b"/>
+<text x="660.0" y="961.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>苍白球</tspan></text>
+<path d="M1112.0 950.3 L1119.0 962.4000000000001 L1105.0 962.4000000000001 Z" fill="#c0392b"/>
+<rect x="652" y="969" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="985.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>尾状核</tspan></text>
+<circle cx="968.0" cy="981" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<text x="660.0" y="1009.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>丘脑</tspan></text>
+<circle cx="968.0" cy="1005" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<circle cx="1016.0" cy="1005" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<path d="M1112.0 998.3 L1119.0 1010.4000000000001 L1105.0 1010.4000000000001 Z" fill="#c0392b"/>
+<path d="M652.0 1017.0 L1134.0 1017.0" fill="none" stroke="#9aa5b1" stroke-width="1"/>
+<rect x="652" y="1017" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="1033.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>中脑</tspan></text>
+<circle cx="968.0" cy="1029" r="6.2" fill="#2166ac"/>
+<text x="660.0" y="1057.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>脑桥</tspan></text>
+<circle cx="872.0" cy="1053" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<circle cx="920.0" cy="1053" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<path d="M1112.0 1046.3 L1119.0 1058.4 L1105.0 1058.4 Z" fill="#c0392b"/>
+<rect x="652" y="1065" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="1081.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>小脑</tspan></text>
+<circle cx="872.0" cy="1077" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<circle cx="920.0" cy="1077" r="6.2" fill="#2166ac"/>
+<path d="M1112.0 1070.3 L1119.0 1082.4 L1105.0 1082.4 Z" fill="#c0392b"/>
+<path d="M652.0 1089.0 L1134.0 1089.0" fill="none" stroke="#9aa5b1" stroke-width="1"/>
+<text x="660.0" y="1105.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>内侧额叶、前扣带回</tspan></text>
+<circle cx="968.0" cy="1101" r="6.2" fill="#2166ac"/>
+<rect x="652" y="1113" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="1129.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>外侧额叶</tspan></text>
+<circle cx="968.0" cy="1125" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<circle cx="1016.0" cy="1125" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<text x="660.0" y="1153.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>中央周围区</tspan></text>
+<circle cx="1016.0" cy="1149" r="6.2" fill="#2166ac"/>
+<path d="M1112.0 1142.3 L1119.0 1154.4 L1105.0 1154.4 Z" fill="#c0392b"/>
+<rect x="652" y="1161" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="1177.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>顶叶</tspan></text>
+<circle cx="1016.0" cy="1173" r="6.2" fill="#2166ac"/>
+<circle cx="1064.0" cy="1173" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<text x="660.0" y="1201.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>楔前叶</tspan></text>
+<circle cx="1064.0" cy="1197" r="5.3" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<rect x="652" y="1209" width="482" height="24" fill="#f6f8fa"/>
+<text x="660.0" y="1225.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>后扣带回</tspan></text>
+<path d="M1064.0 1213.8 L1071.2 1221 L1064.0 1228.2 L1056.8 1221 Z" fill="#ffffff" stroke="#0f766e" stroke-width="1.8"/>
+<text x="660.0" y="1249.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>枕叶</tspan></text>
+<circle cx="1064.0" cy="1245" r="6.2" fill="#2166ac"/>
+<path d="M652.0 1256.0 L1134.0 1256.0" fill="none" stroke="#9aa5b1" stroke-width="1.2"/>
+<circle cx="668" cy="1278" r="5.4" fill="#2166ac"/>
+<text x="680.0" y="1282.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>核心 ↓</tspan></text>
+<circle cx="734.96" cy="1278" r="4.5" fill="#ffffff" stroke="#2166ac" stroke-width="1.8"/>
+<text x="747.0" y="1282.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>支持 ↓</tspan></text>
+<path d="M801.9200000000001 1272.1 L808.12 1282.6000000000001 L795.7200000000001 1282.6000000000001 Z" fill="#c0392b"/>
+<text x="813.9" y="1282.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>相对增高 ↑</tspan></text>
+<path d="M892.8800000000001 1271.6 L899.2800000000001 1278 L892.8800000000001 1284.4 L886.4800000000001 1278 Z" fill="#ffffff" stroke="#0f766e" stroke-width="1.8"/>
+<text x="904.9" y="1282.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>相对保留</tspan></text>
+<text x="660.0" y="1306.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>CBD：仅一侧半球受累，且明显重于对侧。</tspan></text>
+<text x="660.0" y="1322.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>PD：同时要求纹状体、脑干、小脑无减低。</tspan></text>
+<circle cx="62" cy="1418" r="15" fill="#0f766e"/>
+<text x="62.0" y="1423.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>6</tspan></text>
+<text x="92.0" y="1424.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>结论</tspan></text>
+<text x="92.0" y="1448.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan font-weight="700">S</tspan><tspan>：MSA、PSP、CBD、DLB</tspan></text>
+<text x="92.0" y="1466.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>中最高的匹配度。</tspan></text>
+<text x="92.0" y="1484.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan font-weight="700">Δ</tspan><tspan>：它领先下一种疾病的分数</tspan></text>
+<text x="92.0" y="1502.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>（MSA-P 与 MSA-C 视为</tspan></text>
+<text x="92.0" y="1520.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>同一种病）。</tspan></text>
+<text x="92.0" y="1538.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan font-weight="700">R</tspan><tspan>：只用稳定发现算出的</tspan></text>
+<text x="92.0" y="1556.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>同一匹配度。</tspan></text>
+<path d="M755.0 1366.0 L755.0 1397.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="1400.0" width="810.0" height="340.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<path d="M550.0 1446.0 L617.0 1446.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="585.0" y="1439.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>否</tspan></text>
+<path d="M770.0 1446.0 L827.0 1446.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="800.0" y="1439.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>否</tspan></text>
+<path d="M980.0 1446.0 L1017.0 1446.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="1000.0" y="1438.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>否</tspan></text>
+<path d="M475.0 1467.0 L475.0 1508.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="483.0" y="1492.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="start"><tspan>是</tspan></text>
+<path d="M695.0 1467.0 L695.0 1506.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="703.0" y="1492.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="start"><tspan>是</tspan></text>
+<path d="M905.0 1467.0 L905.0 1506.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="913.0" y="1492.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="start"><tspan>是</tspan></text>
+<rect x="400.0" y="1425.0" width="150.0" height="42.0" rx="21" fill="#ffffff" stroke="#17202a" stroke-width="1.5"/>
+<text x="475.0" y="1451.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>S ≥ 50 ？</tspan></text>
+<rect x="620.0" y="1425.0" width="150.0" height="42.0" rx="21" fill="#ffffff" stroke="#17202a" stroke-width="1.5"/>
+<text x="695.0" y="1451.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>S ≥ 30 ？</tspan></text>
+<rect x="830.0" y="1425.0" width="150.0" height="42.0" rx="21" fill="#ffffff" stroke="#17202a" stroke-width="1.5"/>
+<text x="905.0" y="1451.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>PD 匹配度 ≥ 30 ？</tspan></text>
+<rect x="400.0" y="1511.0" width="150.0" height="42.0" rx="21" fill="#ffffff" stroke="#17202a" stroke-width="1.5"/>
+<text x="475.0" y="1537.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>Δ ≥ 15 ？</tspan></text>
+<rect x="1020.0" y="1423.0" width="130.0" height="46.0" rx="8" fill="#ffffff" stroke="#9aa5b1" stroke-width="1.5"/>
+<text x="1085.0" y="1444.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#5d6b78" text-anchor="middle"><tspan>无特征性模式</tspan></text>
+<text x="1085.0" y="1461.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>倾向 PD</tspan></text>
+<rect x="620.0" y="1509.0" width="150.0" height="46.0" rx="8" fill="#fff3d1" stroke="#d4a72c" stroke-width="1.5"/>
+<text x="695.0" y="1530.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#8a5a00" text-anchor="middle"><tspan>部分特征</tspan></text>
+<text x="695.0" y="1547.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#8a5a00" text-anchor="middle"><tspan>不作判定</tspan></text>
+<rect x="830.0" y="1509.0" width="150.0" height="46.0" rx="8" fill="#f9e1dd" stroke="#c0392b" stroke-width="1.5"/>
+<text x="905.0" y="1537.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#c0392b" text-anchor="middle"><tspan>PD 模式</tspan></text>
+<path d="M475.0 1553.0 L475.0 1569.0" fill="none" stroke="#5d6b78" stroke-width="1.4"/>
+<path d="M475.0 1569.0 L450.0 1569.0 L450.0 1596.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<path d="M475.0 1569.0 L630.0 1569.0 L630.0 1596.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<text x="442.0" y="1589.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="end"><tspan>是</tspan></text>
+<text x="638.0" y="1589.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12" font-weight="700" fill="#5d6b78" text-anchor="start"><tspan>否</tspan></text>
+<rect x="372.0" y="1599.0" width="156.0" height="46.0" rx="8" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="450.0" y="1627.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#ffffff" text-anchor="middle"><tspan>判定为该模式</tspan></text>
+<rect x="545.0" y="1599.0" width="170.0" height="46.0" rx="8" fill="#fff3d1" stroke="#d4a72c" stroke-width="1.5"/>
+<text x="630.0" y="1620.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#8a5a00" text-anchor="middle"><tspan>无法区分</tspan></text>
+<text x="630.0" y="1637.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#8a5a00" text-anchor="middle"><tspan>两种疾病都列出</tspan></text>
+<path d="M450.0 1645.0 L450.0 1673.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="364.0" y="1676.0" width="782.0" height="48.0" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="382.0" y="1705.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="13.5" font-weight="700" fill="#0f766e" text-anchor="start"><tspan>置信度</tspan></text>
+<rect x="442.5" y="1688.0" width="34.5" height="24.0" rx="12" fill="#e0f2ef" stroke="#e0f2ef" stroke-width="1.2"/>
+<text x="459.8" y="1704.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#0f766e" text-anchor="middle"><tspan>高</tspan></text>
+<text x="485.0" y="1704.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>R ≥ 70 且 Δ ≥ 30</tspan></text>
+<rect x="621.5" y="1688.0" width="47.0" height="24.0" rx="12" fill="#e0f2ef" stroke="#e0f2ef" stroke-width="1.2"/>
+<text x="645.0" y="1704.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#0f766e" text-anchor="middle"><tspan>中等</tspan></text>
+<text x="676.5" y="1704.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>R ≥ 50</tspan></text>
+<rect x="744.5" y="1688.0" width="34.5" height="24.0" rx="12" fill="#e0f2ef" stroke="#e0f2ef" stroke-width="1.2"/>
+<text x="761.8" y="1704.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="700" fill="#0f766e" text-anchor="middle"><tspan>低</tspan></text>
+<text x="787.0" y="1704.5" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#17202a" text-anchor="start"><tspan>R &lt; 50</tspan></text>
+<circle cx="62" cy="1792" r="9" fill="#ffffff" stroke="#0f766e" stroke-width="2.4"/>
+<text x="92.0" y="1798.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="16.5" font-weight="700" fill="#17202a" text-anchor="start"><tspan>输出</tspan></text>
+<text x="92.0" y="1822.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>辅助决策，不是诊断：</tspan></text>
+<text x="92.0" y="1840.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>须结合临床表现、MRI 和</tspan></text>
+<text x="92.0" y="1858.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="12.5" font-weight="400" fill="#5d6b78" text-anchor="start"><tspan>多巴胺转运体显像判断。</tspan></text>
+<path d="M755.0 1740.0 L755.0 1771.0" fill="none" stroke="#5d6b78" stroke-width="1.4" marker-end="url(#arrow)"/>
+<rect x="350.0" y="1774.0" width="190.5" height="62.0" rx="8" fill="#e0f2ef" stroke="#0f766e" stroke-width="1.8"/>
+<text x="445.2" y="1801.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#0f766e" text-anchor="middle"><tspan>报告</tspan></text>
+<text x="445.2" y="1820.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>HTML，中文或英文</tspan></text>
+<rect x="556.5" y="1774.0" width="190.5" height="62.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="651.8" y="1801.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>评分图</tspan></text>
+<text x="651.8" y="1820.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>NIfTI</tspan></text>
+<rect x="763.0" y="1774.0" width="190.5" height="62.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="858.2" y="1801.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>全部数值</tspan></text>
+<text x="858.2" y="1820.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>JSON</tspan></text>
+<rect x="969.5" y="1774.0" width="190.5" height="62.0" rx="8" fill="#f6f8fa" stroke="#c9d1d9" stroke-width="1.2"/>
+<text x="1064.8" y="1801.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="14" font-weight="700" fill="#17202a" text-anchor="middle"><tspan>汇总表</tspan></text>
+<text x="1064.8" y="1820.0" font-family="'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif" font-size="11.5" font-weight="400" fill="#5d6b78" text-anchor="middle"><tspan>TSV，每幅图像一行</tspan></text>
+</svg>

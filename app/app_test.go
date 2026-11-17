@@ -235,3 +235,44 @@ func TestPages(t *testing.T) {
 		}
 	}
 }
+
+// TestCompareSmoothing checks that, left to the app, the smoothing before
+// the test is that of the chosen reference, also for a method that does not
+// need the reference.
+func TestCompareSmoothing(t *testing.T) {
+	ref := t.TempDir()
+	write := func(fwhm float64) {
+		t.Helper()
+		raw := fmt.Sprintf(`{"n_controls": 12, "fwhm_mm": %g}`, fwhm)
+		if err := os.WriteFile(filepath.Join(ref, "reference.json"), []byte(raw), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := newApp()
+	p := &a.cmp
+	for _, p.method = range []string{"cerebellum", "hn"} {
+		a.setReference("")
+		if got := p.smoothing(); got != 8 {
+			t.Errorf("%s without a reference: %g mm, want 8", p.method, got)
+		}
+		write(6)
+		a.setReference(ref)
+		if got := p.smoothing(); got != 6 {
+			t.Errorf("%s with a reference smoothed by 6 mm: %g mm", p.method, got)
+		}
+		write(0)
+		a.setReference(ref) // as after building it anew
+		if got := p.smoothing(); got != 0 {
+			t.Errorf("%s with an unsmoothed reference: %g mm", p.method, got)
+		}
+		p.fwhmAuto, p.fwhm = false, 10
+		if got := p.smoothing(); got != 10 {
+			t.Errorf("%s with 10 mm asked for: %g mm", p.method, got)
+		}
+		p.fwhmAuto = true
+	}
+	a.setReference(filepath.Join(ref, "missing"))
+	if got := p.smoothing(); got != 8 {
+		t.Errorf("with a reference that cannot be read: %g mm, want 8", got)
+	}
+}

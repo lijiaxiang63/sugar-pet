@@ -538,6 +538,19 @@ type grfResult struct {
 	clusters []Cluster
 }
 
+// tToZ gives the z-score that has the tail probability of a t-statistic,
+// with its sign.  It takes the quantile in the lower tail: GrouVox takes
+// that of 1 - p, which rounds to 1 for p below about 1e-16 and so gives
+// infinity for a |z| above about 8.2.
+func tToZ(t, dof float64) float64 {
+	p := math.Max(tSF(math.Abs(t), dof), 1e-300)
+	z := -normPPF(p)
+	if t < 0 {
+		return -z
+	}
+	return z
+}
+
 // grfCorrection is the two-tailed cluster-level correction of GrouVox,
 // based on Gaussian random field theory (Friston et al., 1994).
 func grfCorrection(tVol *Volume, mask []bool, dof, dlh, voxelP, clusterP float64) *grfResult {
@@ -549,11 +562,7 @@ func grfCorrection(tVol *Volume, mask []bool, dof, dlh, voxelP, clusterP float64
 			if !mask[v] || t == 0 || math.IsNaN(t) {
 				continue
 			}
-			p := math.Min(math.Max(tSF(math.Abs(t), dof), 1e-300), 1-1e-15)
-			z[v] = normPPF(1.0 - p)
-			if t < 0 {
-				z[v] = -z[v]
-			}
+			z[v] = tToZ(t, dof)
 		}
 	})
 	res := &grfResult{zThr: normPPF(1.0 - voxelP/2.0), z: make([]float32, nvox), t: make([]float32, nvox)}

@@ -12,14 +12,18 @@ import (
 )
 
 type comparePage struct {
-	g1, g2     fileList
-	method     string
-	reference  string
-	region     regionChoice
-	cov        covChoice
-	covExtra   string // a second table, when the two groups are listed apart
-	fwhmAuto   bool
-	fwhm       float64
+	g1, g2    fileList
+	method    string
+	reference string
+	region    regionChoice
+	cov       covChoice
+	covExtra  string // a second table, when the two groups are listed apart
+	fwhmAuto  bool
+	fwhm      float64
+	// The smoothing of the reference, as last read from its folder.
+	fwhmKnown  bool
+	fwhmOf     string
+	fwhmRef    *float64
 	analysis   string // a built-in mask, or "file"
 	maskFile   string
 	correction int // 0 GRF, 1 FDR, 2 none
@@ -43,6 +47,36 @@ func (p *comparePage) init() {
 	p.fwhmAuto, p.fwhm = true, 8
 	p.voxelP, p.clusterP, p.q = 0.001, 0.05, 0.05
 	p.cov.adjust = map[string]bool{}
+}
+
+// referenceFWHM is the smoothing (mm) of the chosen reference, if there is
+// one that can be read.
+func (p *comparePage) referenceFWHM() (fwhm float64, ok bool) {
+	if !p.fwhmKnown || p.fwhmOf != p.reference {
+		p.fwhmKnown, p.fwhmOf, p.fwhmRef = true, p.reference, nil
+		if p.reference != "" {
+			if info := readRefInfo(p.reference); info.err == "" {
+				p.fwhmRef = &info.FWHM
+			}
+		}
+	}
+	if p.fwhmRef == nil {
+		return 0, false
+	}
+	return *p.fwhmRef, true
+}
+
+// smoothing is the smoothing (mm) before the test.  Left to the app, it is
+// that of the chosen reference, whether or not the method needs one, or 8 mm
+// without a reference.
+func (p *comparePage) smoothing() float64 {
+	if !p.fwhmAuto {
+		return p.fwhm
+	}
+	if fwhm, ok := p.referenceFWHM(); ok {
+		return fwhm
+	}
+	return 8
 }
 
 func (p *comparePage) problem() string {
@@ -167,7 +201,11 @@ func (a *app) compareView(c *ui.Context) {
 							},
 							fileRow,
 							func() {
-								setting(c, T("Smoothing before the test", "检验前的平滑"), T("Automatic: that of the reference, or 8 mm without one. Use 0 if the images are already smoothed.", "自动：采用参考库的平滑，无参考库时为 8 mm。图像已平滑时填 0。"),
+								about := T("Automatic: 8 mm, as no reference is chosen. Use 0 if the images are already smoothed.", "自动：未选择参考库，采用 8 mm。图像已平滑时填 0。")
+								if fwhm, ok := p.referenceFWHM(); ok {
+									about = Tf("Automatic: %g mm, that of the reference. Use 0 if the images are already smoothed.", "自动：采用参考库的平滑 %g mm。图像已平滑时填 0。", fwhm)
+								}
+								setting(c, T("Smoothing before the test", "检验前的平滑"), about,
 									func() {
 										ui.Checkbox(c, &p.fwhmAuto, T("Automatic", "自动"))
 										number(c, &p.fwhm, 0, 30, 1).Disabled(p.fwhmAuto).Tooltip("FWHM, mm")
@@ -252,10 +290,9 @@ func (a *app) runCompare() {
 	opt.Method, opt.Name, opt.KeepImages = p.method, strings.TrimSpace(p.name), p.keep
 	opt.Correction = [...]string{"grf", "fdr", "none"}[p.correction]
 	opt.VoxelP, opt.ClusterP, opt.Q = p.voxelP, p.clusterP, p.q
-	if !p.fwhmAuto {
-		fwhm := p.fwhm
-		opt.FWHM = &fwhm
-	}
+	p.fwhmKnown = false // the reference may have been built anew
+	fwhm := p.smoothing()
+	opt.FWHM = &fwhm
 	opt.AnalysisMask = core.MaskSpec{Name: p.analysis}
 	if p.analysis == "file" {
 		opt.AnalysisMask = core.MaskSpec{Name: p.maskFile}

@@ -116,6 +116,7 @@ func (a *app) saveSettings() {
 func (a *app) setReference(path string) {
 	a.norm.reference, a.zmap.reference, a.cmp.reference, a.cluster.reference = path, path, path, path
 	a.zmap.loadedFrom = ""
+	a.cmp.fwhmKnown = false
 }
 
 type pageInfo struct {

@@ -228,7 +228,8 @@ func decodeNifti(buf []byte, name, imgPath string) (*Volume, error) {
 	inter32 := math.Float32frombits(bo.Uint32(buf[116:]))
 	slope, inter := float64(slope32), float64(inter32)
 	if slope == 0 || math.IsNaN(slope) || math.IsInf(slope, 0) {
-		slope, slope32 = 1, 1
+		// No scaling: the intercept does not count either.
+		slope, slope32, inter, inter32 = 1, 1, 0, 0
 	}
 	if math.IsNaN(inter) || math.IsInf(inter, 0) {
 		inter, inter32 = 0, 0

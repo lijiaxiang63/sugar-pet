@@ -13,7 +13,7 @@ import (
 )
 
 // Version is written into the references this program builds.
-const Version = "0.4.0"
+const Version = "0.5.0"
 
 // Stat is the voxel-wise mean and standard deviation of the controls.
 type Stat struct{ Mean, Std []float32 }

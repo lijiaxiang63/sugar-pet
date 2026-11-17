@@ -37,6 +37,40 @@ Python 3.10+; depends only on numpy, scipy and nibabel. Group statistics
 pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 ```
 
+## Desktop app
+
+[`app/`](app) holds SUGAR-PET, a desktop app with the same methods and
+nothing to install beside it: no Python, no MATLAB. It is one small native
+program (about 12 MB) for macOS, Windows and Linux, written in Go with
+[MyGo](https://github.com/egoist/mygo)'s native UI, in English and Chinese.
+
+![SUGAR-PET](app/screenshots/normalize-en.png)
+
+Its pages follow the workflow below: **Normalise**, **Reference**,
+**Z-score Maps**, **Compare Groups**, **Reference Cluster**, and the
+built-in **Masks & Atlas**. Files can be dropped onto the lists. The app
+reads and writes the same files as the command line (reference folders,
+`factors.tsv`, output names, cluster reports), so the two can be mixed.
+Spatial normalisation (`sugar-pet spatial-norm`, which drives SPM) is not
+part of the app.
+
+Build it with Go 1.27+:
+
+```bash
+cd app
+go tool mygo build        # this machine: build/<os>-<arch>/
+go tool mygo build -platform darwin/universal,windows/amd64,linux/amd64
+go tool mygo dev          # run it while working on the code
+```
+
+The numeric core ([`app/core`](app/core)) is a Go port of this package,
+GrouVox's two-sample t-test and corrections included. `app/parity/run.py`
+runs the same commands through both and compares every output: images agree
+to about 1e-6 of their range, tables and cluster reports exactly.
+`go test ./...` in `app` drives the app's pages through a whole analysis of
+made-up images. The macOS app is signed ad hoc, not notarised: open it the
+first time with right-click > Open.
+
 ## Quick start
 
 Your images must already be **spatially normalised to MNI space** (any voxel

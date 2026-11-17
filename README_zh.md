@@ -34,6 +34,35 @@ git clone https://github.com/lijiaxiang63/sugar-pet && cd sugar-pet && uv sync
 pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 ```
 
+## 桌面应用
+
+[`app/`](app) 是 SUGAR-PET 桌面应用：方法与命令行相同，但不需要安装任何环境
+（不需要 Python，也不需要 MATLAB）。它是一个约 12 MB 的原生程序，支持 macOS、
+Windows 和 Linux，用 Go 和 [MyGo](https://github.com/egoist/mygo) 的原生界面
+编写，界面有中文和英文。
+
+![SUGAR-PET](app/screenshots/normalize-zh.png)
+
+页面按下文的推荐流程排列：**强度归一化**、**参考库**、**Z 值图**、**组间比较**、
+**参考簇**，以及内置的**掩膜与图谱**。文件可以直接拖到列表里。应用读写的文件
+与命令行完全一致（参考库文件夹、`factors.tsv`、输出文件名、团块报告），两者可以
+混用。空间标准化（`sugar-pet spatial-norm`，需调用 SPM）不在应用之内。
+
+用 Go 1.27+ 构建：
+
+```bash
+cd app
+go tool mygo build        # 本机平台，输出到 build/<系统>-<架构>/
+go tool mygo build -platform darwin/universal,windows/amd64,linux/amd64
+go tool mygo dev          # 开发时直接运行
+```
+
+数值核心（[`app/core`](app/core)）是本包的 Go 移植，包含 GrouVox 的双样本
+t 检验和多重比较校正。`app/parity/run.py` 用两种实现运行同样的命令并逐个比较
+输出：图像的差异约为取值范围的 1e-6，表格和团块报告完全一致。在 `app` 中运行
+`go test ./...` 会用合成图像把应用各页面的完整分析流程走一遍。macOS 版仅有临时
+签名、未公证：首次打开请右键选择“打开”。
+
 ## 快速上手
 
 输入图像必须已经**空间标准化到 MNI 空间**（体素大小和包围盒不限）。

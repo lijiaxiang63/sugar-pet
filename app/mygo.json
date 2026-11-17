@@ -1,0 +1,10 @@
+{
+  "name": "SUGAR-PET",
+  "slug": "sugar-pet",
+  "identifier": "org.sugarpet.desktop",
+  "version": "0.4.0",
+  "license": "MIT",
+  "icon": "assets/icon.png",
+  "out": "build",
+  "linux": { "comment": "Intensity normalisation of brain FDG-PET images" }
+}

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#343A73"/>
+      <stop offset="1" stop-color="#0D0F26"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="hot" gradientUnits="userSpaceOnUse" cx="512" cy="492" r="318">
+      <stop offset="0" stop-color="#FFF9D0"/>
+      <stop offset="0.26" stop-color="#FFD60A"/>
+      <stop offset="0.54" stop-color="#FF7A1A"/>
+      <stop offset="0.8" stop-color="#F0308A"/>
+      <stop offset="1" stop-color="#7B2FF7"/>
+    </radialGradient>
+    <radialGradient id="halo" gradientUnits="userSpaceOnUse" cx="512" cy="512" r="400">
+      <stop offset="0.45" stop-color="#FF7A1A" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#7B2FF7" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dy="12"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.38"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)" filter="url(#shadow)"/>
+  <g clip-path="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#halo)"/>
+    <g fill="url(#hot)">
+      <path d="M496 232 C372 228 262 330 258 500 C254 664 362 796 496 796 C504 796 506 790 506 782 L506 246 C506 238 504 232 496 232 Z"/>
+      <path d="M528 232 C652 228 762 330 766 500 C770 664 662 796 528 796 C520 796 518 790 518 782 L518 246 C518 238 520 232 528 232 Z"/>
+    </g>
+    <g fill="none" stroke="#17193A" stroke-opacity="0.5" stroke-width="15" stroke-linecap="round">
+      <path d="M398 318 q34 44 86 30"/>
+      <path d="M300 424 q72 34 124 -8"/>
+      <path d="M286 566 q84 -42 156 10"/>
+      <path d="M338 694 q62 -32 116 0"/>
+      <path d="M626 318 q-34 44 -86 30"/>
+      <path d="M724 424 q-72 34 -124 -8"/>
+      <path d="M738 566 q-84 -42 -156 10"/>
+      <path d="M686 694 q-62 -32 -116 0"/>
+    </g>
+    <rect x="100" y="100" width="824" height="824" fill="url(#gloss)"/>
+  </g>
+</svg>

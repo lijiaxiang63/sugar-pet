@@ -208,6 +208,71 @@ def cmd_zmap(args) -> int:
     return 1 if failed else 0
 
 
+def _lookup(tables: list[str], image: str, names: list[str]) -> dict[str, str]:
+    """Covariates of one image, from whichever table lists it."""
+    problems = []
+    for table in tables:
+        try:
+            return read_table(table, [image], names)[0]
+        except ValueError as err:
+            problems.append(str(err))
+    raise ValueError("; ".join(problems))
+
+
+def cmd_compare(args) -> int:
+    from .compare import compare_groups
+
+    problem = _unknown_methods([args.method])
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
+        return 2
+    images = [*args.group1, *args.group2]
+    covariates = None
+    if args.covariates:
+        names = _split([args.adjust_for])
+        rows = [_lookup(args.covariates, image, names) for image in images]
+        covariates = {name: [row[name] for row in rows] for name in names}
+    options = {"mask": args.mask} if args.mask else {}
+    print(
+        f"Comparing {len(args.group1)} images (group 1) with {len(args.group2)} (group 2), method {args.method} ...",
+        file=sys.stderr,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # per-image notes; the factors are in the table
+        res = compare_groups(
+            args.group1,
+            args.group2,
+            args.output,
+            args.method,
+            reference=args.reference,
+            covariates=covariates,
+            fwhm=args.fwhm,
+            analysis_mask=args.analysis_mask,
+            correction=args.correction,
+            voxel_p=args.voxel_p,
+            cluster_p=args.cluster_p,
+            q=args.q,
+            name=args.name,
+            keep_images=args.keep_images,
+            progress=_progress,
+            **options,
+        )
+    print(f"T-map (group 1 minus group 2): {res.t_map}")
+    print(f"Degrees of freedom {res.dof:g}, smoothness {' x '.join(f'{v:.1f}' for v in res.fwhm)} mm")
+    if res.n_clusters is not None:
+        if "min_cluster_voxels" in res.thresholds:
+            limit = res.thresholds
+            how = f"voxel p < {limit['voxel_p']:g}, cluster p < {limit['cluster_p']:g}"
+            how += f" (clusters of at least {limit['min_cluster_voxels']} voxels)"
+        else:
+            how = f"FDR q < {res.thresholds['q']:g}"
+        print(f"{res.n_clusters} cluster(s) survive {how}")
+        for key in ("thresholded", "cluster_report"):
+            if key in res.files:
+                print(f"  {res.files[key]}")
+    return 0
+
+
 def cmd_reference_cluster(args) -> int:
     from .cluster import reference_cluster
 
@@ -336,6 +401,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_iterative_options(p)
     p.set_defaults(func=cmd_zmap)
+
+    p = sub.add_parser("compare", help="voxel-wise comparison of two groups (needs the 'stats' extra)")
+    p.add_argument("--group1", nargs="+", required=True, help="images of group 1, e.g. the patients")
+    p.add_argument("--group2", nargs="+", required=True, help="images of group 2, e.g. the controls")
+    p.add_argument("-m", "--method", default="hn", help="normalisation method for both groups [hn]")
+    p.add_argument("-r", "--reference", help="reference folder (needed for hn, ips, ihn)")
+    p.add_argument("-o", "--output", required=True, help="output folder")
+    p.add_argument("--name", default="group1_vs_group2", help="prefix of the result files [group1_vs_group2]")
+    p.add_argument("--covariates", nargs="+", help="TSV/CSV table(s) listing the covariates of all images")
+    p.add_argument("--adjust-for", default="age,sex", help="columns to put in the model [age,sex]")
+    p.add_argument("--mask", help="built-in mask name or NIfTI file replacing the method's default region")
+    p.add_argument("--fwhm", type=float, help="smoothing in mm before the test [that of the reference, else 8]")
+    p.add_argument("--analysis-mask", default="gray-matter", help="voxels to test: mask name or file [gray-matter]")
+    p.add_argument("--correction", choices=("grf", "fdr", "none"), default="grf", help="multiple-comparison correction")
+    p.add_argument("--voxel-p", type=float, default=0.001, help="grf: voxel-level p, two-tailed [0.001]")
+    p.add_argument("--cluster-p", type=float, default=0.05, help="grf: cluster-level p [0.05]")
+    p.add_argument("--q", type=float, default=0.05, help="fdr: q value [0.05]")
+    p.add_argument("--keep-images", action="store_true", help="keep the normalised, smoothed images")
+    p.set_defaults(func=cmd_compare)
 
     p = sub.add_parser("reference-cluster", help="find a reference region from a patient group (Yakushev 2009)")
     p.add_argument("patients", nargs="+", help="FDG-PET images of the patient group, in MNI space")

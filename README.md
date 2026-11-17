@@ -29,7 +29,13 @@ or, to work on the code:
 git clone https://github.com/lijiaxiang63/sugar-pet && cd sugar-pet && uv sync
 ```
 
-Python 3.10+; depends only on numpy, scipy and nibabel.
+Python 3.10+; depends only on numpy, scipy and nibabel. Group statistics
+(`sugar-pet compare`) additionally need
+[GrouVox](https://github.com/lijiaxiang63/GrouVox):
+
+```bash
+pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
+```
 
 ## Quick start
 
@@ -137,14 +143,16 @@ at every warped image.
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates participants.tsv --stats-for occipital,white-matter
 ```
 
-**3. Normalise with `hn`.** This is the main analysis.
+**3. Compare the groups with `hn`.** This is the main analysis.
 
 ```bash
-sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -o normalised/
+sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r hc_reference/ -o stats/ --covariates participants.tsv
 ```
 
-For group statistics, smooth these images and put age and sex in the model.
-Switch off any global scaling in the statistics software (in SPM: no
+This normalises both groups, smooths them and tests every voxel with age and
+sex in the model (see [Comparing two groups](#comparing-two-groups)). If you
+prefer other statistics software, write the normalised images with
+`sugar-pet normalize` and switch off any global scaling there (in SPM: no
 proportional scaling, no ANCOVA), because the images are already normalised.
 
 **4. For single patients, make W-score maps,** which are adjusted for age and
@@ -154,8 +162,8 @@ sex:
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
 ```
 
-**5. Repeat steps 3 and 4 with two other references** (`-m occipital,white-matter`)
-as a sensitivity analysis:
+**5. Repeat steps 3 and 4 with two other references** (`-m occipital`, then
+`-m white-matter`) as a sensitivity analysis:
 
 * `occipital` is an anatomical region that MSA, PSP and CBS usually spare.
 * `white-matter` does not assume that most gray matter is normal, so it can
@@ -285,6 +293,45 @@ The cluster depends on the group it came from. Comparing that same group with
 controls afterwards is circular: derive the cluster from other patients, or
 cross-validate.
 
+## Comparing two groups
+
+```bash
+sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r hc_reference/ -o stats/ --covariates participants.tsv
+```
+
+In one go this
+
+1. normalises every image of both groups with the same method,
+2. smooths them (8 mm by default),
+3. runs a two-sample t-test at every voxel, with age and sex in the model,
+4. corrects for multiple comparisons and lists the surviving clusters with
+   their anatomical labels.
+
+The statistics are done by [GrouVox](https://github.com/lijiaxiang63/GrouVox)
+(see [Install](#install)). The result is group 1 minus group 2: with patients
+as group 1, **negative T means hypometabolism**.
+
+| File in `stats/`                         | Content                                              |
+| ---------------------------------------- | ---------------------------------------------------- |
+| `group1_vs_group2_T.nii.gz`              | T-map, unthresholded                                 |
+| `ClusterThresholded_group1_vs_group2_T.nii.gz` | T-map with only the clusters that survive      |
+| `ClusterReport_group1_vs_group2_T.csv`   | One row per cluster: size, peak, AAL and Harvard-Oxford regions |
+| `group1_vs_group2_factors.tsv`           | Normalisation factor of every image                  |
+| `group1_vs_group2_mask.nii.gz`           | Voxels that were tested                              |
+| `group1_vs_group2_beta.nii.gz`, `..._cohen_f2.nii.gz` | Model coefficients and effect size      |
+
+| Option             | Default          | Meaning                                                    |
+| ------------------ | ---------------- | ---------------------------------------------------------- |
+| `--covariates`     | none             | One or more tables listing all images, e.g. one for patients and one for controls ([format](#adjusting-for-age-and-sex-w-scores)) |
+| `--adjust-for`     | `age,sex`        | Columns of those tables to put in the model                |
+| `--correction`     | `grf`            | `grf`: cluster-level correction (`--voxel-p 0.001`, `--cluster-p 0.05`); `fdr`: voxel-level (`--q 0.05`); `none`. Two-tailed |
+| `--analysis-mask`  | `gray-matter`    | Voxels to test: a built-in mask or your own file           |
+| `--fwhm`           | as the reference | Smoothing in mm; 0 if the images are already smoothed      |
+| `--name`           | `group1_vs_group2` | Prefix of the result files                               |
+| `--keep-images`    | off              | Keep the normalised, smoothed images that were tested      |
+
+Each person should appear once: the test assumes independent subjects.
+
 ## Python
 
 ```python
@@ -319,6 +366,16 @@ res = normalize(img, "region", mask=labels_mask([40, 91]))  # both thalami
 
 cluster = reference_cluster(patient_files, ref)
 res = normalize(img, "region", mask=cluster)
+```
+
+Group comparison (needs GrouVox):
+
+```python
+from sugar_pet import compare_groups
+
+ages, sexes = patient_ages + control_ages, patient_sexes + control_sexes  # group 1 first
+res = compare_groups(patient_files, control_files, "stats", "hn", reference=ref, covariates={"age": ages, "sex": sexes})
+print(res.n_clusters, res.files["cluster_report"])
 ```
 
 ## Built-in masks

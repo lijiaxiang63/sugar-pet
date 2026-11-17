@@ -1,5 +1,7 @@
 import nibabel as nib
 import numpy as np
+import pytest
+from conftest import make_pet
 
 from sugar_pet.cli import main, output_name
 
@@ -130,3 +132,57 @@ def test_w_scores_from_a_participants_table(tmp_path, controls, patient, capsys)
     assert main(["zmap", patient_path, "-m", "hn", "-r", plain, "-o", str(out), "--covariates", str(tsv)]) == 2
     assert "built without covariates" in capsys.readouterr().err
     assert main([*build, "--covariates", str(tsv), "--adjust-for", "age,height"]) == 2
+
+
+def test_compare_two_groups(tmp_path, controls, lesion, capsys):
+    pytest.importorskip("grouvox")
+
+    rng = np.random.default_rng(21)
+    table = ["participant_id\tage\tsex"]
+    patients, healthy = [], []
+    for i in range(10):
+        patients.append(str(tmp_path / f"sub-p{i:02d}_pet.nii.gz"))
+        nib.save(make_pet(rng, scale=rng.uniform(3000, 9000), lesion=lesion, drop=0.3), patients[-1])
+        table.append(f"sub-p{i:02d}\t{55 + 2 * i}\t{'MF'[i % 2]}")
+    hc_table = ["participant_id,age,sex"]  # the controls come with their own table, as a CSV
+    for i, img in enumerate(controls[:12]):
+        healthy.append(str(tmp_path / f"sub-c{i:02d}_pet.nii.gz"))
+        nib.save(img, healthy[-1])
+        hc_table.append(f"sub-c{i:02d},{40 + 3 * i},{'FM'[i % 2]}")
+    (tmp_path / "patients.tsv").write_text("\n".join(table) + "\n")
+    (tmp_path / "controls.csv").write_text("\n".join(hc_table) + "\n")
+    ref = str(tmp_path / "ref")
+    assert main(["build-reference", *healthy, "-o", ref, "--fwhm", "0"]) == 0
+
+    out = tmp_path / "stats"
+    args = ["compare", "--group1", *patients, "--group2", *healthy, "-r", ref, "-o", str(out), "--name", "pat_vs_hc"]
+    tables = ["--covariates", str(tmp_path / "patients.tsv"), str(tmp_path / "controls.csv")]
+    capsys.readouterr()
+    assert main([*args, *tables, "--fwhm", "4"]) == 0
+    printed = capsys.readouterr().out
+    assert "Degrees of freedom 18" in printed and "cluster(s) survive" in printed  # 22 images - 2 groups - age - sex
+
+    t = nib.load(out / "pat_vs_hc_T.nii.gz").get_fdata()
+    mask = nib.load(out / "pat_vs_hc_mask.nii.gz").get_fdata() > 0
+    core = (lesion > 0.5) & mask
+    assert np.median(t[core]) < -5  # patients lower than controls inside the lesion
+    assert abs(np.median(t[mask & ~(lesion > 0)])) < 1.5
+    kept = nib.load(out / "ClusterThresholded_pat_vs_hc_T.nii.gz").get_fdata()
+    rest = mask & ~(lesion > 0)
+    assert (kept[core] < 0).mean() > 0.8  # the lesion survives the correction ...
+    assert (kept[rest] != 0).mean() < 0.15  # ... with only its smoothed rim around it
+    assert (kept[rest] > 0).mean() < 0.01  # and no false "hypermetabolism" with hn
+    report = (out / "ClusterReport_pat_vs_hc_T.csv").read_text().splitlines()
+    assert report[0].startswith("Cluster,Size,PeakZ") and len(report) >= 2
+    rows = (out / "pat_vs_hc_factors.tsv").read_text().strip().splitlines()
+    assert len(rows) == 1 + 22 and rows[1].split("\t")[1:3] == ["1", "hn"] and rows[-1].split("\t")[1] == "2"
+    assert not list(out.glob("tmp*")) and not (out / "pat_vs_hc_images").exists()
+
+    # other corrections, kept images, and input errors
+    assert main([*args, "-m", "whole-brain", "--correction", "fdr", "--keep-images"]) == 0
+    assert (out / "FDR_Thresholded_pat_vs_hc_T.nii.gz").exists()
+    assert len(list((out / "pat_vs_hc_images").glob("group1_*.nii.gz"))) == 10
+    assert main([*args, "--covariates", str(tmp_path / "patients.tsv")]) == 2  # the controls are not in that table
+    assert "no row" in capsys.readouterr().err
+    assert main([*args, "-m", "magic"]) == 2
+    assert main(["compare", "--group1", patients[0], "--group2", *healthy, "-m", "ps", "-o", str(out)]) == 2

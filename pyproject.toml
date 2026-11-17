@@ -1,6 +1,6 @@
 [project]
 name = "sugar-pet"
-version = "0.3.0"
+version = "0.4.0"
 description = "Intensity normalisation methods for brain FDG-PET (Standardized Uptake Global And Regional-normalization)"
 readme = "README.md"
 authors = [
@@ -18,12 +18,18 @@ dependencies = [
 [project.scripts]
 sugar-pet = "sugar_pet.cli:main"
 
+[project.optional-dependencies]
+stats = [
+    "grouvox @ git+https://github.com/lijiaxiang63/GrouVox@v0.2.0",
+]
+
 [build-system]
 requires = ["uv_build>=0.10.12,<0.11.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "grouvox @ git+https://github.com/lijiaxiang63/GrouVox@v0.2.0",
     "pytest>=8",
     "ruff>=0.6",
 ]

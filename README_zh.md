@@ -27,7 +27,12 @@ pip install git+https://github.com/lijiaxiang63/sugar-pet
 git clone https://github.com/lijiaxiang63/sugar-pet && cd sugar-pet && uv sync
 ```
 
-需要 Python 3.10+，只依赖 numpy、scipy、nibabel。
+需要 Python 3.10+，只依赖 numpy、scipy、nibabel。组间统计（`sugar-pet compare`）
+还需要 [GrouVox](https://github.com/lijiaxiang63/GrouVox)：
+
+```bash
+pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
+```
 
 ## 快速上手
 
@@ -124,15 +129,15 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates participants.tsv --stats-for occipital,white-matter
 ```
 
-**3. 用 `hn` 做归一化**，这是主分析。
+**3. 用 `hn` 做组间比较**，这是主分析。
 
 ```bash
-sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -o normalised/
+sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r hc_reference/ -o stats/ --covariates participants.tsv
 ```
 
-做组间统计时，先平滑这些图像，并把年龄、性别放进统计模型。
-统计软件里的全局缩放要关掉（SPM 里不选 proportional scaling，也不选 ANCOVA），
-因为图像已经归一化过了。
+它会把两组图像归一化、平滑，并在每个体素上做检验，模型里包含年龄和性别
+（详见[组间比较](#组间比较)）。如果想用其他统计软件，就用 `sugar-pet normalize` 输出归一化图像，
+并把那边的全局缩放关掉（SPM 里不选 proportional scaling，也不选 ANCOVA），因为图像已经归一化过了。
 
 **4. 看单个患者时，生成 W 值图**，它校正了年龄和性别：
 
@@ -140,7 +145,7 @@ sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
 ```
 
-**5. 换两种参考区把第 3、4 步重做一遍**（`-m occipital,white-matter`），作为敏感性分析：
+**5. 换两种参考区把第 3、4 步重做一遍**（先 `-m occipital`，再 `-m white-matter`），作为敏感性分析：
 
 * `occipital`：解剖参考区，MSA、PSP、CBS 通常不累及枕叶。
 * `white-matter`：不假设“大部分灰质正常”，所以能显示 `hn` 看不到的弥漫性下降，但噪声更大。
@@ -252,6 +257,43 @@ sugar-pet normalize patients/*.nii.gz -m region --mask cluster.nii.gz -o out/
 参考簇依赖于生成它的那组患者。之后再拿同一组患者与对照比较属于循环论证：
 应当用另一批患者生成参考簇，或做交叉验证。
 
+## 组间比较
+
+```bash
+sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz -m hn -r hc_reference/ -o stats/ --covariates participants.tsv
+```
+
+这一条命令依次完成：
+
+1. 用同一种方法把两组的每幅图像归一化；
+2. 平滑（默认 8 mm）；
+3. 在每个体素上做两样本 t 检验，模型里包含年龄和性别；
+4. 做多重比较校正，并列出通过校正的簇及其解剖位置。
+
+统计部分由 [GrouVox](https://github.com/lijiaxiang63/GrouVox) 完成（见[安装](#安装)）。
+结果是“第 1 组减第 2 组”：把患者放在第 1 组时，**T 值为负表示低代谢**。
+
+| `stats/` 中的文件                        | 内容                                             |
+| ---------------------------------------- | ------------------------------------------------ |
+| `group1_vs_group2_T.nii.gz`              | 未设阈值的 T 值图                                |
+| `ClusterThresholded_group1_vs_group2_T.nii.gz` | 只保留通过校正的簇的 T 值图                |
+| `ClusterReport_group1_vs_group2_T.csv`   | 每个簇一行：大小、峰值、AAL 和 Harvard-Oxford 脑区 |
+| `group1_vs_group2_factors.tsv`           | 每幅图像的归一化因子                             |
+| `group1_vs_group2_mask.nii.gz`           | 参与检验的体素                                   |
+| `group1_vs_group2_beta.nii.gz`、`..._cohen_f2.nii.gz` | 模型系数与效应量                    |
+
+| 选项               | 默认值             | 含义                                                     |
+| ------------------ | ------------------ | -------------------------------------------------------- |
+| `--covariates`     | 无                 | 一个或多个表格，需覆盖所有图像，例如患者一个、对照一个（[格式](#校正年龄和性别w-值)） |
+| `--adjust-for`     | `age,sex`          | 放进模型的列                                             |
+| `--correction`     | `grf`              | `grf`：簇水平校正（`--voxel-p 0.001`、`--cluster-p 0.05`）；`fdr`：体素水平（`--q 0.05`）；`none`。均为双侧 |
+| `--analysis-mask`  | `gray-matter`      | 参与检验的体素：内置掩膜或自己的文件                     |
+| `--fwhm`           | 与参考库相同       | 平滑核（mm）；图像已平滑过就设 0                         |
+| `--name`           | `group1_vs_group2` | 结果文件的前缀                                           |
+| `--keep-images`    | 关                 | 保留参与检验的归一化、平滑后的图像                       |
+
+每个人只应出现一次：检验假设各受试者相互独立。
+
 ## Python 接口
 
 ```python
@@ -285,6 +327,16 @@ res = normalize(img, "region", mask=labels_mask([40, 91]))  # 双侧丘脑
 
 cluster = reference_cluster(patient_files, ref)
 res = normalize(img, "region", mask=cluster)
+```
+
+组间比较（需要 GrouVox）：
+
+```python
+from sugar_pet import compare_groups
+
+ages, sexes = patient_ages + control_ages, patient_sexes + control_sexes  # 第 1 组在前
+res = compare_groups(patient_files, control_files, "stats", "hn", reference=ref, covariates={"age": ages, "sex": sexes})
+print(res.n_clusters, res.files["cluster_report"])
 ```
 
 ## 内置掩膜

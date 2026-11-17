@@ -44,9 +44,17 @@ MASKS: dict[str, str] = {
     "temporal-right": "Right temporal cortex (RRTL for a left-sided lesion)",
 }
 
-# Built-in masks that are also offered as reference-region methods of the
-# same name.  The others can still be used with ``method="region"``.
-REFERENCE_REGIONS = ("cerebellum", "cerebellar-gm", "pons", "white-matter", "occipital", "sensorimotor")
+# Reference-region methods: method name -> built-in mask.  The other masks
+# can still be used with ``method="region"``.
+REFERENCE_REGIONS: dict[str, str] = {
+    "whole-brain": "parenchyma",
+    "cerebellum": "cerebellum",
+    "cerebellar-gm": "cerebellar-gm",
+    "pons": "pons",
+    "white-matter": "white-matter",
+    "occipital": "occipital",
+    "sensorimotor": "sensorimotor",
+}
 
 
 def _load(name: str) -> nib.Nifti1Image:

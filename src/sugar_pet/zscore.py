@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
+from collections.abc import Mapping
 from pathlib import Path
 
 import nibabel as nib
 import numpy as np
 
+from .covariates import design_row
 from .imageops import smooth, valid_voxels
 from .masks import get_mask
 from .normalize import normalize
@@ -18,6 +21,7 @@ def zmap(
     method: str = "hn",
     *,
     reference: Reference | str | Path,
+    covariates: Mapping | None = None,
     p_threshold: float = 0.01,
     exclude: str = "hypo",
     max_iter: int = 1,
@@ -34,13 +38,29 @@ def zmap(
     built with ``stats_for`` naming the method; their default region and the
     mean are always used, because that is what the controls were scaled with.
 
+    With ``covariates`` (for example ``{"age": 63, "sex": "F"}``) the result
+    is a W-score map instead: the image is compared with what the controls
+    predict for a person of that age and sex,
+    ``w = (image - predicted) / residual SD``.  The reference must have been
+    built with the same covariates.
+
     Voxels outside the brain, or not covered by the image, are set to 0.
     """
     ref = reference if isinstance(reference, Reference) else Reference.load(reference)
     ref.control_stats(method)  # fail before doing any work
+    row = None
+    if covariates is not None:
+        ref.control_model(method)
+        row, notes = design_row(ref.meta["covariates"], covariates)
+        for note in notes:
+            warnings.warn(note, stacklevel=2)
     res = normalize(image, method, reference=ref, p_threshold=p_threshold, exclude=exclude, max_iter=max_iter)
     ref = ref.on_grid(res.image)
-    mean, std = ref.control_stats(method)
+    if row is None:
+        mean, std = ref.control_stats(method)
+    else:
+        beta, std = ref.control_model(method)
+        mean = np.tensordot(row.astype(np.float32), beta, axes=1)
 
     data = res.image.get_fdata(dtype=np.float32)
     brain = get_mask("gray-matter", res.image) | get_mask("parenchyma", res.image)
@@ -51,5 +71,6 @@ def zmap(
 
     out = nib.Nifti1Image(z, res.image.affine)
     out.header.set_xyzt_units("mm")
-    out.header["descrip"] = f"sugar-pet z-score {method} factor={res.factor:.6g} n={ref.n}"[:79]
+    kind = "z-score" if row is None else "w-score"
+    out.header["descrip"] = f"sugar-pet {kind} {method} factor={res.factor:.6g} n={ref.n}"[:79]
     return out

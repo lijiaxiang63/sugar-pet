@@ -83,10 +83,50 @@ def test_all_methods_and_errors(tmp_path, healthy, capsys):
     out = tmp_path / "out"
     assert main(["normalize", path, "-m", "all", "-o", str(out), "--factors-only"]) == 0
     assert not list(out.glob("*.nii.gz"))
-    assert len((out / "factors.tsv").read_text().strip().splitlines()) == 1 + 8
+    assert len((out / "factors.tsv").read_text().strip().splitlines()) == 1 + 9
     # a reference-based method without a reference fails cleanly
     assert main(["normalize", path, "-m", "hn", "-o", str(out)]) == 1
     assert main(["normalize", path, "-m", "nope", "-o", str(out)]) == 2
     assert main(["methods"]) == 0
     assert main(["masks", "-o", str(tmp_path / "masks")]) == 0
     assert (tmp_path / "masks" / "pons.nii.gz").exists()
+
+
+def test_w_scores_from_a_participants_table(tmp_path, controls, patient, capsys):
+    paths = []
+    table = ["participant_id\tname\tage\tsex"]
+    for i, img in enumerate(controls[:12]):
+        paths.append(str(tmp_path / f"sub-hc{i:02d}_ses-1_pet.nii.gz"))
+        nib.save(img, paths[-1])
+        table.append(f"sub-hc{i:02d}\tsomeone\t{40 + 3 * i}\t{'FM'[i % 2]}")
+    patient_path = str(tmp_path / "sub-p1_pet.nii.gz")
+    nib.save(patient, patient_path)
+    table.append("sub-p1\tsomeone\t90\tF")
+    tsv = tmp_path / "participants.tsv"
+    tsv.write_text("\n".join(table) + "\n")
+
+    ref = str(tmp_path / "ref")
+    build = ["build-reference", *paths, "-o", ref, "--fwhm", "0"]
+    assert main([*build, "--covariates", str(tsv), "--stats-for", "pons"]) == 0
+    assert "someone" not in (tmp_path / "ref" / "reference.json").read_text()  # only what is asked for is read
+    out = tmp_path / "w"
+    capsys.readouterr()
+    assert main(["zmap", patient_path, "-m", "hn,pons", "-r", ref, "-o", str(out), "--covariates", str(tsv)]) == 0
+    assert "outside the range of the controls" in capsys.readouterr().err  # age 90
+    w = nib.load(out / "sub-p1_desc-hn_wmap.nii.gz")
+    assert "w-score" in str(w.header["descrip"]) and w.get_fdata().min() < -4
+    assert (out / "sub-p1_desc-pons_wmap.nii.gz").exists()
+    # without the table: plain z-scores
+    assert main(["zmap", patient_path, "-m", "hn", "-r", ref, "-o", str(out)]) == 0
+    assert (out / "sub-p1_desc-hn_zmap.nii.gz").exists()
+
+    # an image that is not in the table, and a reference without covariates
+    other = str(tmp_path / "sub-p2_pet.nii.gz")
+    nib.save(patient, other)
+    assert main(["zmap", other, "-m", "hn", "-r", ref, "-o", str(out), "--covariates", str(tsv)]) == 1
+    assert "no row" in capsys.readouterr().err
+    plain = str(tmp_path / "plain")
+    assert main(build[:-4] + ["-o", plain, "--fwhm", "0"]) == 0
+    assert main(["zmap", patient_path, "-m", "hn", "-r", plain, "-o", str(out), "--covariates", str(tsv)]) == 2
+    assert "built without covariates" in capsys.readouterr().err
+    assert main([*build, "--covariates", str(tsv), "--adjust-for", "age,height"]) == 2

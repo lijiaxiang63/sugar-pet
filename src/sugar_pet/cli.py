@@ -11,6 +11,7 @@ import nibabel as nib
 from nibabel.filebasedimages import ImageFileError
 
 from . import __version__
+from .covariates import read_table
 from .masks import MASKS, atlas_labels, builtin_mask, labels_mask
 from .normalize import METHODS, NEEDS_REFERENCE, normalize
 from .reference import STATS_METHODS, Reference
@@ -68,7 +69,17 @@ def cmd_build_reference(args) -> int:
     stats_for = _split(args.stats_for)
     if stats_for == ["all"]:
         stats_for = list(STATS_METHODS)
-    ref = Reference.build(args.controls, mask=args.mask, fwhm=args.fwhm, stats_for=stats_for, progress=_progress)
+    covariates = None
+    if args.covariates:
+        names = _split([args.adjust_for])
+        rows = read_table(args.covariates, args.controls, names)
+        covariates = {name: [row[name] for row in rows] for name in names}
+    ref = Reference.build(
+        args.controls, mask=args.mask, fwhm=args.fwhm, stats_for=stats_for, covariates=covariates, progress=_progress
+    )
+    for term in ref.meta.get("covariates", []):
+        detail = f"{term['min']:g} to {term['max']:g}" if term["type"] == "numeric" else " / ".join(term["levels"])
+        print(f"Adjusting for {term['name']} ({detail})", file=sys.stderr)
     ref.save(args.output)
     print(f"Reference saved to {args.output}")
     return 0
@@ -156,27 +167,42 @@ def cmd_zmap(args) -> int:
         print(f"error: {problem}", file=sys.stderr)
         return 2
     reference = Reference.load(args.reference)
-    for method in methods:
-        reference.control_stats(method)  # stop early if the reference cannot serve a method
+    for method in methods:  # stop early if the reference cannot serve a method
+        reference.control_stats(method)
+        if args.covariates:
+            reference.control_model(method)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     failed = 0
     for path in args.images:
+        covariates = None
+        if args.covariates:
+            try:
+                covariates = read_table(args.covariates, [path], reference.covariates)[0]
+            except ValueError as err:
+                failed += 1
+                print(f"error: {Path(path).name}: {err}", file=sys.stderr)
+                continue
         for method in methods:
             try:
-                z = zmap(
-                    path,
-                    method,
-                    reference=reference,
-                    p_threshold=args.p_threshold,
-                    exclude=args.exclude,
-                    max_iter=args.max_iter,
-                )
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    z = zmap(
+                        path,
+                        method,
+                        reference=reference,
+                        covariates=covariates,
+                        p_threshold=args.p_threshold,
+                        exclude=args.exclude,
+                        max_iter=args.max_iter,
+                    )
+                for w in caught:
+                    print(f"warning: {Path(path).name} [{method}]: {w.message}", file=sys.stderr)
             except (ValueError, OSError, ImageFileError) as err:  # keep going with the other images
                 failed += 1
                 print(f"error: {Path(path).name} [{method}]: {err}", file=sys.stderr)
                 continue
-            name = output_name(path, method, "zmap")
+            name = output_name(path, method, "wmap" if covariates else "zmap")
             nib.save(z, out / name)
             print(name)
     return 1 if failed else 0
@@ -292,13 +318,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         help=f"also store control statistics for z-maps with these methods ({', '.join(STATS_METHODS)}, or 'all')",
     )
+    p.add_argument(
+        "--covariates",
+        help="TSV/CSV table with the covariates of the controls (e.g. BIDS participants.tsv), for W-scores",
+    )
+    p.add_argument("--adjust-for", default="age,sex", help="columns of that table to adjust for [age,sex]")
     p.set_defaults(func=cmd_build_reference)
 
-    p = sub.add_parser("zmap", help="z-score maps of images against the controls of a reference")
+    p = sub.add_parser("zmap", help="z-score (or covariate-adjusted W-score) maps against the controls")
     p.add_argument("images", nargs="+", help="FDG-PET images in MNI space")
     p.add_argument("-m", "--method", action="append", required=True, help="normalisation method(s) to use")
     p.add_argument("-r", "--reference", required=True, help="reference folder")
     p.add_argument("-o", "--output", required=True, help="output folder")
+    p.add_argument(
+        "--covariates",
+        help="TSV/CSV table with the covariates of these images: writes W-score maps adjusted for them",
+    )
     _add_iterative_options(p)
     p.set_defaults(func=cmd_zmap)
 

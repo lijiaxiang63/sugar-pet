@@ -236,3 +236,100 @@ def test_reference_cluster_avoids_the_lesion(lesion, healthy, reference):
         reference_cluster(group[:1], reference)
     with pytest.raises(ValueError, match="relatively preserved"):
         reference_cluster(group, reference, p_threshold=1e-12, min_cluster_ml=1e6)
+
+
+@pytest.fixture(scope="module")
+def ageing():
+    """Controls whose occipital uptake falls by 0.8 % per year and is 10 % higher in sensorimotor cortex of men."""
+    rng = np.random.default_rng(11)
+    occipital = builtin_mask("occipital").get_fdata()
+    motor = builtin_mask("sensorimotor").get_fdata()
+
+    def person(age, sex, seed=None):
+        effect = 0.008 * (age - 55) * occipital - (0.10 if sex == "M" else 0.0) * motor
+        return make_pet(rng if seed is None else np.random.default_rng(seed), scale=4000.0, lesion=effect, drop=1.0)
+
+    ages = [float(a) for a in np.linspace(30, 80, 24)]
+    sexes = ["F", "M"] * 12
+    images = [person(a, s) for a, s in zip(ages, sexes)]
+    ref = Reference.build(images, fwhm=0, covariates={"age": ages, "sex": sexes}, stats_for=["cerebellum"])
+    return ref, images, ages, sexes, person, occipital > 0, motor > 0
+
+
+def test_covariate_model_is_ordinary_least_squares(ageing):
+    ref, images, ages, sexes, *_ = ageing
+    assert ref.covariates == ["age", "sex"]
+    y = np.stack([normalize(img, "cerebellum").image.get_fdata()[ref.mask] for img in images])
+    design = np.column_stack([np.ones(24), np.array(ages) - np.mean(ages), [s == "M" for s in sexes]])
+    expected, *_ = np.linalg.lstsq(design, y, rcond=None)
+    beta, sd = ref.control_model("cerebellum")
+    assert np.allclose(beta[:, ref.mask], expected, atol=2e-4)
+    resid = y - design @ expected
+    assert np.allclose(sd[ref.mask], np.sqrt((resid**2).sum(0) / (24 - 3)), rtol=2e-2, atol=1e-5)
+    assert ref.control_model("ihn")[0] is ref.models["hn"][0]
+
+
+@pytest.mark.parametrize("method", ["hn", "cerebellum"])
+def test_w_scores_remove_age_and_sex_effects(ageing, method):
+    ref, _, _, _, person, occipital, motor = ageing
+    old_man = person(78, "M", seed=5)  # healthy for his age and sex
+    z = zmap(old_man, method, reference=ref).get_fdata()
+    w = zmap(old_man, method, reference=ref, covariates={"age": 78, "sex": "M"}).get_fdata()
+    occipital, motor = occipital & ref.mask, motor & ref.mask
+    assert np.median(z[occipital]) < -1.0  # looks hypometabolic next to mostly younger controls
+    assert abs(np.median(w[occipital])) < 0.6  # ... but is normal for 78
+    assert abs(np.median(w[motor])) < abs(np.median(z[motor]))
+    rest = ref.mask & ~occipital & ~motor
+    assert abs(np.median(w[rest])) < 0.5 and w[rest].std() < 2
+
+
+def test_w_scores_survive_a_roundtrip_and_another_grid(ageing, tmp_path):
+    from nibabel.processing import resample_from_to
+
+    ref, _, _, _, person, *_ = ageing
+    loaded = Reference.load(ref.save(tmp_path / "ref"))
+    assert set(loaded.models) == {"ps", "hn", "cerebellum"} and loaded.covariates == ["age", "sex"]
+    img = person(70, "F", seed=9)
+    who = {"age": 70, "sex": "F"}
+    a = zmap(img, "hn", reference=ref, covariates=who).get_fdata()
+    b = zmap(img, "hn", reference=loaded, covariates=who).get_fdata()
+    assert np.allclose(a, b, atol=1e-3)
+    affine = np.array([[-2.0, 0, 0, 90], [0, 2, 0, -126], [0, 0, 2, -72], [0, 0, 0, 1]])
+    moved = resample_from_to(img, ((91, 109, 91), affine), order=1)
+    c = zmap(moved, "hn", reference=loaded, covariates=who)
+    back = resample_from_to(c, img, order=1).get_fdata()
+    inside = ref.mask & (back != 0)
+    assert np.corrcoef(a[inside], back[inside])[0, 1] > 0.8
+
+
+def test_covariate_errors(ageing, controls, healthy, reference):
+    ref, images, ages, *_ = ageing
+    with pytest.raises(ValueError, match="built without covariates"):
+        zmap(healthy, "hn", reference=reference, covariates={"age": 60, "sex": "F"})
+    with pytest.raises(ValueError, match="needed but missing"):
+        zmap(healthy, "hn", reference=ref, covariates={"age": 60})
+    with pytest.raises(ValueError, match="one of"):
+        zmap(healthy, "hn", reference=ref, covariates={"age": 60, "sex": "female"})
+    with pytest.raises(ValueError, match="stats-for pons"):
+        zmap(healthy, "pons", reference=ref, covariates={"age": 60, "sex": "F"})
+    with pytest.warns(UserWarning, match="extrapolation"):
+        zmap(healthy, "hn", reference=ref, covariates={"age": 95, "sex": "F"})
+    for bad, message in (
+        ({"age": ages[:5]}, "5 covariate values"),
+        ({"sex": ["F"] * 24}, "exactly two values"),
+        ({"age": [60.0] * 24}, "same for all controls"),
+        ({"age": ages, "site": ["a", "b", "c"] * 8}, "exactly two values"),
+        ({"age": ages[:-1] + ["n/a"]}, "missing"),
+        ({"age": ages, "years": ages}, "redundant"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            Reference.build(images, fwhm=0, covariates=bad)
+
+
+def test_whole_brain_is_the_parenchyma_mean(healthy):
+    data = healthy.get_fdata()
+    mask = (builtin_mask("parenchyma").get_fdata() > 0) & (data > 0)
+    assert normalize(healthy, "whole-brain").factor == pytest.approx(data[mask].mean(), rel=1e-5)
+    # ... and proportional scaling is the same thing on the gray-matter mask
+    assert normalize(healthy, "ps").factor == normalize(healthy, "region", mask="gray-matter").factor
+    assert normalize(healthy, "ps", mask="parenchyma").factor == normalize(healthy, "whole-brain").factor

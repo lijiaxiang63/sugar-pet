@@ -54,6 +54,7 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 
 | `-m`             | 因子的估计方式                                             | 需要对照 |
 | ---------------- | ---------------------------------------------------------- | :------: |
+| `whole-brain`    | 全脑平均摄取（灰质 + 白质）                                |    否    |
 | `cerebellum`     | 全小脑平均摄取（文中的 RRC）                               |    否    |
 | `cerebellar-gm`  | 小脑灰质平均摄取                                           |    否    |
 | `pons`           | 脑桥中央平均摄取                                           |    否    |
@@ -68,6 +69,9 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 | `ihn`            | **迭代 HN**：先做 HN，找出低代谢体素，去掉后重做 HN        |    是    |
 
 一次用多种方法：`-m cerebellum,ps,hn` 或 `-m all`。加 `--factors-only` 只输出因子表。
+
+`ps` 和 `whole-brain` 与其他参考区法一样，都是直接取区域均值，只是区域不同：
+`ps` 用灰质（与文章一致），`whole-brain` 用灰质加白质。
 
 参考区相关的选项：
 
@@ -119,6 +123,7 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 | `mask.nii.gz`      | 估计因子所用的体素（灰质掩膜）                        |
 | `reference.json`   | 对照例数、平滑核、每个对照的因子                      |
 | `stats-<方法>_mean.nii.gz`、`..._std.nii.gz` | 仅在使用 `--stats-for` 时生成：对照经其他方法归一化后的均值与标准差（用于 [Z 值图](#z-值图)） |
+| `model-<方法>_beta.nii.gz`、`..._sd.nii.gz` | 仅在使用 `--covariates` 时生成：对照的摄取与年龄、性别的关系（用于 [W 值](#校正年龄和性别w-值)） |
 
 对照应与患者来自同一台扫描仪、同样的重建参数，并经过相同的预处理，建议不少于 20 例。
 
@@ -152,7 +157,35 @@ sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --stats-for cerebel
 sugar-pet zmap patients/*.nii.gz -m pons -r hc_reference/ -o zmaps/
 ```
 
-（`--stats-for all` 保存所有参考区。）Z 值没有做年龄、性别校正，请使用与患者匹配的对照。
+（`--stats-for all` 保存所有参考区。）
+
+### 校正年龄和性别（W 值）
+
+摄取随年龄变化，男女之间也略有差别。如果患者比对照年龄大，普通 Z 值会把年龄效应和疾病混在一起。
+W 值把每个患者与“对照中**同年龄、同性别**的人应有的摄取”相比：
+`w = (图像 − 预测值) / 对照的残差标准差`。
+
+建参考库时提供对照的年龄、性别表，算图时提供患者的表：
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates controls.tsv
+sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates patients.tsv
+```
+
+输出 `sub-01_desc-hn_wmap.nii.gz`。不加 `--covariates` 时，`zmap` 仍用同一个参考库输出普通 Z 值。
+
+表格是 TSV 或 CSV 文件，例如 BIDS 的 `participants.tsv`：
+
+```
+participant_id	age	sex
+sub-01	63	F
+sub-02	58	M
+```
+
+每幅图像按 `participant_id` 找到对应的行（`sub-01` 对应 `sub-01_..._pet.nii.gz`），
+也可以用名为 `image` 的列直接写文件名。只读取需要校正的那几列。
+默认 `--adjust-for age,sex`；任何数值列或恰好两种取值的列都可以。
+年龄按线性关系处理；患者年龄超出对照的年龄范围时会给出警告。
 
 ## 参考簇
 
@@ -186,6 +219,10 @@ res.save("sub-01_desc-ihn_pet.nii.gz")
 res.mask_image()  # 估计因子所用的体素
 
 z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # NIfTI 图像
+
+# W 值：建参考库时给出对照的协变量，算图时给出患者的
+ref = Reference.build(control_files, covariates={"age": ages, "sex": sexes})
+w = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref, covariates={"age": 63, "sex": "F"})
 ```
 
 参考区可以是内置掩膜、自己的文件，或内置图谱的任意标签组合：
@@ -241,6 +278,9 @@ sugar-pet spatial-norm raw/*_pet.nii.gz -o mni/ --spm-path /path/to/spm12 --jobs
 * **统一的尺度。** `ps`、`ips`、`hn`、`ihn` 都按“健康大脑灰质掩膜均值约为 1”来定标。
 * **参考簇。** 两样本 t 检验（患者 > 对照，等方差）直接由患者图像和参考库里保存的
   均值、标准差算出，不需要再读对照图像。
+* **W 值。** 在每个体素上，把归一化后的对照对协变量做普通最小二乘回归。
+  与 [La Joie 等, 2012](https://doi.org/10.1523/JNEUROSCI.2170-12.2012) 一样，
+  残差除以对照的残差标准差，不另加预测不确定性那一项。
 * **有意不做的。** 把图像标准化成零均值、单位方差（深度学习前常用）既平移又缩放，
   摄取比值就丢了。SSM/PCA 协方差分析里的对数变换和双中心化属于那种分析本身，
   而且事先怎么缩放都不影响它的结果。
@@ -265,6 +305,9 @@ uv run ruff check .
 * Yakushev I, Hammers A, Fellgiebel A, et al. SPM-based count normalization
   provides excellent discrimination of mild Alzheimer's disease and amnestic
   mild cognitive impairment from healthy aging. *NeuroImage* 2009;44:43–50.
+* La Joie R, Perrotin A, Barré L, et al. Region-specific hierarchy between
+  atrophy, hypometabolism, and β-amyloid (Aβ) load in Alzheimer's disease
+  dementia. *J Neurosci* 2012;32:16265–16273.
 * Manera AL, Dadar M, Fonov V, Collins DL. CerebrA, registration and manual
   label correction of Mindboggle-101 atlas for MNI-ICBM152 template.
   *Sci Data* 2020;7:237.

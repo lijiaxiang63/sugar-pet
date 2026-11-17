@@ -10,6 +10,7 @@ import nibabel as nib
 import numpy as np
 
 from . import __version__
+from .covariates import build_design
 from .imageops import histogram_mode, load_image, region_mean, smooth, spm_global, valid_voxels
 from .masks import REFERENCE_REGIONS, get_mask, resample_to, same_grid
 
@@ -18,6 +19,30 @@ _VOLUMES = ("template", "ps_std", "hn_mean", "hn_std", "mask")
 # Methods whose control statistics can be stored on request (for z-score
 # maps).  PS/iPS and HN/iHN statistics are always part of a reference.
 STATS_METHODS = (*REFERENCE_REGIONS, "spm-global")
+
+
+def _fit(volumes, design: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Voxel-wise least squares of the control images on the design matrix.
+
+    Returns the coefficients (terms x volume) and the residual standard
+    deviation.  The images are visited once, so they need not fit in memory
+    a second time.
+    """
+    n, p = design.shape
+    pinv = np.linalg.pinv(design)
+    beta = xty = squares = None
+    for i, y in enumerate(volumes):
+        y = y.astype(np.float64)
+        if beta is None:
+            beta = np.zeros((p,) + y.shape)
+            xty = np.zeros((p,) + y.shape)
+            squares = np.zeros(y.shape)
+        for j in range(p):
+            beta[j] += pinv[j, i] * y
+            xty[j] += design[i, j] * y
+        squares += y * y
+    residual = np.maximum(squares - (beta * xty).sum(axis=0), 0.0)
+    return beta.astype(np.float32), np.sqrt(residual / (n - p)).astype(np.float32)
 
 
 @dataclass
@@ -43,6 +68,10 @@ class Reference:
     stats
         ``{method: (mean, std)}`` of the controls after normalisation with
         further methods, when asked for with ``stats_for``.
+    models
+        ``{method: (coefficients, residual SD)}`` of the regression of the
+        normalised controls on their covariates (age, sex, ...), when the
+        reference was built with ``covariates``.  Used for W-scores.
     """
 
     template: np.ndarray
@@ -55,6 +84,7 @@ class Reference:
     fwhm: float
     meta: dict = field(default_factory=dict)
     stats: dict[str, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)
+    models: dict[str, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)
 
     @classmethod
     def build(
@@ -63,6 +93,7 @@ class Reference:
         mask: str | Path | nib.Nifti1Image = "gray-matter",
         fwhm: float = 8.0,
         stats_for: tuple[str, ...] | list[str] = (),
+        covariates: dict[str, list] | None = None,
         progress=None,
     ) -> Reference:
         """Build a reference from spatially normalised healthy-control images.
@@ -81,6 +112,11 @@ class Reference:
             Reference-region methods (or ``"spm-global"``) whose control mean
             and standard deviation should be stored as well, so that z-score
             maps can be made with them.  PS, iPS, HN and iHN never need this.
+        covariates
+            ``{name: one value per control}``, for example
+            ``{"age": [63, 58, ...], "sex": ["F", "M", ...]}``.  When given,
+            the controls are also regressed on these at every voxel, so
+            that z-score maps can be adjusted for them (W-scores).
         """
         if len(controls) < 3:
             raise ValueError("at least 3 control images are needed to build a reference")
@@ -88,9 +124,15 @@ class Reference:
         unknown = [m for m in stats_for if m not in STATS_METHODS]
         if unknown:
             raise ValueError(f"cannot store statistics for {unknown}; choose from: {', '.join(STATS_METHODS)}")
+        design = terms = None
+        if covariates:
+            design, terms = build_design(covariates)
+            if len(design) != len(controls):
+                raise ValueError(f"{len(design)} covariate values for {len(controls)} controls")
+        models = {}
         first = load_image(controls[0])
         mask0 = get_mask(mask, first)
-        regions = {m: get_mask(m, first) for m in stats_for if m != "spm-global"}
+        regions = {m: get_mask(REFERENCE_REGIONS[m], first) for m in stats_for if m != "spm-global"}
         other: dict[str, list[float]] = {m: [] for m in stats_for}
         scaled = np.empty((len(controls),) + first.shape, dtype=np.float32)
         unsmoothed = np.empty((len(controls), int(mask0.sum())), dtype=np.float32)
@@ -122,6 +164,8 @@ class Reference:
             scaled[i] /= ps[i]
         template = scaled.mean(axis=0, dtype=np.float64).astype(np.float32)
         ps_std = scaled.std(axis=0, ddof=1, dtype=np.float64).astype(np.float32)
+        if design is not None:
+            models["ps"] = _fit(scaled, design)
 
         # HN factor of each control against the template, then HN statistics.
         hn = []
@@ -131,6 +175,8 @@ class Reference:
             scaled[i] /= mode
         hn_mean = scaled.mean(axis=0, dtype=np.float64).astype(np.float32)
         hn_std = scaled.std(axis=0, ddof=1, dtype=np.float64).astype(np.float32)
+        if design is not None:
+            models["hn"] = _fit(scaled, design)
 
         # Control statistics under the other methods: ``scaled`` now holds
         # smoothed / HN factor, so rescale it by HN factor / method factor.
@@ -147,6 +193,8 @@ class Reference:
             mean = total / n
             var = np.maximum(squares - n * mean**2, 0.0) / (n - 1)
             stats[m] = (mean.astype(np.float32), np.sqrt(var).astype(np.float32))
+            if design is not None:
+                models[m] = _fit((scaled[i] * ratio[i] for i in range(len(controls))), design)
 
         factors = {"ps": ps, "hn": hn, **other}
         meta = {
@@ -154,7 +202,25 @@ class Reference:
             "mask": mask if isinstance(mask, str) else "custom",
             "control_factors": {k: [float(v) for v in vals] for k, vals in factors.items()},
         }
-        return cls(template, ps_std, hn_mean, hn_std, mask0, first.affine, len(controls), float(fwhm), meta, stats)
+        if terms:
+            meta["covariates"] = terms
+        n = len(controls)
+        return cls(template, ps_std, hn_mean, hn_std, mask0, first.affine, n, float(fwhm), meta, stats, models)
+
+    @property
+    def covariates(self) -> list[str]:
+        """Names of the covariates W-scores are adjusted for (empty if none)."""
+        return [term["name"] for term in self.meta.get("covariates", [])]
+
+    def control_model(self, method: str) -> tuple[np.ndarray, np.ndarray]:
+        """Regression coefficients and residual SD of the controls normalised with ``method``."""
+        if not self.models:
+            raise ValueError("this reference was built without covariates; rebuild it with covariates (--covariates)")
+        key = {"ips": "ps", "ihn": "hn"}.get(method, method)
+        if key in self.models:
+            return self.models[key]
+        self.control_stats(method)  # explains what is missing
+        raise ValueError(f"this reference holds no covariate model for '{method}'")
 
     def control_stats(self, method: str) -> tuple[np.ndarray, np.ndarray]:
         """Mean and standard deviation of the controls normalised with ``method``."""
@@ -182,7 +248,11 @@ class Reference:
         for method, (mean, std) in self.stats.items():
             nib.save(nib.Nifti1Image(mean.astype(np.float32), self.affine), folder / f"stats-{method}_mean.nii.gz")
             nib.save(nib.Nifti1Image(std.astype(np.float32), self.affine), folder / f"stats-{method}_std.nii.gz")
-        info = {"n_controls": self.n, "fwhm_mm": self.fwhm, **self.meta, "stats_for": list(self.stats)}
+        for method, (beta, sd) in self.models.items():
+            nib.save(nib.Nifti1Image(np.moveaxis(beta, 0, -1), self.affine), folder / f"model-{method}_beta.nii.gz")
+            nib.save(nib.Nifti1Image(sd, self.affine), folder / f"model-{method}_sd.nii.gz")
+        info = {"n_controls": self.n, "fwhm_mm": self.fwhm, **self.meta}
+        info.update(stats_for=list(self.stats), models=list(self.models))
         (folder / "reference.json").write_text(json.dumps(info, indent=2))
         return folder
 
@@ -204,7 +274,12 @@ class Reference:
         for method in info.pop("stats_for", []):
             pair = (nib.load(folder / f"stats-{method}_{part}.nii.gz") for part in ("mean", "std"))
             stats[method] = tuple(np.asarray(img.get_fdata(dtype=np.float32)) for img in pair)
-        return cls(**vols, affine=affine, n=n, fwhm=fwhm, meta=info, stats=stats)
+        models = {}
+        for method in info.pop("models", []):
+            beta = nib.load(folder / f"model-{method}_beta.nii.gz").get_fdata(dtype=np.float32)
+            sd = nib.load(folder / f"model-{method}_sd.nii.gz").get_fdata(dtype=np.float32)
+            models[method] = (np.moveaxis(np.asarray(beta), -1, 0), np.asarray(sd))
+        return cls(**vols, affine=affine, n=n, fwhm=fwhm, meta=info, stats=stats, models=models)
 
     def on_grid(self, target: nib.Nifti1Image) -> Reference:
         """Return this reference resampled onto the grid of ``target``."""
@@ -218,4 +293,8 @@ class Reference:
         stats = {}
         for method, pair in self.stats.items():
             stats[method] = tuple(resample_to(nib.Nifti1Image(v, self.affine), target, order=1) for v in pair)
-        return Reference(**vols, affine=target.affine, n=self.n, fwhm=self.fwhm, meta=self.meta, stats=stats)
+        move = lambda v: resample_to(nib.Nifti1Image(v, self.affine), target, order=1)
+        models = {m: (np.stack([move(b) for b in beta]), move(sd)) for m, (beta, sd) in self.models.items()}
+        return Reference(
+            **vols, affine=target.affine, n=self.n, fwhm=self.fwhm, meta=self.meta, stats=stats, models=models
+        )

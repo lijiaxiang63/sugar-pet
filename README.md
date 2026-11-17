@@ -57,6 +57,7 @@ Run `sugar-pet methods` to see this list in the terminal.
 
 | `-m`             | How the factor is found                                                    | Needs controls |
 | ---------------- | -------------------------------------------------------------------------- | :------------: |
+| `whole-brain`    | Mean uptake of the whole brain (gray + white matter)                       |       no       |
 | `cerebellum`     | Mean uptake of the whole cerebellum (RRC in the paper)                     |       no       |
 | `cerebellar-gm`  | Mean uptake of cerebellar gray matter                                      |       no       |
 | `pons`           | Mean uptake of the central pons                                            |       no       |
@@ -72,6 +73,10 @@ Run `sugar-pet methods` to see this list in the terminal.
 
 Several methods at once: `-m cerebellum,ps,hn`, or `-m all`. Add
 `--factors-only` to get just the table.
+
+`ps` and `whole-brain` are plain region means like the others; only the region
+differs. `ps` uses gray matter (as in the paper), `whole-brain` gray and white
+matter together.
 
 Options for the reference regions:
 
@@ -129,6 +134,7 @@ sensitivity check in that case.
 | `mask.nii.gz`      | Voxels used for the estimate (gray-matter mask)            |
 | `reference.json`   | Number of controls, smoothing, factors of each control     |
 | `stats-<method>_mean.nii.gz`, `..._std.nii.gz` | Only with `--stats-for`: mean and SD of the controls after another method (for [z-score maps](#z-score-maps)) |
+| `model-<method>_beta.nii.gz`, `..._sd.nii.gz` | Only with `--covariates`: how the controls depend on age and sex (for [W-scores](#adjusting-for-age-and-sex-w-scores)) |
 
 Use controls from the same scanner and reconstruction as your patients, and
 processed the same way. Twenty or more is a sensible minimum.
@@ -167,8 +173,41 @@ sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --stats-for cerebel
 sugar-pet zmap patients/*.nii.gz -m pons -r hc_reference/ -o zmaps/
 ```
 
-(`--stats-for all` stores every reference region.) The z-scores are not
-adjusted for age or sex; use controls that match your patients.
+(`--stats-for all` stores every reference region.)
+
+### Adjusting for age and sex (W-scores)
+
+Uptake changes with age and differs a little between the sexes. If your
+patients are older than your controls, a plain z-score mixes that up with the
+disease. A W-score compares each patient with what the controls predict *for a
+person of the same age and sex*:
+`w = (image − predicted) / residual SD of the controls`.
+
+Give `build-reference` a table with the age and sex of the controls, and
+`zmap` a table with those of the patients:
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates controls.tsv
+sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates patients.tsv
+```
+
+writes `sub-01_desc-hn_wmap.nii.gz`. Without `--covariates`, `zmap` still
+writes plain z-scores from the same reference.
+
+The table is a TSV or CSV file such as a BIDS `participants.tsv`:
+
+```
+participant_id	age	sex
+sub-01	63	F
+sub-02	58	M
+```
+
+Rows are matched to images by `participant_id` (`sub-01` matches
+`sub-01_..._pet.nii.gz`), or by a column called `image` holding file names.
+Only the columns you adjust for are read. `--adjust-for age,sex` is the
+default; any column works if it is numeric or has exactly two values. Age
+enters as a straight line, and you get a warning when a patient is older or
+younger than every control.
 
 ## Reference cluster
 
@@ -206,6 +245,10 @@ res.save("sub-01_desc-ihn_pet.nii.gz")
 res.mask_image()  # the voxels the factor was estimated from
 
 z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # a NIfTI image
+
+# W-scores: build the reference with the controls' covariates, then pass the patient's
+ref = Reference.build(control_files, covariates={"age": ages, "sex": sexes})
+w = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref, covariates={"age": 63, "sex": "F"})
 ```
 
 A reference region can be a built-in mask, your own file, or any set of labels
@@ -278,6 +321,11 @@ writes 2 mm MNI-space images. Always check the result visually.
 * **Reference cluster.** The two-sample t-test (patients > controls, equal
   variances) is computed directly from the patient images and the mean and SD
   stored in the reference, so the control images are not needed again.
+* **W-scores.** An ordinary least-squares regression of the normalised
+  controls on the covariates is fitted at every voxel. As in
+  [La Joie et al., 2012](https://doi.org/10.1523/JNEUROSCI.2170-12.2012), the
+  residual is divided by the residual SD of the controls, without the extra
+  term for the uncertainty of the prediction.
 * **Left out on purpose.** Standardising images to zero mean and unit variance
   (common before deep learning) is a shift as well as a scaling, so uptake
   ratios are lost. The log transform and double centring of SSM/PCA covariance
@@ -306,6 +354,9 @@ MNI downloads.
 * Yakushev I, Hammers A, Fellgiebel A, et al. SPM-based count normalization
   provides excellent discrimination of mild Alzheimer's disease and amnestic
   mild cognitive impairment from healthy aging. *NeuroImage* 2009;44:43–50.
+* La Joie R, Perrotin A, Barré L, et al. Region-specific hierarchy between
+  atrophy, hypometabolism, and β-amyloid (Aβ) load in Alzheimer's disease
+  dementia. *J Neurosci* 2012;32:16265–16273.
 * Manera AL, Dadar M, Fonov V, Collins DL. CerebrA, registration and manual
   label correction of Mindboggle-101 atlas for MNI-ICBM152 template.
   *Sci Data* 2020;7:237.

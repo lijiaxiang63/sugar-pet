@@ -20,7 +20,7 @@ from .masks import MASKS, REFERENCE_REGIONS, get_mask
 from .reference import Reference
 
 # Reference-region methods: method name -> built-in mask.
-REGION_METHODS: dict[str, str] = {name: name for name in REFERENCE_REGIONS}
+REGION_METHODS: dict[str, str] = dict(REFERENCE_REGIONS)
 
 METHODS: dict[str, str] = {
     **{name: f"Reference region: {MASKS[mask]}" for name, mask in REGION_METHODS.items()},

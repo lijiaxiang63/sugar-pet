@@ -278,6 +278,15 @@ func SpatialNormalize(ctx context.Context, inputs, outputs []string, opt Spatial
 	if len(inputs) != len(outputs) {
 		return nil, errors.New("inputs and outputs must have the same length")
 	}
+	// Two images written to one file would leave only the second.
+	first := map[string]string{}
+	for i, out := range outputs {
+		key := filepath.Clean(out)
+		if other, ok := first[key]; ok {
+			return nil, fmt.Errorf("%s and %s would both be written to %s; rename one or run them separately", other, inputs[i], out)
+		}
+		first[key] = inputs[i]
+	}
 	spm, err := filepath.Abs(opt.SPMPath)
 	if err != nil {
 		return nil, err

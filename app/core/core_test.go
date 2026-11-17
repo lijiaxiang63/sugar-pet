@@ -191,6 +191,17 @@ func TestSpatialStaleWorkDir(t *testing.T) {
 	}
 }
 
+// TestSpatialSameOutput checks that two images that would be written to one
+// file are refused before anything runs.
+func TestSpatialSameOutput(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "pet_space-MNI.nii.gz")
+	_, err := SpatialNormalize(context.Background(), []string{"a/pet.nii.gz", "b/pet.nii.gz"},
+		[]string{out, filepath.Join(filepath.Dir(out), ".", filepath.Base(out))}, SpatialOptions{})
+	if err == nil || !strings.Contains(err.Error(), "a/pet.nii.gz and b/pet.nii.gz would both be written") {
+		t.Fatalf("error %v, want that of the shared output", err)
+	}
+}
+
 // TestSpatialRelativeMatlab checks that MATLAB given by a path relative to
 // the working folder is still found once it runs in the work folder.
 func TestSpatialRelativeMatlab(t *testing.T) {

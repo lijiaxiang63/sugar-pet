@@ -6,6 +6,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
+from sugar_pet.cli import main
 from sugar_pet.spatial import spatial_normalize
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the stand-in for MATLAB is a shell script")
@@ -66,3 +67,17 @@ def test_relative_matlab(tmp_path, setup, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out = tmp_path / "out.nii.gz"
     assert spatial_normalize([image], [out], spm_path=spm, matlab="./matlab") == [out]
+
+
+def test_same_output(tmp_path, setup, capsys):
+    """Two images that would be written to one file are refused before anything runs."""
+    spm, image, matlab = setup
+    out = tmp_path / "out.nii.gz"
+    with pytest.raises(ValueError, match="would both be written"):
+        spatial_normalize([image, image], [out, out], spm_path=spm, matlab=str(matlab(COPYING)))
+    assert not out.exists()
+
+    # The command line names the outputs after the inputs, whatever their folders.
+    args = ["spatial-norm", "a/pet.nii.gz", "b/pet.nii.gz", "-o", str(tmp_path / "mni"), "--spm-path", str(spm)]
+    assert main(args) == 2
+    assert "a/pet.nii.gz and b/pet.nii.gz would both be written" in capsys.readouterr().err

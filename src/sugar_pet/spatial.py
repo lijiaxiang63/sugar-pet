@@ -10,6 +10,7 @@ It needs MATLAB and SPM12/SPM25; nothing else in sugar-pet does.
 from __future__ import annotations
 
 import gzip
+import os
 import shutil
 import subprocess
 import tempfile
@@ -155,6 +156,15 @@ def spatial_normalize(
     """
     if len(inputs) != len(outputs):
         raise ValueError("inputs and outputs must have the same length")
+    # Two images written to one file would leave only the second.
+    first: dict[str, str | Path] = {}
+    for src, out in zip(inputs, outputs):
+        key = os.path.normpath(out)
+        if key in first:
+            raise ValueError(
+                f"{first[key]} and {src} would both be written to {out}; rename one or run them separately"
+            )
+        first[key] = src
     spm_path = Path(spm_path).expanduser().resolve()
     custom_template = template is not None
     template = Path(template).resolve() if custom_template else spm_path / "toolbox" / "OldNorm" / "PET.nii"

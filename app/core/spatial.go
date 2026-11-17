@@ -214,11 +214,15 @@ func FindMatlab() string {
 }
 
 // ResolveMatlab turns what a user points at (the program, the MATLAB_R*.app
-// of macOS or MATLAB's folder) into the MATLAB executable.
+// of macOS or MATLAB's folder) into the full path of the MATLAB executable:
+// MATLAB is run from another folder than this program's.
 func ResolveMatlab(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", fmt.Errorf("MATLAB not found: %s", path)
+	}
+	if path, err = filepath.Abs(path); err != nil {
+		return "", err
 	}
 	if !info.IsDir() {
 		return path, nil
@@ -328,6 +332,7 @@ func SpatialNormalize(ctx context.Context, inputs, outputs []string, opt Spatial
 
 	results := make([]SpatialResult, len(inputs))
 	native := make([]string, len(inputs))
+	warped := func(i int) string { return filepath.Join(work, "w"+filepath.Base(native[i])) }
 	var ready []int // the images MATLAB is given
 	for i, src := range inputs {
 		results[i] = SpatialResult{Input: src, Output: outputs[i]}
@@ -335,13 +340,17 @@ func SpatialNormalize(ctx context.Context, inputs, outputs []string, opt Spatial
 			return nil, err
 		}
 		native[i] = filepath.Join(work, fmt.Sprintf("img%05d.nii", i))
+		// A work folder that is kept may hold the warped image of an earlier
+		// run, of another subject perhaps: it must not pass for this one's.
+		if err := os.Remove(warped(i)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
 		if err := PrepareNative(src, native[i]); err != nil {
 			results[i].Err = err
 			continue
 		}
 		ready = append(ready, i)
 	}
-	warped := func(i int) string { return filepath.Join(work, "w"+filepath.Base(native[i])) }
 	total := len(inputs)
 	shown := -1
 	progress := func() {

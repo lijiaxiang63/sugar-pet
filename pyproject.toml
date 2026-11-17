@@ -20,7 +20,7 @@ sugar-pet = "sugar_pet.cli:main"
 
 [project.optional-dependencies]
 stats = [
-    "grouvox @ git+https://github.com/lijiaxiang63/GrouVox@v0.2.0",
+    "grouvox @ git+https://github.com/lijiaxiang63/GrouVox@v0.2.1",
 ]
 
 [build-system]
@@ -29,7 +29,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "grouvox @ git+https://github.com/lijiaxiang63/GrouVox@v0.2.0",
+    "grouvox @ git+https://github.com/lijiaxiang63/GrouVox@v0.2.1",
     "pytest>=8",
     "ruff>=0.6",
 ]

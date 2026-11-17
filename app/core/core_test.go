@@ -8,25 +8,80 @@ import (
 	"testing"
 )
 
-// The z-score of a strong t-statistic is finite, and that of an everyday one
-// is what the quantile of the upper tail gives.
+// The z-score of a t-statistic is finite however strong it is, and agrees
+// with GrouVox 0.2.1.
 func TestTToZ(t *testing.T) {
-	for _, c := range []struct{ t, dof, want float64 }{
-		{20, 100, 12.658857948227011}, // SciPy: -norm.ppf(t.sf(20, 100))
-		{-20, 100, -12.658857948227011},
+	for _, c := range []struct{ t, dof, want float64 }{ // grouvox.correction._t_to_z
+		{0.5, 26, 0.4940361145648001},
+		{5, 26, 4.147552585313663},
 		{9, 100, 7.684489973879415},
+		{20, 100, 12.658857948227011},
+		{-20, 100, -12.658857948227011},
 		{60, 30, 11.929457765408362},
+		{200, 30, 14.626273931113698},
+		{1e4, 30, 21.163491551675346},
+		{1e6, 26, 25.110230015800322},
+		{45, 1000, 33.2627165452198},
+		{-300, 500, -50.96661157065154}, // the tail is below the smallest number
+		{3e38, 26, 67.2100194031716},    // the largest t a T-map can hold
 	} {
 		got := tToZ(c.t, c.dof)
-		if math.IsInf(got, 0) || math.Abs(got-c.want) > 1e-4*math.Abs(c.want) {
-			t.Errorf("tToZ(%g, %g) = %g, want %g", c.t, c.dof, got, c.want)
+		if math.IsInf(got, 0) || math.IsNaN(got) || math.Abs(got-c.want) > 1e-12*math.Abs(c.want) {
+			t.Errorf("tToZ(%g, %g) = %.17g, want %.17g", c.t, c.dof, got, c.want)
 		}
 	}
-	// Where 1 - p loses nothing, it agrees with GrouVox's way.
+	// Where 1 - p loses nothing, it agrees with the older way.
 	for _, tv := range []float64{0.5, 2, 3.3, 5} {
 		got, old := tToZ(tv, 26), normPPF(1-tSF(tv, 26))
 		if math.Abs(got-old) > 1e-9 {
-			t.Errorf("tToZ(%g, 26) = %.12g, GrouVox gives %.12g", tv, got, old)
+			t.Errorf("tToZ(%g, 26) = %.12g, the older way gives %.12g", tv, got, old)
+		}
+	}
+	// The log of the tail, on both sides of where the two ways meet.
+	for _, c := range []struct{ t, dof, want float64 }{ // grouvox.correction._t_logsf
+		{0.5, 26, -1.1691195080630312},
+		{5, 26, -10.993987929230094},
+		{45, 1000, -557.6284334557529},
+		{300, 500, -1303.64824137489},
+		{3e38, 26, -2263.7203362095725},
+	} {
+		if got := tLogSF(c.t, c.dof); math.Abs(got-c.want) > 1e-12*math.Abs(c.want) {
+			t.Errorf("tLogSF(%g, %g) = %.17g, want %.17g", c.t, c.dof, got, c.want)
+		}
+	}
+}
+
+// The quantiles of the normal distribution agree with SciPy over the whole
+// range, both tails.
+func TestNormPPF(t *testing.T) {
+	for _, c := range [][2]float64{ // scipy.stats.norm.ppf
+		{0.5, 0.0},
+		{0.3, -0.5244005127080409},
+		{0.1, -1.2815515655446004},
+		{0.075, -1.4395314709384563},
+		{0.05, -1.6448536269514729},
+		{0.01, -2.3263478740408408},
+		{0.001, -3.090232306167813},
+		{1e-05, -4.264890793922825},
+		{1e-08, -5.612001244174789},
+		{1e-10, -6.361340902404056},
+		{1e-11, -6.706023155495138},
+		{1e-12, -7.034483825301131},
+		{1e-15, -7.941345326170998},
+		{1e-20, -9.262340089798409},
+		{1e-50, -14.933337534788487},
+		{1e-100, -21.273453560965322},
+		{1e-200, -30.20559417957964},
+		{1e-290, -36.420731673207996},
+		{1e-300, -37.0470962993612},
+	} {
+		if got := normPPF(c[0]); math.Abs(got-c[1]) > 1e-13*math.Max(1, math.Abs(c[1])) {
+			t.Errorf("normPPF(%g) = %.17g, want %.17g", c[0], got, c[1])
+		}
+		if c[0] > 1e-10 {
+			if got := normPPF(1 - c[0]); math.Abs(got+c[1]) > 1e-6 {
+				t.Errorf("normPPF(1 - %g) = %.17g, want %.17g", c[0], got, -c[1])
+			}
 		}
 	}
 }

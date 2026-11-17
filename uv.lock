@@ -46,8 +46,8 @@ wheels = [
 
 [[package]]
 name = "grouvox"
-version = "0.2.0"
-source = { git = "https://github.com/lijiaxiang63/GrouVox?rev=v0.2.0#94438b541e3dfbe2d6e5ddfa0ec747709298c8f3" }
+version = "0.2.1"
+source = { git = "https://github.com/lijiaxiang63/GrouVox?rev=v0.2.1#b2f5dd785b1855c5307c45ff24c5e932b57a7139" }
 dependencies = [
     { name = "click" },
     { name = "nibabel", version = "5.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -871,7 +871,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "grouvox", marker = "extra == 'stats'", git = "https://github.com/lijiaxiang63/GrouVox?rev=v0.2.0" },
+    { name = "grouvox", marker = "extra == 'stats'", git = "https://github.com/lijiaxiang63/GrouVox?rev=v0.2.1" },
     { name = "nibabel", specifier = ">=5.0" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "scipy", specifier = ">=1.10" },
@@ -880,7 +880,7 @@ provides-extras = ["stats"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "grouvox", git = "https://github.com/lijiaxiang63/GrouVox?rev=v0.2.0" },
+    { name = "grouvox", git = "https://github.com/lijiaxiang63/GrouVox?rev=v0.2.1" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.6" },
 ]

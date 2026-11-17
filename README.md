@@ -66,11 +66,7 @@ go tool mygo dev          # run it while working on the code
 The numeric core ([`app/core`](app/core)) is a Go port of this package,
 GrouVox's two-sample t-test and corrections included. `app/parity/run.py`
 runs the same commands through both and compares every output: images agree
-to about 1e-6 of their range, tables and cluster reports exactly. The one
-exception is a z-score beyond about 8 in the corrected Z-map of a group
-comparison: GrouVox writes infinity there, and reports the peak of the
-cluster at the first such voxel, where the app writes the finite z-score and
-reports the true peak.
+to about 1e-6 of their range, tables and cluster reports exactly.
 `go test ./...` in `app` drives the app's pages through a whole analysis of
 made-up images. The macOS app is signed ad hoc, not notarised: open it the
 first time with right-click > Open.

@@ -57,7 +57,7 @@ func normPPF(p float64) float64 {
 			5.4637849111641143699)*r + 6.6579046435011037772)
 		den := (((((((2.04426310338993978564e-15*r+1.4215117583164458887e-7)*r+1.8463183175100546818e-5)*r+
 			7.868691311456132591e-4)*r+0.0148753612908506148525)*r+0.13692988092273580531)*r+
-			0.59983464991983893e0)*r + 1.0)
+			0.59983220655588793769)*r + 1.0)
 		x = num / den
 	}
 	if q < 0 {
@@ -139,6 +139,47 @@ func tSF(t, df float64) float64 {
 		return 0
 	}
 	return 0.5 * betaInc(df/2, 0.5, df/(df+t*t))
+}
+
+// tLogSF is the log of the upper tail of Student's t distribution for a t far
+// from 0, where the tail itself may be too small for a number.
+func tLogSF(t, df float64) float64 {
+	a, b, x := df/2, 0.5, df/(df+t*t)
+	if x >= (a+1)/(a+b+2) {
+		return math.Log(tSF(t, df))
+	}
+	la, _ := math.Lgamma(a)
+	lb, _ := math.Lgamma(b)
+	lab, _ := math.Lgamma(a + b)
+	return math.Log(0.5) + lab - la - lb + a*math.Log(x) + b*math.Log1p(-x) + math.Log(betaCF(a, b, x)/a)
+}
+
+// normLogSF is the log of the upper tail of the standard normal distribution.
+func normLogSF(z float64) float64 {
+	if z < 25 {
+		return math.Log(normSF(z))
+	}
+	// The asymptotic series of Mills' ratio.
+	u := 1 / (z * z)
+	series := 1 - u*(1-3*u*(1-5*u*(1-7*u*(1-9*u*(1-11*u*(1-13*u))))))
+	return -0.5*z*z - math.Log(z) - 0.5*math.Log(2*math.Pi) + math.Log(series)
+}
+
+// normISFLog is the z whose upper tail in the standard normal distribution
+// has the log logp, for a tail too small for normPPF.
+func normISFLog(logp float64) float64 {
+	z := math.Sqrt(-2 * logp)
+	for i := 0; i < 50; i++ {
+		tail := normLogSF(z)
+		// Newton's step: the slope of the log of the tail is minus the hazard.
+		hazard := math.Exp(-0.5*z*z - 0.5*math.Log(2*math.Pi) - tail)
+		step := (tail - logp) / hazard
+		z += step
+		if math.Abs(step) < 1e-15*z {
+			break
+		}
+	}
+	return z
 }
 
 // tPPF is the quantile function of Student's t distribution.

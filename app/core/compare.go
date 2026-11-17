@@ -539,12 +539,17 @@ type grfResult struct {
 }
 
 // tToZ gives the z-score that has the tail probability of a t-statistic,
-// with its sign.  It takes the quantile in the lower tail: GrouVox takes
-// that of 1 - p, which rounds to 1 for p below about 1e-16 and so gives
-// infinity for a |z| above about 8.2.
+// with its sign.  Like GrouVox from 0.2.1 on, it matches the upper tails, and
+// does so in log space where the probability is too small for a number, so
+// the z-score is finite for every finite t.  (To take the quantile of 1 - p,
+// as GrouVox did before, gives infinity for a |z| above about 8.2.)
 func tToZ(t, dof float64) float64 {
-	p := math.Max(tSF(math.Abs(t), dof), 1e-300)
-	z := -normPPF(p)
+	var z float64
+	if p := tSF(math.Abs(t), dof); p > 1e-290 {
+		z = -normPPF(p)
+	} else {
+		z = normISFLog(tLogSF(math.Abs(t), dof))
+	}
 	if t < 0 {
 		return -z
 	}

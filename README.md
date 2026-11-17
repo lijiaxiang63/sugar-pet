@@ -342,6 +342,11 @@ images that would get the same name, such as `a/pet.nii.gz` and `b/pet.nii.gz`,
 are refused before anything is written, so that one patient's report cannot
 replace another's.
 
+In the [desktop app](#desktop-app) this is the **Classify Parkinsonism** page,
+which lists the conclusions and opens the reports:
+
+![The Classify Parkinsonism page of SUGAR-PET](app/screenshots/classify-en.png)
+
 **It is decision support, not a diagnosis.** The diagnostic criteria (MSA 2022,
 PSP 2017, DLB 2017) count FDG-PET as supportive only, and the rules below come
 from the literature: they were not fitted to or validated on your patients.

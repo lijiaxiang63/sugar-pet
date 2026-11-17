@@ -298,6 +298,10 @@ sugar-pet classify sub-01_pet.nii.gz -r hc_reference/ -o reports/ --covariates p
 （例如 `a/pet.nii.gz` 和 `b/pet.nii.gz`），程序会在写入任何文件之前拒绝运行，
 以免一位患者的报告覆盖另一位的。
 
+在[桌面应用](#桌面应用)里，这就是“帕金森综合征分类”页面：列出每位患者的结论，并可直接打开报告。
+
+![SUGAR-PET 的帕金森综合征分类页面](app/screenshots/classify-zh.png)
+
 **它是辅助决策工具，不是诊断。** 诊断标准（MSA 2022、PSP 2017、DLB 2017）只把
 FDG-PET 列为支持性证据；下面的规则来自文献，没有用你的患者数据拟合或验证过。
 结果须结合临床表现、MRI 和多巴胺转运体显像来判断。

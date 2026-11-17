@@ -16,6 +16,7 @@ def test_region_volumes_are_plausible():
     assert 120 < cm3("cerebellum") < 220
     assert 20 < cm3("brainstem") < 45
     assert 5 < cm3("pons") < 15
+    assert 60 < cm3("occipital") < 130
 
 
 def test_nested_regions():

@@ -1,8 +1,9 @@
 import nibabel as nib
 import numpy as np
 import pytest
+from conftest import make_pet
 
-from sugar_pet import METHODS, Reference, builtin_mask, normalize
+from sugar_pet import MASKS, METHODS, Reference, builtin_mask, labels_mask, normalize, reference_cluster, zmap
 from sugar_pet.imageops import histogram_mode, spm_global
 from sugar_pet.normalize import REGION_METHODS, single_subject_t
 
@@ -136,3 +137,102 @@ def test_image_outside_mni_space_is_rejected():
     )
     with pytest.raises(ValueError, match="MNI space"):
         normalize(far, "cerebellum")
+
+
+def test_median_and_target(healthy):
+    data = healthy.get_fdata()
+    mask = (builtin_mask("pons").get_fdata() > 0) & (data > 0)
+    res = normalize(healthy, "pons", statistic="median", target=50)
+    assert res.factor == pytest.approx(np.median(data[mask]), rel=1e-5)
+    assert np.median(res.image.get_fdata()[mask]) == pytest.approx(50.0, rel=1e-4)
+    assert res.info["statistic"] == "median" and res.info["target"] == 50
+    with pytest.raises(ValueError, match="statistic"):
+        normalize(healthy, "pons", statistic="mode")
+    with pytest.raises(ValueError, match="target"):
+        normalize(healthy, "pons", target=0)
+
+
+def test_paper_regions_are_still_available_as_masks(healthy):
+    """Brainstem (RRBS) and temporal lobe (RRTL) are masks now, not methods."""
+    for name in ("brainstem", "temporal-left", "temporal-right"):
+        assert name in MASKS and name not in METHODS
+        with pytest.raises(ValueError, match="built-in mask"):
+            normalize(healthy, name)
+        res = normalize(healthy, "region", mask=name)
+        assert res.info["mask"] == name and res.factor > 0
+
+
+def test_occipital_matches_its_atlas_labels(healthy):
+    a = normalize(healthy, "occipital").factor
+    b = normalize(healthy, "region", mask=labels_mask([34, 85, 43, 94, 6, 57, 12, 63])).factor
+    assert a == pytest.approx(b)
+    with pytest.raises(ValueError, match="label numbers"):
+        labels_mask([34, 999])
+
+
+@pytest.fixture(scope="module")
+def reference_with_stats(controls):
+    return Reference.build(controls, fwhm=0, stats_for=["cerebellum", "spm-global"])
+
+
+def test_control_stats_match_a_direct_computation(controls, reference_with_stats):
+    ref = reference_with_stats
+    scaled = np.stack([normalize(c, "cerebellum").image.get_fdata() for c in controls])
+    mean, std = ref.control_stats("cerebellum")
+    inside = ref.mask
+    assert np.allclose(mean[inside], scaled.mean(0)[inside], rtol=1e-4)
+    assert np.allclose(std[inside], scaled.std(0, ddof=1)[inside], rtol=1e-2, atol=1e-5)
+    assert ref.control_stats("ips")[0] is ref.template
+    with pytest.raises(ValueError, match="stats-for pons"):
+        ref.control_stats("pons")
+    with pytest.raises(ValueError, match="cannot store statistics"):
+        Reference.build(controls[:3], fwhm=0, stats_for=["hn"])
+
+
+def test_stats_survive_a_roundtrip(reference_with_stats, tmp_path):
+    loaded = Reference.load(reference_with_stats.save(tmp_path / "ref"))
+    assert list(loaded.stats) == ["cerebellum", "spm-global"]
+    for a, b in zip(loaded.control_stats("spm-global"), reference_with_stats.control_stats("spm-global")):
+        assert np.allclose(a, b)
+    assert len(loaded.meta["control_factors"]["cerebellum"]) == 16
+
+
+@pytest.mark.parametrize("method", ["hn", "ips", "cerebellum"])
+def test_zmap_finds_the_lesion(method, patient, healthy, lesion, reference_with_stats):
+    ref = reference_with_stats
+    core = (lesion > 0) & ref.mask
+    rest = ref.mask & ~(lesion > 0)
+    z = zmap(patient, method, reference=ref).get_fdata()
+    assert np.median(z[core]) < -4  # a 40 % drop is far outside the controls
+    assert abs(np.median(z[rest])) < 1
+    z0 = zmap(healthy, method, reference=ref).get_fdata()
+    assert abs(np.median(z0[ref.mask])) < 0.5 and z0[ref.mask].std() < 2
+    assert z[~(z != 0)].size > 0 and not np.isnan(z).any()
+
+
+def test_zmap_needs_stored_statistics(healthy, reference):
+    with pytest.raises(ValueError, match="stats-for pons"):
+        zmap(healthy, "pons", reference=reference)
+    with pytest.raises(ValueError, match="not available"):
+        zmap(healthy, "region", reference=reference)
+
+
+def test_reference_cluster_avoids_the_lesion(lesion, healthy, reference):
+    rng = np.random.default_rng(7)
+    group = [make_pet(rng, scale=rng.uniform(3000, 9000), lesion=lesion, drop=0.4) for _ in range(12)]
+    cluster = reference_cluster(group, reference, p_threshold=0.01, min_cluster_ml=0.5)
+    mask = cluster.get_fdata() > 0
+    assert mask.sum() > 1000
+    assert not (mask & ~reference.mask).any()
+    assert (mask & (lesion > 0.5)).sum() / mask.sum() < 0.01
+    # As a reference region it is not dragged down by the lesion the way PS is.
+    sick = make_pet(np.random.default_rng(42), scale=TRUE_SCALE, lesion=lesion, drop=0.4)
+    bias = {
+        m: abs(normalize(sick, m, **kw).factor / normalize(healthy, m, **kw).factor - 1)
+        for m, kw in (("ps", {}), ("region", {"mask": cluster}))
+    }
+    assert bias["region"] < 0.01 < bias["ps"]
+    with pytest.raises(ValueError, match="at least 2"):
+        reference_cluster(group[:1], reference)
+    with pytest.raises(ValueError, match="relatively preserved"):
+        reference_cluster(group, reference, p_threshold=1e-12, min_cluster_ml=1e6)

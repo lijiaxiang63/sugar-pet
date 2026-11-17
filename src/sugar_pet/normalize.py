@@ -15,26 +15,17 @@ import nibabel as nib
 import numpy as np
 from scipy import stats
 
-from .imageops import histogram_mode, load_image, region_mean, smooth, spm_global, valid_voxels
-from .masks import MASKS, get_mask
+from .imageops import histogram_mode, load_image, region_mean, region_stat, smooth, spm_global, valid_voxels
+from .masks import MASKS, REFERENCE_REGIONS, get_mask
 from .reference import Reference
 
 # Reference-region methods: method name -> built-in mask.
-REGION_METHODS: dict[str, str] = {
-    "cerebellum": "cerebellum",
-    "cerebellar-gm": "cerebellar-gm",
-    "pons": "pons",
-    "brainstem": "brainstem",
-    "white-matter": "white-matter",
-    "sensorimotor": "sensorimotor",
-    "temporal-left": "temporal-left",
-    "temporal-right": "temporal-right",
-}
+REGION_METHODS: dict[str, str] = {name: name for name in REFERENCE_REGIONS}
 
 METHODS: dict[str, str] = {
     **{name: f"Reference region: {MASKS[mask]}" for name, mask in REGION_METHODS.items()},
-    "region": "Reference region: mean uptake in your own mask (needs mask=...)",
-    "ps": "Proportional scaling: mean uptake of the brain parenchyma mask",
+    "region": "Reference region: any built-in mask, mask file or set of atlas labels (needs mask=...)",
+    "ps": "Proportional scaling: mean uptake of the gray-matter mask",
     "spm-global": "SPM-style global mean (voxels above 1/8 of the image mean)",
     "hn": "Histogram normalisation: peak of the subject/template ratio histogram [needs reference]",
     "ips": "Iterative PS: PS, then re-estimated without hypometabolic voxels [needs reference]",
@@ -51,7 +42,8 @@ class NormResult:
     Attributes
     ----------
     image
-        The normalised image (``input / factor``).
+        The normalised image (``input / factor``, times ``target`` if one
+        was given).
     factor
         The normalisation factor, in the units of the input image.
     mask
@@ -142,6 +134,8 @@ def normalize(
     reference: Reference | str | Path | None = None,
     mask: str | Path | nib.Nifti1Image | np.ndarray | None = None,
     fwhm: float | None = None,
+    statistic: str = "mean",
+    target: float = 1.0,
     p_threshold: float = 0.01,
     exclude: str = "hypo",
     max_iter: int = 1,
@@ -170,6 +164,13 @@ def normalize(
         image itself is never smoothed.  Defaults to the smoothing of the
         reference for ``hn``/``ips``/``ihn`` and to no smoothing otherwise.
         Pass 0 if your images are already smoothed.
+    statistic
+        ``"mean"`` or ``"median"`` of the region, for the reference-region
+        methods and ``"ps"``.  The other methods ignore it.
+    target
+        Value the reference takes in the output, which is
+        ``image / factor * target``.  For example 50 reproduces the common
+        "global mean scaled to 50" convention.
     p_threshold, exclude
         For ``ips``/``ihn``: voxels are dropped when they differ from the
         controls at this uncorrected p-value.  ``exclude="hypo"`` drops only
@@ -188,7 +189,12 @@ def normalize(
     NormResult
     """
     if method not in METHODS:
-        raise ValueError(f"unknown method '{method}'; choose from: {', '.join(METHODS)}")
+        hint = f" ('{method}' is a built-in mask: use method='region' with mask='{method}')" if method in MASKS else ""
+        raise ValueError(f"unknown method '{method}'{hint}; choose from: {', '.join(METHODS)}")
+    if statistic not in ("mean", "median"):
+        raise ValueError("statistic must be 'mean' or 'median'")
+    if not np.isfinite(target) or target <= 0:
+        raise ValueError("target must be a positive number")
     img = load_image(image)
     raw = img.get_fdata(dtype=np.float32)
     info: dict = {}
@@ -218,9 +224,10 @@ def normalize(
             region, info["mask"] = ref.mask, "reference"
         else:
             region = mask if mask is not None else REGION_METHODS.get(method, "gray-matter")
-            info["mask"] = region if isinstance(region, str) else "custom"
+            info["mask"] = region if isinstance(region, str) and region in MASKS else "custom"
         final_mask = get_mask(region, img) & valid
-        factor = region_mean(data, final_mask)
+        factor = region_stat(data, final_mask, statistic)
+        info["statistic"] = statistic
     else:
         mask0 = ref.mask & valid & (ref.template > 0)
         if mask0.sum() < 0.5 * ref.mask.sum():
@@ -247,7 +254,9 @@ def normalize(
     if final_mask is not None:
         info["n_voxels"] = int(final_mask.sum())
 
-    out = nib.Nifti1Image((raw / factor).astype(np.float32), img.affine)
+    info["target"] = float(target)
+    out = nib.Nifti1Image((raw * (target / factor)).astype(np.float32), img.affine)
     out.header.set_xyzt_units("mm")
-    out.header["descrip"] = f"sugar-pet {method} factor={factor:.6g}"[:79]
+    scale = "" if target == 1 else f" target={target:g}"
+    out.header["descrip"] = f"sugar-pet {method} factor={factor:.6g}{scale}"[:79]
     return NormResult(method=method, factor=float(factor), image=out, mask=final_mask, info=info)

@@ -1,4 +1,4 @@
-"""The healthy-control reference needed by the HN, iPS and iHN methods."""
+"""The healthy-control reference needed by HN, iPS, iHN and by z-score maps."""
 
 from __future__ import annotations
 
@@ -10,10 +10,14 @@ import nibabel as nib
 import numpy as np
 
 from . import __version__
-from .imageops import histogram_mode, load_image, smooth, valid_voxels
-from .masks import get_mask, resample_to, same_grid
+from .imageops import histogram_mode, load_image, region_mean, smooth, spm_global, valid_voxels
+from .masks import REFERENCE_REGIONS, get_mask, resample_to, same_grid
 
 _VOLUMES = ("template", "ps_std", "hn_mean", "hn_std", "mask")
+
+# Methods whose control statistics can be stored on request (for z-score
+# maps).  PS/iPS and HN/iHN statistics are always part of a reference.
+STATS_METHODS = (*REFERENCE_REGIONS, "spm-global")
 
 
 @dataclass
@@ -31,11 +35,14 @@ class Reference:
     hn_mean, hn_std
         Mean and standard deviation of the controls after HN normalisation.
     mask
-        Voxels used to estimate factors (the parenchyma mask).
+        Voxels used to estimate factors (the gray-matter mask).
     n
         Number of controls.
     fwhm
         Smoothing (mm) applied to the controls before computing statistics.
+    stats
+        ``{method: (mean, std)}`` of the controls after normalisation with
+        further methods, when asked for with ``stats_for``.
     """
 
     template: np.ndarray
@@ -47,6 +54,7 @@ class Reference:
     n: int
     fwhm: float
     meta: dict = field(default_factory=dict)
+    stats: dict[str, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)
 
     @classmethod
     def build(
@@ -54,6 +62,7 @@ class Reference:
         controls: list[str | Path | nib.Nifti1Image],
         mask: str | Path | nib.Nifti1Image = "gray-matter",
         fwhm: float = 8.0,
+        stats_for: tuple[str, ...] | list[str] = (),
         progress=None,
     ) -> Reference:
         """Build a reference from spatially normalised healthy-control images.
@@ -68,11 +77,21 @@ class Reference:
         fwhm
             Smoothing in mm applied before computing statistics.  Use 0 if
             the images are already smoothed.
+        stats_for
+            Reference-region methods (or ``"spm-global"``) whose control mean
+            and standard deviation should be stored as well, so that z-score
+            maps can be made with them.  PS, iPS, HN and iHN never need this.
         """
         if len(controls) < 3:
             raise ValueError("at least 3 control images are needed to build a reference")
+        stats_for = list(dict.fromkeys(stats_for))
+        unknown = [m for m in stats_for if m not in STATS_METHODS]
+        if unknown:
+            raise ValueError(f"cannot store statistics for {unknown}; choose from: {', '.join(STATS_METHODS)}")
         first = load_image(controls[0])
         mask0 = get_mask(mask, first)
+        regions = {m: get_mask(m, first) for m in stats_for if m != "spm-global"}
+        other: dict[str, list[float]] = {m: [] for m in stats_for}
         scaled = np.empty((len(controls),) + first.shape, dtype=np.float32)
         unsmoothed = np.empty((len(controls), int(mask0.sum())), dtype=np.float32)
         in_fov = np.zeros(first.shape, dtype=np.int32)
@@ -81,8 +100,11 @@ class Reference:
             if not same_grid(img.shape, img.affine, first.shape, first.affine):
                 raise ValueError(f"control {i + 1} is on a different grid than the first control")
             data = img.get_fdata(dtype=np.float32)
-            in_fov += valid_voxels(data)
+            valid = valid_voxels(data)
+            in_fov += valid
             unsmoothed[i] = data[mask0]
+            for m in stats_for:
+                other[m].append(spm_global(data) if m == "spm-global" else region_mean(data, regions[m] & valid))
             scaled[i] = smooth(data, img.affine, fwhm)
             if progress:
                 progress(i + 1, len(controls))
@@ -110,12 +132,44 @@ class Reference:
         hn_mean = scaled.mean(axis=0, dtype=np.float64).astype(np.float32)
         hn_std = scaled.std(axis=0, ddof=1, dtype=np.float64).astype(np.float32)
 
+        # Control statistics under the other methods: ``scaled`` now holds
+        # smoothed / HN factor, so rescale it by HN factor / method factor.
+        stats = {}
+        for m in stats_for:
+            ratio = (np.asarray(hn) / np.asarray(other[m])).astype(np.float32)
+            total = np.zeros(first.shape, dtype=np.float64)
+            squares = np.zeros(first.shape, dtype=np.float64)
+            for i in range(len(controls)):
+                x = scaled[i] * ratio[i]
+                total += x
+                squares += np.square(x, dtype=np.float64)
+            n = len(controls)
+            mean = total / n
+            var = np.maximum(squares - n * mean**2, 0.0) / (n - 1)
+            stats[m] = (mean.astype(np.float32), np.sqrt(var).astype(np.float32))
+
+        factors = {"ps": ps, "hn": hn, **other}
         meta = {
             "sugar_pet_version": __version__,
             "mask": mask if isinstance(mask, str) else "custom",
-            "control_factors": {"ps": [float(v) for v in ps], "hn": [float(v) for v in hn]},
+            "control_factors": {k: [float(v) for v in vals] for k, vals in factors.items()},
         }
-        return cls(template, ps_std, hn_mean, hn_std, mask0, first.affine, len(controls), float(fwhm), meta)
+        return cls(template, ps_std, hn_mean, hn_std, mask0, first.affine, len(controls), float(fwhm), meta, stats)
+
+    def control_stats(self, method: str) -> tuple[np.ndarray, np.ndarray]:
+        """Mean and standard deviation of the controls normalised with ``method``."""
+        if method in ("ps", "ips"):
+            return self.template, self.ps_std
+        if method in ("hn", "ihn"):
+            return self.hn_mean, self.hn_std
+        if method in self.stats:
+            return self.stats[method]
+        if method in STATS_METHODS:
+            raise ValueError(
+                f"this reference holds no control statistics for '{method}'; "
+                f"rebuild it with stats_for=['{method}'] (--stats-for {method})"
+            )
+        raise ValueError(f"control statistics are not available for method '{method}'")
 
     def save(self, folder: str | Path) -> Path:
         """Write the reference as a folder of NIfTI files plus ``reference.json``."""
@@ -125,7 +179,10 @@ class Reference:
             data = getattr(self, name)
             data = data.astype(np.uint8) if name == "mask" else data.astype(np.float32)
             nib.save(nib.Nifti1Image(data, self.affine), folder / f"{name}.nii.gz")
-        info = {"n_controls": self.n, "fwhm_mm": self.fwhm, **self.meta}
+        for method, (mean, std) in self.stats.items():
+            nib.save(nib.Nifti1Image(mean.astype(np.float32), self.affine), folder / f"stats-{method}_mean.nii.gz")
+            nib.save(nib.Nifti1Image(std.astype(np.float32), self.affine), folder / f"stats-{method}_std.nii.gz")
+        info = {"n_controls": self.n, "fwhm_mm": self.fwhm, **self.meta, "stats_for": list(self.stats)}
         (folder / "reference.json").write_text(json.dumps(info, indent=2))
         return folder
 
@@ -143,7 +200,11 @@ class Reference:
             affine = img.affine
         vols["mask"] = vols["mask"] > 0.5
         n, fwhm = info.pop("n_controls"), info.pop("fwhm_mm")
-        return cls(**vols, affine=affine, n=n, fwhm=fwhm, meta=info)
+        stats = {}
+        for method in info.pop("stats_for", []):
+            pair = (nib.load(folder / f"stats-{method}_{part}.nii.gz") for part in ("mean", "std"))
+            stats[method] = tuple(np.asarray(img.get_fdata(dtype=np.float32)) for img in pair)
+        return cls(**vols, affine=affine, n=n, fwhm=fwhm, meta=info, stats=stats)
 
     def on_grid(self, target: nib.Nifti1Image) -> Reference:
         """Return this reference resampled onto the grid of ``target``."""
@@ -154,4 +215,7 @@ class Reference:
             src = nib.Nifti1Image(getattr(self, name).astype(np.float32), self.affine)
             vols[name] = resample_to(src, target, order=1)
         vols["mask"] = vols["mask"] > 0.5
-        return Reference(**vols, affine=target.affine, n=self.n, fwhm=self.fwhm, meta=self.meta)
+        stats = {}
+        for method, pair in self.stats.items():
+            stats[method] = tuple(resample_to(nib.Nifti1Image(v, self.affine), target, order=1) for v in pair)
+        return Reference(**vols, affine=target.affine, n=self.n, fwhm=self.fwhm, meta=self.meta, stats=stats)

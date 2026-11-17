@@ -25,6 +25,7 @@ _VERMIS = (50, 101, 2, 53, 20, 71)
 _TEMPORAL_R = (3, 28, 45, 14, 24, 18, 36)  # inf/mid/sup/transverse, fusiform, parahipp., entorhinal
 _TEMPORAL_L = tuple(i + 51 for i in _TEMPORAL_R)
 _SENSORIMOTOR = (35, 86, 13, 64, 16, 67)  # precentral, postcentral, paracentral
+_OCCIPITAL = (34, 85, 43, 94, 6, 57, 12, 63)  # lateral occipital, cuneus, pericalcarine, lingual
 
 # Pons = the part of the brainstem between these MNI z coordinates (mm).
 _PONS_Z = (-44.0, -26.0)
@@ -34,13 +35,18 @@ MASKS: dict[str, str] = {
     "parenchyma": "Whole brain parenchyma (gray + white matter probability > 0.5)",
     "cerebellum": "Whole cerebellum, gray and white matter (RRC in the paper)",
     "cerebellar-gm": "Cerebellar gray matter, hemispheres and vermis",
-    "brainstem": "Whole brainstem (RRBS in the paper)",
     "pons": "Central pons (brainstem between z = -44 and -26 mm, eroded)",
     "white-matter": "Deep cerebral white matter (eroded, centrum semiovale)",
+    "occipital": "Occipital cortex (lateral occipital, cuneus, pericalcarine, lingual)",
     "sensorimotor": "Primary sensorimotor cortex (pre-, post- and paracentral)",
+    "brainstem": "Whole brainstem (RRBS in the paper)",
     "temporal-left": "Left temporal cortex (RRTL for a right-sided lesion)",
     "temporal-right": "Right temporal cortex (RRTL for a left-sided lesion)",
 }
+
+# Built-in masks that are also offered as reference-region methods of the
+# same name.  The others can still be used with ``method="region"``.
+REFERENCE_REGIONS = ("cerebellum", "cerebellar-gm", "pons", "white-matter", "occipital", "sensorimotor")
 
 
 def _load(name: str) -> nib.Nifti1Image:
@@ -96,6 +102,8 @@ def _builtin(name: str) -> np.ndarray:
         return ndimage.binary_erosion(wm, iterations=2)
     if name == "sensorimotor":
         return np.isin(labels, _SENSORIMOTOR)
+    if name == "occipital":
+        return np.isin(labels, _OCCIPITAL)
     if name == "temporal-left":
         return np.isin(labels, _TEMPORAL_L)
     if name == "temporal-right":
@@ -113,6 +121,11 @@ def builtin_mask(name: str) -> nib.Nifti1Image:
 def labels_mask(labels: list[int]) -> nib.Nifti1Image:
     """Return a mask made of the given CerebrA label numbers."""
     atlas, affine = _atlas()
+    unknown = sorted(set(labels) - set(atlas_labels()))
+    if unknown:
+        raise ValueError(f"not CerebrA label numbers: {unknown}; see atlas_labels()")
+    if not labels:
+        raise ValueError("no labels given")
     return nib.Nifti1Image(np.isin(atlas, labels).astype(np.uint8), affine)
 
 

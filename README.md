@@ -60,11 +60,10 @@ Run `sugar-pet methods` to see this list in the terminal.
 | `cerebellum`     | Mean uptake of the whole cerebellum (RRC in the paper)                     |       no       |
 | `cerebellar-gm`  | Mean uptake of cerebellar gray matter                                      |       no       |
 | `pons`           | Mean uptake of the central pons                                            |       no       |
-| `brainstem`      | Mean uptake of the whole brainstem (RRBS)                                  |       no       |
 | `white-matter`   | Mean uptake of deep cerebral white matter                                  |       no       |
+| `occipital`      | Mean uptake of the occipital cortex                                        |       no       |
 | `sensorimotor`   | Mean uptake of primary sensorimotor cortex                                 |       no       |
-| `temporal-left` / `temporal-right` | Mean uptake of one temporal lobe (RRTL: pick the side *opposite* the lesion) | no |
-| `region`         | Mean uptake of your own mask (`--mask my_roi.nii.gz`)                      |       no       |
+| `region`         | Mean uptake of any region you choose (`--mask` or `--labels`, see below)   |       no       |
 | `ps`             | **Proportional scaling**: mean uptake of the gray-matter mask              |       no       |
 | `spm-global`     | SPM's global mean (all voxels above 1/8 of the image mean)                 |       no       |
 | `hn`             | **Histogram normalisation**: divide the image by the mean of the controls, take the *most frequent* ratio | yes |
@@ -73,6 +72,19 @@ Run `sugar-pet methods` to see this list in the terminal.
 
 Several methods at once: `-m cerebellum,ps,hn`, or `-m all`. Add
 `--factors-only` to get just the table.
+
+Options for the reference regions:
+
+| Option               | Meaning                                                                   |
+| -------------------- | ------------------------------------------------------------------------- |
+| `--mask NAME_OR_FILE` | Use another region: a [built-in mask](#built-in-masks) or your own NIfTI file in MNI space |
+| `--labels 34,85`     | Build the region from atlas labels (`sugar-pet labels` lists them)        |
+| `--statistic median` | Median of the region instead of its mean (also for `ps`)                  |
+| `--target 50`        | Scale the output so that the reference is 50 instead of 1 (any method)    |
+
+For example, the paper's two other reference regions are built-in masks:
+`-m region --mask brainstem` (RRBS) and `-m region --mask temporal-left`
+(RRTL; pick the side *opposite* the lesion).
 
 ### Which one should I use?
 
@@ -85,9 +97,24 @@ Following the paper's conclusions:
   mean, the factor comes out too small, and healthy tissue then looks
   *hyper*metabolic. `ips` removes most of that bias.
 * **A reference region is fine only if it is large and truly spared by the
-  disease.** The cerebellum works well in many dementias but is wrong for
-  diseases that affect it (e.g. MSA, cerebellar ataxias). Small regions such
-  as the brainstem or pons are noisy.
+  disease.** Small regions such as the pons are noisy.
+
+Which regions are spared depends on the disease. Some examples:
+
+| Disease                          | Avoid as reference                    | Usually spared            |
+| -------------------------------- | ------------------------------------- | ------------------------- |
+| Alzheimer's disease              | —                                     | cerebellum, pons, sensorimotor |
+| Multiple system atrophy          | cerebellum, pons                      | occipital                 |
+| Progressive supranuclear palsy   | pons (midbrain atrophy nearby)        | occipital, cerebellum     |
+| Corticobasal syndrome            | sensorimotor                          | occipital, cerebellum     |
+| Dementia with Lewy bodies, PCA   | occipital                             | cerebellum, sensorimotor  |
+
+These are rules of thumb; check the literature for your disease and stage.
+
+`hn`, `ips` and `ps` assume that *most* of the gray matter is normal. If a
+disease lowers uptake almost everywhere they cannot see it; a white-matter
+reference or a [reference cluster](#reference-cluster) is a useful
+sensitivity check in that case.
 
 ## The healthy-control reference
 
@@ -101,6 +128,7 @@ Following the paper's conclusions:
 | `hn_mean.nii.gz`, `hn_std.nii.gz` | Mean and SD of the controls after HN        |
 | `mask.nii.gz`      | Voxels used for the estimate (gray-matter mask)            |
 | `reference.json`   | Number of controls, smoothing, factors of each control     |
+| `stats-<method>_mean.nii.gz`, `..._std.nii.gz` | Only with `--stats-for`: mean and SD of the controls after another method (for [z-score maps](#z-score-maps)) |
 
 Use controls from the same scanner and reconstruction as your patients, and
 processed the same way. Twenty or more is a sensible minimum.
@@ -119,34 +147,90 @@ smoothed, pass `--fwhm 0` to both commands.
 | `--max-iter`      | `1`     | Number of re-estimations (paper: 1)                          |
 | `--save-masks`    | off     | Also write the mask each factor was estimated from           |
 
+## Z-score maps
+
+A z-score map shows how far each voxel of a normalised image is from the
+controls: `z = (image − control mean) / control SD`. Negative means lower
+uptake than the controls.
+
+```bash
+sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o zmaps/
+```
+
+writes `sub-01_desc-hn_zmap.nii.gz`. The image is smoothed like the controls
+were before it is compared. `ps`, `ips`, `hn` and `ihn` work with any
+reference. For a reference region, the controls must have been scaled with the
+same region, so name it when building the reference:
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --stats-for cerebellum,pons
+sugar-pet zmap patients/*.nii.gz -m pons -r hc_reference/ -o zmaps/
+```
+
+(`--stats-for all` stores every reference region.) The z-scores are not
+adjusted for age or sex; use controls that match your patients.
+
+## Reference cluster
+
+Instead of choosing a reference region from an atlas, you can let a patient
+group show which voxels its disease spares
+([Yakushev et al., 2009](https://doi.org/10.1016/j.neuroimage.2008.07.015)).
+After proportional scaling, spared regions look *hyper*metabolic compared with
+controls, because the lesions pulled the global mean down. Those voxels become
+the reference region:
+
+```bash
+sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o cluster.nii.gz
+sugar-pet normalize patients/*.nii.gz -m region --mask cluster.nii.gz -o out/
+```
+
+`--p-threshold` (default 0.001, uncorrected) and `--min-cluster` (default
+1 mL) control which voxels are kept.
+
+The cluster depends on the group it came from. Comparing that same group with
+controls afterwards is circular: derive the cluster from other patients, or
+cross-validate.
+
 ## Python
 
 ```python
-from sugar_pet import Reference, normalize
+from sugar_pet import Reference, normalize, zmap
 
-ref = Reference.build(control_files, fwhm=8)     # or Reference.load("hc_reference")
+ref = Reference.build(control_files, fwhm=8)  # or Reference.load("hc_reference")
 ref.save("hc_reference")
 
 res = normalize("sub-01_pet.nii.gz", method="ihn", reference=ref)
-print(res.factor)                 # the normalisation factor
-print(res.info)                   # voxels used, fraction excluded, ...
+print(res.factor)  # the normalisation factor
+print(res.info)  # voxels used, fraction excluded, ...
 res.save("sub-01_desc-ihn_pet.nii.gz")
-res.mask_image()                  # the voxels the factor was estimated from
+res.mask_image()  # the voxels the factor was estimated from
+
+z = zmap("sub-01_pet.nii.gz", method="ihn", reference=ref)  # a NIfTI image
 ```
 
-Any reference-region method accepts your own mask, and any set of labels of the
-bundled atlas can be turned into one:
+A reference region can be a built-in mask, your own file, or any set of labels
+of the bundled atlas:
 
 ```python
-from sugar_pet import atlas_labels, labels_mask
+from sugar_pet import atlas_labels, labels_mask, reference_cluster
 
-atlas_labels()                                   # {21: 'Putamen (R)', 72: 'Putamen (L)', ...}
-res = normalize(img, "region", mask=labels_mask([40, 91]))   # both thalami
+res = normalize(img, "region", mask="brainstem", statistic="median", target=100)
+
+atlas_labels()  # {21: 'Putamen (R)', 72: 'Putamen (L)', ...}
+res = normalize(img, "region", mask=labels_mask([40, 91]))  # both thalami
+
+cluster = reference_cluster(patient_files, ref)
+res = normalize(img, "region", mask=cluster)
 ```
 
 ## Built-in masks
 
-`sugar-pet masks -o masks/` writes them as NIfTI files so you can look at them.
+`gray-matter`, `parenchyma`, `cerebellum`, `cerebellar-gm`, `pons`,
+`white-matter`, `occipital`, `sensorimotor`, `brainstem`, `temporal-left` and
+`temporal-right`. `sugar-pet masks -o masks/` writes them as NIfTI files so
+you can look at them, and `sugar-pet labels` lists the atlas labels for
+`--labels`.
+
 They come from two freely redistributable MNI resources, resampled to 2 mm:
 the ICBM 2009c tissue probability maps and the
 [CerebrA atlas](https://doi.org/10.1038/s41597-020-0557-9). Masks are resampled
@@ -154,7 +238,9 @@ to the grid of each image automatically.
 
 The pons mask is the part of the CerebrA brainstem between z = −44 and −26 mm,
 eroded in-plane; treat it as a pragmatic central-pons region, not an anatomical
-gold standard. For other MNI variants or atlases, pass your own mask.
+gold standard. `occipital` is the whole occipital cortex; for the lateral
+occipital cortex alone use `--labels 34,85`. For other MNI variants or atlases,
+pass your own mask.
 
 ## Images not in MNI space yet?
 
@@ -189,6 +275,14 @@ writes 2 mm MNI-space images. Always check the result visually.
   exactly why HN works well.
 * **One scale.** `ps`, `ips`, `hn` and `ihn` are all scaled so that the
   gray-matter mask of a healthy brain averages about 1.
+* **Reference cluster.** The two-sample t-test (patients > controls, equal
+  variances) is computed directly from the patient images and the mean and SD
+  stored in the reference, so the control images are not needed again.
+* **Left out on purpose.** Standardising images to zero mean and unit variance
+  (common before deep learning) is a shift as well as a scaling, so uptake
+  ratios are lost. The log transform and double centring of SSM/PCA covariance
+  analysis belong to that analysis, which gives the same result whatever
+  scaling was applied before.
 
 In a simulated image with a large 40 % cortical lesion (see `tests/`), the
 factor is off by −3.7 % with `ps`, −0.5 % with `ips` and less than 0.1 % with
@@ -209,6 +303,9 @@ MNI downloads.
 
 * López-González FJ, Silva-Rodríguez J, Paredes-Pacheco J, et al. Intensity
   normalization methods in brain FDG-PET quantification. *NeuroImage* 2020;222:117229.
+* Yakushev I, Hammers A, Fellgiebel A, et al. SPM-based count normalization
+  provides excellent discrimination of mild Alzheimer's disease and amnestic
+  mild cognitive impairment from healthy aging. *NeuroImage* 2009;44:43–50.
 * Manera AL, Dadar M, Fonov V, Collins DL. CerebrA, registration and manual
   label correction of Mindboggle-101 atlas for MNI-ICBM152 template.
   *Sci Data* 2020;7:237.

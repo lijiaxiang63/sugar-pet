@@ -11,9 +11,9 @@ import nibabel as nib
 from nibabel.filebasedimages import ImageFileError
 
 from . import __version__
-from .masks import MASKS, builtin_mask
+from .masks import MASKS, atlas_labels, builtin_mask, labels_mask
 from .normalize import METHODS, NEEDS_REFERENCE, normalize
-from .reference import Reference
+from .reference import STATS_METHODS, Reference
 
 
 def _strip_ext(name: str) -> str:
@@ -23,13 +23,29 @@ def _strip_ext(name: str) -> str:
     return name
 
 
-def output_name(path: str | Path, method: str) -> str:
+def output_name(path: str | Path, method: str, suffix: str = "pet") -> str:
     """``sub-01_pet.nii.gz`` -> ``sub-01_desc-hn_pet.nii.gz`` (BIDS-style)."""
     stem = _strip_ext(Path(path).name)
     label = "desc-" + method.replace("-", "")
     if stem.endswith("_pet"):
-        return f"{stem[:-4]}_{label}_pet.nii.gz"
-    return f"{stem}_{label}.nii.gz"
+        return f"{stem[:-4]}_{label}_{suffix}.nii.gz"
+    return f"{stem}_{label}.nii.gz" if suffix == "pet" else f"{stem}_{label}_{suffix}.nii.gz"
+
+
+def _split(items: list[str] | None) -> list[str]:
+    """``["a,b", "c"]`` -> ``["a", "b", "c"]``."""
+    return [part for item in items or [] for part in item.split(",") if part]
+
+
+def _unknown_methods(methods: list[str]) -> str | None:
+    unknown = [m for m in methods if m not in METHODS]
+    if not unknown:
+        return None
+    text = f"unknown method(s): {', '.join(unknown)}. Run 'sugar-pet methods'."
+    masks = [m for m in unknown if m in MASKS]
+    if masks:
+        text += f" '{masks[0]}' is a built-in mask: use -m region --mask {masks[0]}."
+    return text
 
 
 def _progress(done: int, total: int) -> None:
@@ -49,23 +65,33 @@ def cmd_methods(_args) -> int:
 
 def cmd_build_reference(args) -> int:
     print(f"Building reference from {len(args.controls)} controls ...", file=sys.stderr)
-    ref = Reference.build(args.controls, mask=args.mask, fwhm=args.fwhm, progress=_progress)
+    stats_for = _split(args.stats_for)
+    if stats_for == ["all"]:
+        stats_for = list(STATS_METHODS)
+    ref = Reference.build(args.controls, mask=args.mask, fwhm=args.fwhm, stats_for=stats_for, progress=_progress)
     ref.save(args.output)
     print(f"Reference saved to {args.output}")
     return 0
 
 
 def cmd_normalize(args) -> int:
-    methods = [m for item in args.method for m in item.split(",") if m]
+    methods = _split(args.method)
     if methods == ["all"]:
         methods = [m for m in METHODS if m != "region" and (args.reference or m not in NEEDS_REFERENCE)]
-    unknown = [m for m in methods if m not in METHODS]
-    if unknown:
-        print(f"error: unknown method(s): {', '.join(unknown)}. Run 'sugar-pet methods'.", file=sys.stderr)
+    problem = _unknown_methods(methods)
+    if args.mask and args.labels:
+        problem = "--mask and --labels cannot be combined"
+    elif (args.mask or args.labels) and len(methods) > 1:
+        problem = "--mask and --labels can only be combined with a single method"
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
         return 2
-    if args.mask and len(methods) > 1:
-        print("error: --mask can only be combined with a single method", file=sys.stderr)
-        return 2
+    mask, mask_text, label_of = args.mask, None, {}
+    if args.labels:
+        mask = labels_mask([int(v) for v in _split([args.labels])])
+        mask_text = "labels:" + ",".join(_split([args.labels]))
+    elif args.mask in MASKS:
+        label_of["region"] = args.mask  # name the files after the mask, not "region"
     reference = Reference.load(args.reference) if args.reference else None
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
@@ -80,8 +106,10 @@ def cmd_normalize(args) -> int:
                         path,
                         method,
                         reference=reference,
-                        mask=args.mask,
+                        mask=mask,
                         fwhm=args.fwhm,
+                        statistic=args.statistic,
+                        target=args.target,
                         p_threshold=args.p_threshold,
                         exclude=args.exclude,
                         max_iter=args.max_iter,
@@ -93,10 +121,11 @@ def cmd_normalize(args) -> int:
                 failed += 1
                 print(f"error: {Path(path).name} [{method}]: {err}", file=sys.stderr)
                 continue
+            name = output_name(path, label_of.get(method, method))
             if not args.factors_only:
-                res.save(out / output_name(path, method))
+                res.save(out / name)
             if args.save_masks and res.mask is not None:
-                nib.save(res.mask_image(), out / output_name(path, method).replace(".nii.gz", "_mask.nii.gz"))
+                nib.save(res.mask_image(), out / name.replace(".nii.gz", "_mask.nii.gz"))
             excluded = res.info.get("excluded_fraction")
             rows.append(
                 (
@@ -105,16 +134,72 @@ def cmd_normalize(args) -> int:
                     f"{res.factor:.6g}",
                     str(res.info.get("n_voxels", "")),
                     "" if excluded is None else f"{excluded:.4f}",
+                    mask_text or res.info.get("mask", ""),
                 )
             )
             print(f"{Path(path).name}\t{method}\t{res.factor:.6g}")
 
     table = out / "factors.tsv"
     with open(table, "w") as fh:
-        fh.write("image\tmethod\tfactor\tn_voxels\texcluded_fraction\n")
+        fh.write("image\tmethod\tfactor\tn_voxels\texcluded_fraction\tmask\n")
         fh.writelines("\t".join(r) + "\n" for r in rows)
     print(f"Factors written to {table}", file=sys.stderr)
     return 1 if failed else 0
+
+
+def cmd_zmap(args) -> int:
+    from .zscore import zmap
+
+    methods = _split(args.method)
+    problem = _unknown_methods(methods)
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
+        return 2
+    reference = Reference.load(args.reference)
+    for method in methods:
+        reference.control_stats(method)  # stop early if the reference cannot serve a method
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+    failed = 0
+    for path in args.images:
+        for method in methods:
+            try:
+                z = zmap(
+                    path,
+                    method,
+                    reference=reference,
+                    p_threshold=args.p_threshold,
+                    exclude=args.exclude,
+                    max_iter=args.max_iter,
+                )
+            except (ValueError, OSError, ImageFileError) as err:  # keep going with the other images
+                failed += 1
+                print(f"error: {Path(path).name} [{method}]: {err}", file=sys.stderr)
+                continue
+            name = output_name(path, method, "zmap")
+            nib.save(z, out / name)
+            print(name)
+    return 1 if failed else 0
+
+
+def cmd_reference_cluster(args) -> int:
+    from .cluster import reference_cluster
+
+    print(f"Comparing {len(args.patients)} patients with the controls ...", file=sys.stderr)
+    cluster = reference_cluster(
+        args.patients,
+        args.reference,
+        p_threshold=args.p_threshold,
+        min_cluster_ml=args.min_cluster,
+        progress=_progress,
+    )
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    nib.save(cluster, out)
+    voxel_ml = abs(float(nib.affines.voxel_sizes(cluster.affine).prod())) / 1000.0
+    print(f"Reference cluster ({cluster.get_fdata().sum() * voxel_ml:.0f} mL) written to {out}")
+    print(f"Use it with: sugar-pet normalize ... -m region --mask {out}")
+    return 0
 
 
 def cmd_masks(args) -> int:
@@ -142,6 +227,23 @@ def cmd_spatial_norm(args) -> int:
     return 0 if len(written) == len(targets) else 1
 
 
+def cmd_labels(_args) -> int:
+    for index, name in sorted(atlas_labels().items()):
+        print(f"{index:4d}  {name}")
+    return 0
+
+
+def _add_iterative_options(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--p-threshold", type=float, default=0.01, help="ips/ihn: p-value for excluding voxels [0.01]")
+    p.add_argument(
+        "--exclude",
+        choices=("hypo", "both"),
+        default="hypo",
+        help="ips/ihn: exclude hypometabolic voxels only, or hyper- as well [hypo]",
+    )
+    p.add_argument("--max-iter", type=int, default=1, help="ips/ihn: number of re-estimations [1]")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sugar-pet",
@@ -165,15 +267,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", required=True, help="output folder")
     p.add_argument("-r", "--reference", help="reference folder (needed for hn, ips, ihn)")
     p.add_argument("--mask", help="built-in mask name or NIfTI file replacing the method's default region")
-    p.add_argument("--fwhm", type=float, help="smoothing in mm before estimating the factor (0 = none)")
-    p.add_argument("--p-threshold", type=float, default=0.01, help="ips/ihn: p-value for excluding voxels [0.01]")
+    p.add_argument("--labels", help="atlas label numbers to use as the region, e.g. 34,85 (see 'sugar-pet labels')")
     p.add_argument(
-        "--exclude",
-        choices=("hypo", "both"),
-        default="hypo",
-        help="ips/ihn: exclude hypometabolic voxels only, or hyper- as well [hypo]",
+        "--statistic",
+        choices=("mean", "median"),
+        default="mean",
+        help="reference regions and ps: mean or median of the region [mean]",
     )
-    p.add_argument("--max-iter", type=int, default=1, help="ips/ihn: number of re-estimations [1]")
+    p.add_argument("--target", type=float, default=1.0, help="value of the reference in the output images [1]")
+    p.add_argument("--fwhm", type=float, help="smoothing in mm before estimating the factor (0 = none)")
+    _add_iterative_options(p)
     p.add_argument("--literal-ips", action="store_true", help="ips: plain mean of the remaining voxels")
     p.add_argument("--factors-only", action="store_true", help="only write factors.tsv, no images")
     p.add_argument("--save-masks", action="store_true", help="also save the mask each factor came from")
@@ -184,11 +287,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", required=True, help="folder to write the reference to")
     p.add_argument("--mask", default="gray-matter", help="built-in mask name or NIfTI file [gray-matter]")
     p.add_argument("--fwhm", type=float, default=8.0, help="smoothing in mm; 0 if already smoothed [8]")
+    p.add_argument(
+        "--stats-for",
+        action="append",
+        help=f"also store control statistics for z-maps with these methods ({', '.join(STATS_METHODS)}, or 'all')",
+    )
     p.set_defaults(func=cmd_build_reference)
+
+    p = sub.add_parser("zmap", help="z-score maps of images against the controls of a reference")
+    p.add_argument("images", nargs="+", help="FDG-PET images in MNI space")
+    p.add_argument("-m", "--method", action="append", required=True, help="normalisation method(s) to use")
+    p.add_argument("-r", "--reference", required=True, help="reference folder")
+    p.add_argument("-o", "--output", required=True, help="output folder")
+    _add_iterative_options(p)
+    p.set_defaults(func=cmd_zmap)
+
+    p = sub.add_parser("reference-cluster", help="find a reference region from a patient group (Yakushev 2009)")
+    p.add_argument("patients", nargs="+", help="FDG-PET images of the patient group, in MNI space")
+    p.add_argument("-r", "--reference", required=True, help="reference folder built from healthy controls")
+    p.add_argument("-o", "--output", required=True, help="mask file to write, e.g. cluster.nii.gz")
+    p.add_argument("--p-threshold", type=float, default=0.001, help="one-sided uncorrected p-value [0.001]")
+    p.add_argument("--min-cluster", type=float, default=1.0, help="smallest cluster to keep, in mL [1]")
+    p.set_defaults(func=cmd_reference_cluster)
 
     p = sub.add_parser("masks", help="export the built-in masks as NIfTI files")
     p.add_argument("-o", "--output", required=True, help="output folder")
     p.set_defaults(func=cmd_masks)
+
+    p = sub.add_parser("labels", help="list the label numbers of the built-in atlas (for --labels)")
+    p.set_defaults(func=cmd_labels)
 
     p = sub.add_parser("spatial-norm", help="(optional) warp native PET to MNI space with SPM")
     p.add_argument("images", nargs="+", help="native-space PET images")

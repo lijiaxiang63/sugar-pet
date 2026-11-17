@@ -44,6 +44,17 @@ def region_mean(data: np.ndarray, mask: np.ndarray) -> float:
     return float(data[mask].mean(dtype=np.float64))
 
 
+def region_stat(data: np.ndarray, mask: np.ndarray, statistic: str = "mean") -> float:
+    """Mean or median uptake inside a mask."""
+    if statistic == "mean":
+        return region_mean(data, mask)
+    if statistic != "median":
+        raise ValueError("statistic must be 'mean' or 'median'")
+    if not mask.any():
+        raise ValueError("the mask does not overlap the image; is the image in MNI space?")
+    return float(np.median(data[mask]))
+
+
 def spm_global(data: np.ndarray) -> float:
     """SPM's global mean: the mean of all voxels brighter than 1/8 of the image mean."""
     values = data[np.isfinite(data)]

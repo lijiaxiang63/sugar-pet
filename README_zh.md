@@ -110,6 +110,54 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 `hn`、`ips`、`ps` 都假设**大部分**灰质是正常的。如果疾病让几乎所有区域的摄取都下降，
 它们看不出来；这时用白质参考区或[参考簇](#参考簇)做敏感性分析会有帮助。
 
+## 推荐流程
+
+适用于“患者与健康对照比较”的研究。写的时候主要考虑非典型帕金森综合征（MSA、PSP、CBS），
+这类疾病里常用的参考区（小脑、脑桥）往往本身就受累。
+
+**1. 患者和对照用同样的方式处理。** 尽量来自同一台扫描仪、同样的重建参数，
+用同一套空间标准化，并且每幅标准化后的图像都目视检查一遍。
+
+**2. 用全部对照建一个参考库，**同时提供他们的年龄和性别：
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates participants.tsv --stats-for occipital,white-matter
+```
+
+**3. 用 `hn` 做归一化。**这是主分析。
+
+```bash
+sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -o normalised/
+```
+
+做组间统计时，先平滑这些图像，并把年龄、性别放进统计模型。
+统计软件里的全局缩放要关掉（SPM 里不选 proportional scaling，也不选 ANCOVA），
+因为图像已经归一化过了。
+
+**4. 看单个患者时，生成 W 值图，**它校正了年龄和性别：
+
+```bash
+sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
+```
+
+**5. 换两种参考区把第 3、4 步重做一遍**（`-m occipital,white-matter`），作为敏感性分析：
+
+* `occipital`：解剖参考区，MSA、PSP、CBS 通常不累及枕叶。
+* `white-matter`：不假设“大部分灰质正常”，所以能显示 `hn` 看不到的弥漫性下降，但噪声更大。
+
+如果结论不变，就报告 `hn` 的结果并说明做过这项检查；如果结论变了，要如实写出来：
+依赖于归一化方法的结果是不稳健的。
+
+**论文里应写明：**所用方法（`hn`），对照的例数、年龄范围和性别构成，
+平滑核（默认 8 mm），以及 sugar-pet 的版本。
+
+**应避免：**
+
+* 用疾病会累及的区域作参考区（MSA 的小脑和脑桥、PSP 的脑桥、CBS 的感觉运动皮层）；
+* 患者和对照用不同的方法归一化；
+* 患者和对照年龄不同时使用未校正的 Z 值；
+* 用同一批患者生成[参考簇](#参考簇)，又拿它来检验这批患者。
+
 ## 健康对照参考库
 
 `hn`、`ips`、`ihn` 需要把每幅图像与一组健康对照比较。

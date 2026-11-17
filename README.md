@@ -121,6 +121,61 @@ disease lowers uptake almost everywhere they cannot see it; a white-matter
 reference or a [reference cluster](#reference-cluster) is a useful
 sensitivity check in that case.
 
+## Recommended workflow
+
+For a study that compares patients with healthy controls. It was written with
+atypical parkinsonism in mind (MSA, PSP, CBS), where the classic reference
+regions, cerebellum and pons, are often affected themselves.
+
+**1. Treat patients and controls the same way.** Same scanner and
+reconstruction if at all possible, the same spatial normalisation, and a look
+at every warped image.
+
+**2. Build one reference from all your controls,** with their age and sex:
+
+```bash
+sugar-pet build-reference controls/*.nii.gz -o hc_reference/ --covariates participants.tsv --stats-for occipital,white-matter
+```
+
+**3. Normalise with `hn`.** This is the main analysis.
+
+```bash
+sugar-pet normalize patients/*.nii.gz controls/*.nii.gz -m hn -r hc_reference/ -o normalised/
+```
+
+For group statistics, smooth these images and put age and sex in the model.
+Switch off any global scaling in the statistics software (in SPM: no
+proportional scaling, no ANCOVA), because the images are already normalised.
+
+**4. For single patients, make W-score maps,** which are adjusted for age and
+sex:
+
+```bash
+sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o wmaps/ --covariates participants.tsv
+```
+
+**5. Repeat steps 3 and 4 with two other references** (`-m occipital,white-matter`)
+as a sensitivity analysis:
+
+* `occipital` is an anatomical region that MSA, PSP and CBS usually spare.
+* `white-matter` does not assume that most gray matter is normal, so it can
+  show a diffuse decrease that `hn` cannot. It is noisier.
+
+If the findings hold, report the `hn` results and mention the check. If they
+change, say so: a finding that depends on the normalisation is not robust.
+
+**In the paper, state** the method (`hn`), the number, age range and sex of
+the controls, the smoothing (8 mm by default), and the sugar-pet version.
+
+**Avoid:**
+
+* a reference region the disease affects (cerebellum and pons in MSA, pons in
+  PSP, sensorimotor cortex in CBS);
+* normalising patients and controls with different methods;
+* plain z-scores when patients and controls differ in age;
+* a [reference cluster](#reference-cluster) derived from the very patients you
+  then test.
+
 ## The healthy-control reference
 
 `hn`, `ips` and `ihn` compare each image with a group of healthy controls.

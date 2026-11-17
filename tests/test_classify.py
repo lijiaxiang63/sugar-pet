@@ -9,7 +9,7 @@ import pytest
 from conftest import make_pet
 
 from sugar_pet import Reference, classify
-from sugar_pet.classify import PATTERNS, REGIONS, _conclude, region_masks
+from sugar_pet.classify import PATTERNS, REGIONS, _conclude, _lowest, _patterns, _steady, region_masks
 from sugar_pet.cli import main, report_stem, shared_report_stem
 from sugar_pet.masks import builtin_mask
 from sugar_pet.report import _texts, montage, number, png
@@ -123,6 +123,44 @@ def test_confidence_goes_by_the_findings_that_hold(reference):
     assert res.conclusion["confidence"] == "low"
     assert res.result["notes"][0] == {"key": "lowered", "values": [round(100 * top["robust"])]}
     assert "置信度已下调" in res.report("zh") and "confidence was lowered" in res.report("en")
+
+
+def test_only_confirmed_evidence_is_robust():
+    """Evidence begins at a score of 1, below what is called abnormal: it needs the other normalisations too."""
+    assert _steady(-1.49, [1.49]) == 0.0 and _steady(-1.49, [-1.2]) == -1.49
+    assert _steady(-2.1, [-1.1, -3.0]) == -2.1 and _steady(-2.1, [-1.1, None]) == 0.0
+    assert _steady(1.3, [0.4]) == 0.0 and _steady(1.3, [1.0]) == 1.3
+    assert _steady(-0.8, [0.5]) == -0.8  # no evidence: left as it is
+    assert _steady(None, [None]) is None and _steady(-2.1, []) == -2.1
+
+    # Putamen low and confirmed; pons and cerebellum low under the main normalisation only.
+    score = {name: dict.fromkeys(("left", "right", "both") if paired else ("both",), 0.0) for name, paired in REGIONS}
+    others = {name: dict(sides) for name, sides in score.items()}
+    for name, value, other in (
+        ("putamen", -2.1, -1.1),
+        ("posterior-putamen", -2.1, -1.1),
+        ("pons", -1.49, 1.49),
+        ("cerebellum", -1.49, 1.49),
+    ):
+        score[name] = dict.fromkeys(score[name], value)
+        others[name] = dict.fromkeys(score[name], other)
+    steady = {
+        name: {side: _steady(v, [others[name][side]]) for side, v in sides.items()} for name, sides in score.items()
+    }
+    high = {name: _lowest(sides["both"], [others[name]["both"]]) for name, sides in score.items()}
+    found, kept = _patterns(score, high)[0], _patterns(steady, high)[0]
+    assert found[0]["id"] == "msa-p" and round(found[0]["score"], 2) == 0.57 and round(kept[0]["score"], 2) == 0.44
+    for pattern, robust in zip(found, kept, strict=True):
+        pattern["robust"] = min(pattern["score"], robust["score"])
+    assert _conclude(found, None)["confidence"] == "low"
+
+    # An increase that one normalisation could not check is not confirmed.
+    assert _lowest(3.0, [2.5, 2.8]) == 2.5 and _lowest(3.0, [2.5, None]) is None
+    assert _lowest(3.0, []) == 3.0 and _lowest(None, [1.0]) is None
+    missing = dict(high, putamen=None, pallidum=None, thalamus=None, pons=None, cerebellum=None, sensorimotor=None)
+    calm = {name: dict.fromkeys(sides, 0.0) for name, sides in score.items()}
+    shown = dict.fromkeys(missing, 3.0)
+    assert _patterns(calm, shown)[0][-1]["score"] == 1.0 and _patterns(calm, missing)[0][-1]["score"] == 0.0
 
 
 def test_region_outside_the_image(reference, healthy):

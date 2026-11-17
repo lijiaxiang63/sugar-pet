@@ -364,6 +364,46 @@ func DefaultClassifyOptions() ClassifyOptions {
 
 func clamp01(v float64) float64 { return math.Min(math.Max(v, 0), 1) }
 
+// confirmed says whether every other normalisation shows the finding too:
+// same direction, |score| of 1 or more.
+func confirmed(value float64, others []*float64) bool {
+	for _, v := range others {
+		if !(v != nil && *v*value > 0 && math.Abs(*v) >= scoreRobust) {
+			return false
+		}
+	}
+	return true
+}
+
+// steadyScore is the score as it counts for the robust match: 0 where it
+// is evidence the other normalisations do not confirm.  Evidence begins at
+// a |score| of 1, below the 1.5 from which a region is called abnormal, so
+// this goes by the score and not by that status.  A score that is no
+// evidence is left as it is.
+func steadyScore(value *float64, others []*float64) *float64 {
+	if value == nil || math.Abs(*value) <= evidenceFrom || confirmed(*value, others) {
+		return value
+	}
+	return new(float64)
+}
+
+// lowestScore is what an increase must show: the lowest score under any
+// normalisation.  Nil if one of them could not score the region: an
+// increase that was not checked is not confirmed.
+func lowestScore(value *float64, others []*float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	lowest := *value
+	for _, v := range others {
+		if v == nil {
+			return nil
+		}
+		lowest = math.Min(lowest, *v)
+	}
+	return &lowest
+}
+
 // evidenceLow is the evidence (0 to 1) that a region's uptake is decreased.
 func evidenceLow(z *float64) float64 {
 	if z == nil {
@@ -729,15 +769,12 @@ func Classify(img *Volume, name, method string, ref *Reference, opt ClassifyOpti
 			found := summarise(main.scores, main.brain, mask, inView)
 			found.Checks = map[string]*float64{}
 			found.Status = regionStatus(found.Z)
-			found.Robust = true
-			for _, m := range checks {
-				other := summarise(maps[m].scores, maps[m].brain, mask, inView).Z
-				found.Checks[m] = other
-				if found.Status != "none" && found.Status != "normal" &&
-					!(other != nil && *other**found.Z > 0 && math.Abs(*other) >= scoreRobust) {
-					found.Robust = false
-				}
+			others := make([]*float64, len(checks))
+			for i, m := range checks {
+				others[i] = summarise(maps[m].scores, maps[m].brain, mask, inView).Z
+				found.Checks[m] = others[i]
 			}
+			found.Robust = found.Status == "none" || found.Status == "normal" || confirmed(*found.Z, others)
 			switch side {
 			case "left":
 				entry.Left = found
@@ -746,20 +783,10 @@ func Classify(img *Volume, name, method string, ref *Reference, opt ClassifyOpti
 			default:
 				entry.Both = found
 			}
-			score[r.Name][side], steady[r.Name][side] = found.Z, found.Z
-			if !found.Robust {
-				steady[r.Name][side] = new(float64)
+			score[r.Name][side], steady[r.Name][side] = found.Z, steadyScore(found.Z, others)
+			if side == "both" {
+				robustHigh[r.Name] = lowestScore(found.Z, others)
 			}
-		}
-		// What an increase must show: the lowest score under any normalisation.
-		if entry.Both.Z != nil {
-			lowest := *entry.Both.Z
-			for _, m := range checks {
-				if v := entry.Both.Checks[m]; v != nil {
-					lowest = math.Min(lowest, *v)
-				}
-			}
-			robustHigh[r.Name] = &lowest
 		}
 		if r.Paired && entry.Left.Z != nil && entry.Right.Z != nil {
 			d := *entry.Left.Z - *entry.Right.Z

@@ -110,6 +110,81 @@ func TestRegionViewAndReportStems(t *testing.T) {
 	}
 }
 
+// Evidence begins at a score of 1, below what is called abnormal: it needs
+// the other normalisations too.  As tests/test_classify.py has it.
+func TestOnlyConfirmedEvidenceIsRobust(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	same := func(got, want *float64) bool {
+		return (got == nil) == (want == nil) && (got == nil || *got == *want)
+	}
+	for _, c := range []struct {
+		value  *float64
+		others []*float64
+		want   *float64
+	}{
+		{f(-1.49), []*float64{f(1.49)}, f(0)},
+		{f(-1.49), []*float64{f(-1.2)}, f(-1.49)},
+		{f(-2.1), []*float64{f(-1.1), f(-3)}, f(-2.1)},
+		{f(-2.1), []*float64{f(-1.1), nil}, f(0)},
+		{f(1.3), []*float64{f(0.4)}, f(0)},
+		{f(1.3), []*float64{f(1)}, f(1.3)},
+		{f(-0.8), []*float64{f(0.5)}, f(-0.8)}, // no evidence: left as it is
+		{nil, []*float64{nil}, nil},
+		{f(-2.1), nil, f(-2.1)},
+	} {
+		if got := steadyScore(c.value, c.others); !same(got, c.want) {
+			t.Errorf("steadyScore: case %+v", c)
+		}
+	}
+	// An increase that one normalisation could not check is not confirmed.
+	for _, c := range []struct {
+		value  *float64
+		others []*float64
+		want   *float64
+	}{
+		{f(3), []*float64{f(2.5), f(2.8)}, f(2.5)},
+		{f(3), []*float64{f(2.5), nil}, nil},
+		{f(3), nil, f(3)},
+		{nil, []*float64{f(1)}, nil},
+	} {
+		if got := lowestScore(c.value, c.others); !same(got, c.want) {
+			t.Errorf("lowestScore: case %+v", c)
+		}
+	}
+
+	// Putamen low and confirmed; pons and cerebellum low under the main normalisation only.
+	score, steady := regionScores{}, regionScores{}
+	high := map[string]*float64{}
+	for _, r := range ClassRegions {
+		value, other := 0.0, 0.0
+		switch r.Name {
+		case "putamen", "posterior-putamen":
+			value, other = -2.1, -1.1
+		case "pons", "cerebellum":
+			value, other = -1.49, 1.49
+		}
+		score[r.Name], steady[r.Name] = map[string]*float64{}, map[string]*float64{}
+		for _, side := range []string{"left", "right", "both"} {
+			if side == "both" || r.Paired {
+				score[r.Name][side] = f(value)
+				steady[r.Name][side] = steadyScore(f(value), []*float64{f(other)})
+			}
+		}
+		high[r.Name] = lowestScore(f(value), []*float64{f(other)})
+	}
+	found, _ := matchPatterns(score, high)
+	kept, _ := matchPatterns(steady, high)
+	if found[0].ID != "msa-p" || math.Abs(found[0].Score-0.5707) > 1e-3 || math.Abs(kept[0].Score-0.44) > 1e-3 {
+		t.Errorf("MSA-P matches %.4f, without the unconfirmed evidence %.4f", found[0].Score, kept[0].Score)
+	}
+	for i := range found {
+		found[i].Robust = math.Min(found[i].Score, kept[i].Score)
+	}
+	if got := conclude(found, ""); got.Category != "pattern" || got.Confidence != "low" {
+		t.Errorf("read as %+v", got)
+	}
+}
+
 // The reading of the pattern scores, as tests/test_classify.py has it.
 func TestConclude(t *testing.T) {
 	// robust: what is left of a pattern without the unstable findings (all of it, if negative).

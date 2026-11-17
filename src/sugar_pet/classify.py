@@ -155,6 +155,34 @@ def _status(z: float | None) -> str:
     return "normal"
 
 
+def _confirmed(value: float, others: Sequence[float | None]) -> bool:
+    """Whether every other normalisation shows the finding too: same direction, |score| of 1 or more."""
+    return all(v is not None and v * value > 0 and abs(v) >= _ROBUST for v in others)
+
+
+def _steady(value: float | None, others: Sequence[float | None]) -> float | None:
+    """The score as it counts for the robust match: 0 where it is evidence the other normalisations do not confirm.
+
+    Evidence begins at a |score| of 1, below the 1.5 from which a region is
+    called abnormal, so this goes by the score and not by that status.  A
+    score that is no evidence is left as it is.
+    """
+    if value is None or abs(value) <= _EVIDENCE_FROM or _confirmed(value, others):
+        return value
+    return 0.0
+
+
+def _lowest(value: float | None, others: Sequence[float | None]) -> float | None:
+    """What an increase must show: the lowest score under any normalisation.
+
+    None if one of them could not score the region: an increase that was
+    not checked is not confirmed.
+    """
+    if value is None or any(v is None for v in others):
+        return None
+    return min([value, *others])
+
+
 def _round(value: float | None) -> float | None:
     return None if value is None else round(float(value), 4)
 
@@ -428,16 +456,12 @@ def classify(
             others = {m: _summarise(maps[m][0], maps[m][1], masks[name, side], view[name, side])["z"] for m in checks}
             value = found["z"]
             status = _status(value)
-            agree = status in ("none", "normal") or all(
-                v is not None and v * value > 0 and abs(v) >= _ROBUST for v in others.values()
-            )
+            agree = status in ("none", "normal") or _confirmed(value, others.values())
             found.update(checks=others, status=status, robust=agree)
             entry[side] = found
             score[name][side] = value
-            steady[name][side] = value if agree else 0.0
-        # What an increase must show: the lowest score under any normalisation.
-        values = [entry["both"]["z"], *entry["both"]["checks"].values()]
-        robust_high[name] = None if entry["both"]["z"] is None else min(v for v in values if v is not None)
+            steady[name][side] = _steady(value, others.values())
+        robust_high[name] = _lowest(entry["both"]["z"], entry["both"]["checks"].values())
         if paired:
             left, right = score[name]["left"], score[name]["right"]
             entry["difference"] = None if left is None or right is None else left - right

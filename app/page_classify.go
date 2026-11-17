@@ -84,6 +84,13 @@ func (p *classifyPage) problem() string {
 	case p.output == "":
 		return T("Choose the output folder.", "请选择输出文件夹。")
 	}
+	// Two reports under one name: the second patient's would replace the first's.
+	if first, second, stem, found := core.SharedReportStem(p.files.files); found {
+		short := func(path string) string { return filepath.Join(filepath.Base(filepath.Dir(path)), filepath.Base(path)) }
+		return Tf("%s and %s would both be written as %s: rename one, or run them separately.",
+			"%s 与 %s 的报告都会写为 %s：请重命名其中一个，或分开运行。",
+			short(first), short(second), stem+"_report.html")
+	}
 	return ""
 }
 

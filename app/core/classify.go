@@ -88,6 +88,8 @@ const (
 	scoreRobust = 1.0
 	// A region needs this share of its voxels inside the image to be scored.
 	minCoverage = 0.5
+	// A voxel centre this close (in voxels) to the edge of the grid still counts as inside it.
+	gridEdge = 1e-6
 	// Evidence of a regional decrease (increase) grows from 0 at |score| 1 to 1 at 2.5.
 	evidenceFrom, evidenceSpan = 1.0, 1.5
 	// The hemispheres must differ by more than 0.5 for an asymmetric pattern, and by 1.5 for full evidence.
@@ -403,7 +405,56 @@ func regionStatus(z *float64) string {
 }
 
 // summarise gives the mean score of a region, and how much of it is abnormal.
-func summarise(z []float32, brain, mask []bool) *RegionScore {
+// regionView is the share of each region that lies inside a grid.  On a
+// grid that ends inside a region only a part of the region is left: what
+// is scored there must be counted against the whole region.
+func regionView(dim [3]int, aff Affine) map[regionKey]float64 {
+	a := atlasOnce()
+	out := map[regionKey]float64{}
+	inv, ok := invAffine(aff)
+	if !ok {
+		return out
+	}
+	var m [3][4]float64 // from a voxel of the atlas to a voxel of the grid
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 4; c++ {
+			for k := 0; k < 4; k++ {
+				m[r][c] += inv[r][k] * a.aff[k][c]
+			}
+		}
+	}
+	nx, ny := a.dim[0], a.dim[1]
+	for key, mask := range regionMasks() {
+		total, inside := 0, 0
+		for v, in := range mask {
+			if !in {
+				continue
+			}
+			total++
+			x, y, z := float64(v%nx), float64(v/nx%ny), float64(v/(nx*ny))
+			seen := true
+			for r := 0; r < 3; r++ {
+				at := m[r][0]*x + m[r][1]*y + m[r][2]*z + m[r][3]
+				if !(at > -0.5-gridEdge && at < float64(dim[r])-0.5+gridEdge) {
+					seen = false
+					break
+				}
+			}
+			if seen {
+				inside++
+			}
+		}
+		if total > 0 {
+			out[key] = float64(inside) / float64(total)
+		}
+	}
+	return out
+}
+
+// summarise gives the mean score of a region and how much of it is
+// abnormal.  mask is the region on the grid of the image, inView the share
+// of the whole region that this grid holds.
+func summarise(z []float32, brain, mask []bool, inView float64) *RegionScore {
 	total, n, below, above := 0, 0, 0, 0
 	sum := 0.0
 	for v, in := range mask {
@@ -425,7 +476,7 @@ func summarise(z []float32, brain, mask []bool) *RegionScore {
 	}
 	out := &RegionScore{}
 	if total > 0 {
-		out.Coverage = float64(n) / float64(total)
+		out.Coverage = float64(n) / float64(total) * inView
 	}
 	if out.Coverage < minCoverage {
 		return out
@@ -661,6 +712,7 @@ func Classify(img *Volume, name, method string, ref *Reference, opt ClassifyOpti
 		}
 		onGrid[key] = resampled
 	}
+	view := regionView(img.Dim, img.Aff)
 	var regions []RegionEntry
 	score, steady := regionScores{}, regionScores{}
 	robustHigh := map[string]*float64{}
@@ -673,12 +725,13 @@ func Classify(img *Volume, name, method string, ref *Reference, opt ClassifyOpti
 		}
 		for _, side := range sides {
 			mask := onGrid[regionKey{r.Name, side}]
-			found := summarise(main.scores, main.brain, mask)
+			inView := view[regionKey{r.Name, side}]
+			found := summarise(main.scores, main.brain, mask, inView)
 			found.Checks = map[string]*float64{}
 			found.Status = regionStatus(found.Z)
 			found.Robust = true
 			for _, m := range checks {
-				other := summarise(maps[m].scores, maps[m].brain, mask).Z
+				other := summarise(maps[m].scores, maps[m].brain, mask, inView).Z
 				found.Checks[m] = other
 				if found.Status != "none" && found.Status != "normal" &&
 					!(other != nil && *other**found.Z > 0 && math.Abs(*other) >= scoreRobust) {
@@ -865,6 +918,23 @@ func ReportStem(path string) string {
 		return stem[:len(stem)-4]
 	}
 	return stem
+}
+
+// SharedReportStem finds two images whose reports would get the same name,
+// so that the second would replace the first: a/pet.nii.gz and
+// b/pet.nii.gz, or sub-01.nii.gz and sub-01_pet.nii.gz.  Names that differ
+// only in case count as one, as they are one file on most Macs and on
+// Windows.
+func SharedReportStem(paths []string) (first, second, stem string, found bool) {
+	seen := map[string]string{}
+	for _, path := range paths {
+		stem := ReportStem(path)
+		if other, ok := seen[strings.ToLower(stem)]; ok {
+			return other, path, stem, true
+		}
+		seen[strings.ToLower(stem)] = path
+	}
+	return "", "", "", false
 }
 
 // ClassFiles are the files Save writes.

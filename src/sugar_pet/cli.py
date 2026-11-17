@@ -214,6 +214,25 @@ def report_stem(path: str | Path) -> str:
     return stem[:-4] if stem.endswith("_pet") and len(stem) > 4 else stem
 
 
+def shared_report_stem(images) -> str | None:
+    """What is wrong if two of the images would get the same report: the second would replace the first.
+
+    ``a/pet.nii.gz`` and ``b/pet.nii.gz`` share a name, and so do
+    ``sub-01.nii.gz`` and ``sub-01_pet.nii.gz``.  Names that differ only in
+    case count as one, as they are one file on most Macs and on Windows.
+    """
+    first: dict[str, str] = {}
+    for path in images:
+        stem = report_stem(path)
+        if stem.casefold() in first:
+            return (
+                f"{first[stem.casefold()]} and {path} would both be written as {stem}_report.html; "
+                "rename one or run them separately"
+            )
+        first[stem.casefold()] = str(path)
+    return None
+
+
 def cmd_classify(args) -> int:
     from .classify import PATTERNS, classify, default_checks
     from .report import percent
@@ -222,7 +241,7 @@ def cmd_classify(args) -> int:
     checks = default_checks(reference, args.method) if args.check is None else _split(args.check)
     if checks == ["none"]:
         checks = []
-    problem = _unknown_methods([args.method, *checks])
+    problem = _unknown_methods([args.method, *checks]) or shared_report_stem(args.images)
     if problem:
         print(f"error: {problem}", file=sys.stderr)
         return 2

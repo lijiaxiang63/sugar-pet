@@ -69,4 +69,7 @@ slope = data.max() / 32000
 scaled = nib.Nifti1Image(np.round(data / slope).astype(np.int16), first.affine)
 scaled.header.set_slope_inter(slope, 12.5)
 nib.save(scaled, out / "sub-int16_pet.nii")
+# The first patient on a grid that ends inside the cerebellum (nothing below z = -35 mm).
+low = int(np.ceil((-35 - first.affine[2, 3]) / first.affine[2, 2]))
+nib.save(first.slicer[:, :, low:], out / "sub-cut_pet.nii.gz")
 print("ok")

@@ -10,7 +10,7 @@ from conftest import make_pet
 
 from sugar_pet import Reference, classify
 from sugar_pet.classify import PATTERNS, REGIONS, _conclude, region_masks
-from sugar_pet.cli import main, report_stem
+from sugar_pet.cli import main, report_stem, shared_report_stem
 from sugar_pet.masks import builtin_mask
 from sugar_pet.report import _texts, montage, number, png
 
@@ -137,6 +137,26 @@ def test_region_outside_the_image(reference, healthy):
     assert "图像未覆盖" in res.report("zh")
 
 
+def test_region_cut_by_the_grid(reference, healthy):
+    """A grid that ends inside the cerebellum holds a part of it, which must not pass for the whole."""
+    whole = classify(healthy, reference=reference, checks=[])
+    levels = np.nonzero(region_masks()["cerebellum", "both"])[2]
+    cut = int(np.quantile(levels, 0.7))  # the lower 70% of the cerebellum lie outside the grid
+    res = classify(healthy.slicer[:, :, cut:], reference=reference, checks=[])
+    assert res.zmap.shape[2] == healthy.shape[2] - cut
+    by_id = {r["id"]: r for r in res.result["regions"]}
+    before = {r["id"]: r for r in whole.result["regions"]}
+    cerebellum = by_id["cerebellum"]["both"]
+    assert cerebellum["z"] is None and 0.2 < cerebellum["coverage"] < 0.4, cerebellum
+    assert before["cerebellum"]["both"]["z"] is not None and before["cerebellum"]["both"]["coverage"] > 0.9
+    note = next(n for n in res.result["notes"] if n["key"] == "not-covered")
+    assert ["cerebellum", "left"] in note["regions"] and ["cerebellum", "right"] in note["regions"]
+    # A region the grid holds whole is counted as before.
+    for name in ("putamen", "occipital"):
+        assert by_id[name]["both"]["z"] is not None
+        assert by_id[name]["both"]["coverage"] == before[name]["both"]["coverage"]
+
+
 def test_conclusion():
     def read(robust=None, **scores):
         patterns = [{"id": name, "score": scores.get(name.replace("-", "_"), 0.0)} for name in PATTERNS]
@@ -260,4 +280,13 @@ def test_cli(tmp_path, controls, capsys):
     assert "no other normalisation" in (out / "sub-01_report.html").read_text(encoding="utf-8")
     assert main(["classify", patient_path, "-r", ref, "-o", str(out), "--check", "pons"]) == 2
     assert "--stats-for pons" in capsys.readouterr().err
+
+    # Two images whose reports would get one name are refused before anything is written.
+    assert shared_report_stem(["a/sub-01_pet.nii.gz", "a/sub-02_pet.nii.gz", "b/wFDG.nii"]) is None
+    assert "a/pet.nii.gz and b/pet.nii.gz would both" in shared_report_stem(["a/pet.nii.gz", "c/x.nii", "b/pet.nii.gz"])
+    assert shared_report_stem(["sub-01.nii.gz", "Sub-01_pet.nii"]) is not None  # one file where case does not count
+    clash = tmp_path / "clash"
+    elsewhere = str(tmp_path / "elsewhere" / "sub-01.nii.gz")
+    assert main(["classify", patient_path, elsewhere, "-r", ref, "-o", str(clash)]) == 2
+    assert "would both be written as sub-01_report.html" in capsys.readouterr().err and not clash.exists()
     assert main(["classify", patient_path, str(tmp_path / "missing.nii.gz"), "-r", ref, "-o", str(out)]) == 1

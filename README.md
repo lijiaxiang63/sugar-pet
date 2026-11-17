@@ -337,6 +337,11 @@ sugar-pet classify sub-01_pet.nii.gz -r hc_reference/ -o reports/ --covariates p
 | `sub-01_classification.json`     | Every number of the report: regions, patterns, conclusion   |
 | `classification.tsv`             | One row per image: conclusion and the match with each pattern |
 
+The files are named after the image (`sub-01_pet.nii.gz` gives `sub-01`). Two
+images that would get the same name, such as `a/pet.nii.gz` and `b/pet.nii.gz`,
+are refused before anything is written, so that one patient's report cannot
+replace another's.
+
 **It is decision support, not a diagnosis.** The diagnostic criteria (MSA 2022,
 PSP 2017, DLB 2017) count FDG-PET as supportive only, and the rules below come
 from the literature: they were not fitted to or validated on your patients.
@@ -358,7 +363,8 @@ The steps in words:
    midbrain, pons, cerebellar hemispheres and vermis, medial and lateral
    frontal, peri-central, parietal, precuneus, posterior cingulate, lateral
    temporal and occipital cortex. From −2 a region counts as hypometabolic,
-   from 2 as hypermetabolic.
+   from 2 as hypermetabolic. A region is scored only if at least half of it
+   lies inside the image.
 3. **The same under other normalisations.** By default proportional scaling
    (`ps`), and a white-matter reference if the reference was built with
    `--stats-for white-matter` (recommended: it does not rest on gray matter).

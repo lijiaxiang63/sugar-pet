@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"image/png"
+	"math"
 	"testing"
 )
 
@@ -56,6 +57,56 @@ func TestClassRegions(t *testing.T) {
 	}
 	if _, err := RegionMask("pons", "left"); err == nil {
 		t.Error("the pons has no left side")
+	}
+}
+
+// A grid that ends inside a region holds a part of it, and two images may
+// not share the name of their reports.
+func TestRegionViewAndReportStems(t *testing.T) {
+	a := atlasOnce()
+	whole := regionView(a.dim, a.aff)
+	for key := range regionMasks() {
+		if whole[key] != 1 {
+			t.Errorf("%v: %v of the region on the grid of the atlas itself", key, whole[key])
+		}
+	}
+	// The same grid without its lower slices: the origin moves up with it.
+	cut := 0
+	for cut = 0; cut < a.dim[2]; cut++ {
+		if z := a.aff[2][2]*float64(cut) + a.aff[2][3]; z > -30 {
+			break
+		}
+	}
+	dim, aff := a.dim, a.aff
+	dim[2] -= cut
+	for r := 0; r < 3; r++ {
+		aff[r][3] += a.aff[r][2] * float64(cut)
+	}
+	view := regionView(dim, aff)
+	if share := view[regionKey{"cerebellum", "both"}]; !(share > 0.05 && share < 0.6) {
+		t.Errorf("%v of the cerebellum above z = -30 mm", share)
+	}
+	if view[regionKey{"putamen", "left"}] != 1 || view[regionKey{"occipital", "both"}] != 1 {
+		t.Errorf("putamen %v, occipital %v", view[regionKey{"putamen", "left"}], view[regionKey{"occipital", "both"}])
+	}
+	// What is scored of a cut region counts against the whole of it.
+	mask, brain := []bool{true, true, false}, []bool{true, true, true}
+	if got := summarise([]float32{-3, -3, 0}, brain, mask, 0.3); got.Z != nil || math.Abs(got.Coverage-0.3) > 1e-12 {
+		t.Errorf("a region 30%% inside the grid: %+v", got)
+	}
+	if got := summarise([]float32{-3, -3, 0}, brain, mask, 1); got.Z == nil || *got.Z != -3 || got.Coverage != 1 {
+		t.Errorf("a region inside the grid: %+v", got)
+	}
+
+	if _, _, _, found := SharedReportStem([]string{"a/sub-01_pet.nii.gz", "a/sub-02_pet.nii.gz", "b/wFDG.nii"}); found {
+		t.Error("three different names were taken for a clash")
+	}
+	first, second, stem, found := SharedReportStem([]string{"a/pet.nii.gz", "c/x.nii", "b/pet.nii.gz"})
+	if !found || first != "a/pet.nii.gz" || second != "b/pet.nii.gz" || stem != "pet" {
+		t.Errorf("a/pet and b/pet: %q %q %q %v", first, second, stem, found)
+	}
+	if _, _, _, found := SharedReportStem([]string{"sub-01.nii.gz", "Sub-01_pet.nii"}); !found {
+		t.Error("sub-01.nii.gz and Sub-01_pet.nii share their report")
 	}
 }
 

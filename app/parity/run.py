@@ -55,7 +55,7 @@ def commands(o):
         "wmap": ["zmap", *pt[:2], str(D / "sub-moved_pet.nii.gz"), "-m", "hn,ips,occipital", "-r", ref, "-o", f"{o}/w", "--covariates", tsv],
         "classify": ["classify", *pt[:3], str(D / "sub-moved_pet.nii.gz"), "-r", ref, "-o", f"{o}/class", "--covariates", tsv, "--lang", "zh"],
         "classify-cases": ["classify", *cases, "-r", ref, "-o", f"{o}/class_cases", "--covariates", tsv],
-        "classify-z": ["classify", *pt[3:6], hc[0], str(D / "sub-moved_pet.nii.gz"), str(D / "sub-fine_pet.nii.gz"), "-r", ref, "-o", f"{o}/class_z", "-m", "ihn", "--check", "ps,occipital,pons"],
+        "classify-z": ["classify", *pt[3:6], hc[0], str(D / "sub-moved_pet.nii.gz"), str(D / "sub-fine_pet.nii.gz"), str(D / "sub-cut_pet.nii.gz"), "-r", ref, "-o", f"{o}/class_z", "-m", "ihn", "--check", "ps,occipital,pons"],
         "classify-alone": ["classify", pt[0], "-r", ref0, "-o", f"{o}/class_alone", "--check", "none"],
         "cluster": ["reference-cluster", *pt, "-r", ref, "-o", f"{o}/cluster.nii.gz", "--p-threshold", "0.01", "--min-cluster", "0.5"],
         "norm-cluster": ["normalize", pt[0], "-m", "region", "--mask", f"{o}/cluster.nii.gz", "-o", f"{o}/norm_cluster"],

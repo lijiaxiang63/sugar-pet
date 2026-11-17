@@ -445,6 +445,9 @@ func classify(rest []string) int {
 		}
 	}
 	unknownMethods(append([]string{method}, checks...))
+	if first, second, stem, found := core.SharedReportStem(a.pos); found {
+		fail(2, "%s and %s would both be written as %s_report.html; rename one or run them separately", first, second, stem)
+	}
 	table := a.str("--covariates", "")
 	for _, m := range append([]string{method}, checks...) { // stop early if the reference cannot serve a method
 		_, err := ref.ControlStats(m)

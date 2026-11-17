@@ -76,6 +76,8 @@ ABNORMAL, MILD = 2.0, 1.5
 _ROBUST = 1.0
 # A region needs this share of its voxels inside the image to be scored.
 _MIN_COVERAGE = 0.5
+# A voxel centre this close (in voxels) to the edge of the grid still counts as inside it.
+_EDGE = 1e-6
 # Evidence of a regional decrease (increase) grows from 0 at |score| 1 to 1 at 2.5.
 _EVIDENCE_FROM, _EVIDENCE_SPAN = 1.0, 1.5
 # The hemispheres must differ by more than 0.5 for an asymmetric pattern, and by 1.5 for full evidence.
@@ -157,12 +159,37 @@ def _round(value: float | None) -> float | None:
     return None if value is None else round(float(value), 4)
 
 
-def _summarise(z: np.ndarray, brain: np.ndarray, mask: np.ndarray) -> dict:
-    """Mean score of a region, and how much of it is abnormal."""
+@cache
+def _region_voxels() -> dict[tuple[str, str], np.ndarray]:
+    """The voxels of each region on the grid of the atlas, as indices."""
+    return {key: np.argwhere(mask).astype(np.int16) for key, mask in region_masks().items()}
+
+
+def _in_view(target: nib.Nifti1Image) -> dict[tuple[str, str], float]:
+    """The share of each region that lies inside the grid of ``target``.
+
+    On a grid that ends inside a region only a part of the region is left:
+    what is scored there must be counted against the whole region.
+    """
+    to_target = np.linalg.inv(target.affine) @ _atlas()[1]
+    upper = np.asarray(target.shape[:3], dtype=np.float64) - 0.5 + _EDGE
+    out = {}
+    for key, voxels in _region_voxels().items():
+        ijk = voxels.astype(np.float64) @ to_target[:3, :3].T + to_target[:3, 3]
+        out[key] = float(((ijk > -0.5 - _EDGE) & (ijk < upper)).all(axis=1).mean()) if len(voxels) else 0.0
+    return out
+
+
+def _summarise(z: np.ndarray, brain: np.ndarray, mask: np.ndarray, in_view: float = 1.0) -> dict:
+    """Mean score of a region, and how much of it is abnormal.
+
+    ``mask`` is the region on the grid of the image, ``in_view`` the share of
+    the whole region that this grid holds.
+    """
     total = int(mask.sum())
     inside = mask & brain
     n = int(inside.sum())
-    coverage = n / total if total else 0.0
+    coverage = n / total * in_view if total else 0.0
     if coverage < _MIN_COVERAGE:
         return {"z": None, "coverage": coverage, "below": None, "above": None}
     values = z[inside].astype(np.float64)
@@ -391,13 +418,14 @@ def classify(
     masks = {
         key: get_mask(nib.Nifti1Image(m.astype(np.uint8), _atlas()[1]), target) for key, m in region_masks().items()
     }
+    view = _in_view(target)
     regions, score, steady, robust_high = [], {}, {}, {}
     for name, paired in REGIONS:
         entry: dict = {"id": name}
         score[name], steady[name] = {}, {}
         for side in ("left", "right", "both") if paired else ("both",):
-            found = _summarise(z, brain, masks[name, side])
-            others = {m: _summarise(maps[m][0], maps[m][1], masks[name, side])["z"] for m in checks}
+            found = _summarise(z, brain, masks[name, side], view[name, side])
+            others = {m: _summarise(maps[m][0], maps[m][1], masks[name, side], view[name, side])["z"] for m in checks}
             value = found["z"]
             status = _status(value)
             agree = status in ("none", "normal") or all(

@@ -78,7 +78,7 @@ func (a *app) clusterView(c *ui.Context) {
 						[2]string{filepath.Base(p.saved), shortDir(filepath.Dir(p.saved))},
 					)
 					ui.Row(c).Gap(8).Children(func() {
-						b := ui.PrimaryButton(c, T("Normalise with This Region", "用该区域做归一化")).FontSize(12).Padding(3, 12)
+						b := ui.PrimaryButton(c, T("Normalise Intensity with This Region", "用该区域做强度归一化")).FontSize(12).Padding(3, 12)
 						if b.Clicked() {
 							a.norm.methods = map[string]bool{"region": true}
 							a.norm.region.kind, a.norm.region.file = 1, p.saved

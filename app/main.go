@@ -1,5 +1,6 @@
 // SUGAR-PET is the desktop app of sugar-pet: intensity normalisation of
-// brain FDG-PET images, with nothing to install beside it.
+// brain FDG-PET images, with nothing to install beside it (only warping
+// images into MNI space, which is SPM's work, needs MATLAB and SPM).
 package main
 
 import (
@@ -13,6 +14,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"sugarpet/core"
 )
 
 const (
@@ -39,6 +42,7 @@ type app struct {
 	// reveal is the page whose results are new and should come into view.
 	reveal string
 
+	spatial spatialPage
 	norm    normPage
 	ref     refPage
 	zmap    zmapPage
@@ -55,10 +59,13 @@ type settings struct {
 	Page      string `json:"page"`
 	Reference string `json:"reference"`
 	Output    string `json:"output"`
+	SPM       string `json:"spm,omitempty"`
+	Matlab    string `json:"matlab,omitempty"`
 }
 
 func newApp() *app {
 	a := &app{page: "normalize"}
+	a.spatial.init()
 	a.norm.init()
 	a.ref.init()
 	a.zmap.init()
@@ -97,13 +104,17 @@ func (a *app) loadSettings() {
 			a.setReference(s.Reference)
 		}
 	}
+	a.spatial.setSPM(s.SPM)
+	if _, err := core.ResolveMatlab(s.Matlab); err == nil {
+		a.spatial.matlab = s.Matlab
+	}
 }
 
 func (a *app) saveSettings() {
 	if a.settingsPath == "" {
 		return
 	}
-	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference}
+	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, SPM: a.spatial.spm, Matlab: a.spatial.matlab}
 	if chinese {
 		s.Language = "zh"
 	}
@@ -126,7 +137,8 @@ type pageInfo struct {
 }
 
 var pages = []pageInfo{
-	{"normalize", "Normalise", "强度归一化", iconSliders},
+	{"spatial", "Spatial Normalisation", "空间标准化", iconWarp},
+	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
 	{"reference", "Reference", "参考库", iconLayers},
 	{"zmap", "Z-score Maps", "Z 值图", iconCurve},
 	{"compare", "Compare Groups", "组间比较", iconCompare},
@@ -150,6 +162,8 @@ func (a *app) view(c *ui.Context) {
 		pane := ui.Column(c).Grow(1).MinWidth(0).Background(t.Background)
 		pane.Children(func() {
 			switch a.page {
+			case "spatial":
+				a.spatialView(c)
 			case "normalize":
 				a.normalizeView(c)
 			case "reference":
@@ -181,7 +195,7 @@ func (a *app) sidebar(c *ui.Context, vibrant bool) {
 	page := a.page
 	list := ui.Sidebar(c, &page, func() {
 		ui.SidebarSection(c, T("Workflow", "工作流程"), nil, func() {
-			for _, p := range pages[:5] {
+			for _, p := range pages[:len(pages)-1] {
 				item := ui.SidebarItem(c, p.id, p.icon, T(p.en, p.zh))
 				if a.job != nil && a.job.page == p.id {
 					item.Children(func() { ui.Spinner(c).Size(12, 12) })
@@ -189,7 +203,7 @@ func (a *app) sidebar(c *ui.Context, vibrant bool) {
 			}
 		})
 		ui.SidebarSection(c, T("Resources", "资源"), nil, func() {
-			p := pages[5]
+			p := pages[len(pages)-1]
 			ui.SidebarItem(c, p.id, p.icon, T(p.en, p.zh))
 		})
 	}).Grow(1).Label(T("Pages", "页面"))

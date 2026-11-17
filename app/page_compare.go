@@ -106,7 +106,7 @@ func (a *app) compareView(c *ui.Context) {
 	p := &a.cmp
 	t := c.Theme()
 	a.frame(c, T("Compare Groups", "组间比较"),
-		T("Voxel-wise two-sample t-test after normalisation", "归一化后逐体素双样本 t 检验"),
+		T("Voxel-wise two-sample t-test after intensity normalisation", "强度归一化后逐体素双样本 t 检验"),
 		func() {
 			section(c, T("Groups", "分组"), T("The T-map is group 1 minus group 2: with patients as group 1 and controls as group 2, negative values mean hypometabolism.",
 				"T 图为第 1 组减第 2 组：以患者为第 1 组、对照为第 2 组时，负值表示低代谢。"), func() {
@@ -119,7 +119,7 @@ func (a *app) compareView(c *ui.Context) {
 					})
 				})
 			})
-			section(c, T("Normalisation", "归一化"), "", func() {
+			section(c, T("Intensity normalisation", "强度归一化"), "", func() {
 				var ids, names []string
 				for _, m := range core.Methods {
 					ids, names = append(ids, m.Name), append(names, methodName(m.Name))
@@ -212,7 +212,7 @@ func (a *app) compareView(c *ui.Context) {
 									})
 							},
 							func() {
-								setting(c, T("Keep the images that were tested", "保留参与检验的图像"), T("The normalised, smoothed images of both groups.", "两组归一化并平滑后的图像。"),
+								setting(c, T("Keep the images that were tested", "保留参与检验的图像"), T("The intensity-normalised, smoothed images of both groups.", "两组强度归一化并平滑后的图像。"),
 									func() { ui.Switch(c, &p.keep).Label(T("Keep images", "保留图像")) })
 							},
 						)
@@ -341,7 +341,7 @@ func (a *app) runCompare() {
 		reference = ""
 	}
 	p.result = nil
-	a.start("compare", T("Normalising the images", "正在归一化图像"), func(ctx context.Context, step func(int, int)) (func(), error) {
+	a.start("compare", T("Normalising the intensity of the images", "正在对图像做强度归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		if reference != "" {
 			ref, err := core.LoadReference(reference)
 			if err != nil {

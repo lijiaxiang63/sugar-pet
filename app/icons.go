@@ -16,6 +16,7 @@ func icon(shapes string) *ui.SVG {
 }
 
 var (
+	iconWarp    = icon(`<path d="M2 5V3a1 1 0 0 1 1-1h2M11 2h2a1 1 0 0 1 1 1v2M14 11v2a1 1 0 0 1-1 1h-2M5 14H3a1 1 0 0 1-1-1v-2"/><ellipse cx="8" cy="8" rx="3" ry="3.7"/>`)
 	iconSliders = icon(`<path d="M2 4.5h5.5M11 4.5h3M2 11.5h2.5M8 11.5h6"/><circle cx="9.25" cy="4.5" r="1.75"/><circle cx="6.25" cy="11.5" r="1.75"/>`)
 	iconLayers  = icon(`<path d="M8 2 14 5 8 8 2 5z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/>`)
 	iconCurve   = icon(`<path d="M1.5 12c3 0 3.6-8.5 6.5-8.5S11.5 12 14.5 12"/><path d="M1.5 14h13"/>`)

@@ -1,11 +1,18 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 // The z-score of a t-statistic is finite however strong it is, and agrees
@@ -120,4 +127,70 @@ func TestNiftiScaling(t *testing.T) {
 	if got := read(2, 100); got[5] != 110 || got[0] != 100 {
 		t.Errorf("slope 2, intercept 100: read %v", got)
 	}
+}
+
+// TestSpatialCancel checks that cancelling a spatial normalisation returns
+// at once and takes with it what the stand-in for MATLAB started.
+func TestSpatialCancel(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in for MATLAB is a shell script")
+	}
+	dir := t.TempDir()
+	spm := filepath.Join(dir, "spm12")
+	if err := os.MkdirAll(filepath.Join(spm, "toolbox", "OldNorm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"spm_jobman.m", "toolbox/OldNorm/PET.nii"} {
+		if err := os.WriteFile(filepath.Join(spm, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// As MATLAB's launcher, it starts another process and waits for it.
+	pidFile := filepath.Join(dir, "child.pid")
+	matlab := filepath.Join(dir, "matlab")
+	script := "#!/bin/sh\nsleep 300 &\necho $! > '" + pidFile + "'\nwait\n"
+	if err := os.WriteFile(matlab, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dim, aff := AtlasGrid()
+	vol := NewVolume(dim, aff)
+	brain, _ := BuiltinMask("parenchyma")
+	copy(vol.Data, brain.Data)
+	src := filepath.Join(dir, "sub-01_pet.nii.gz")
+	if err := SaveNifti(src, vol, false); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for { // once the stand-in runs
+			if _, err := os.Stat(pidFile); err == nil {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	_, err := SpatialNormalize(ctx, []string{src}, []string{filepath.Join(dir, "out.nii.gz")},
+		SpatialOptions{SPMPath: spm, Matlab: matlab})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error %v, want that of the cancelled context", err)
+	}
+	if took := time.Since(start); took > 30*time.Second {
+		t.Fatalf("cancelling took %v", took)
+	}
+	raw, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	for i := 0; i < 100; i++ {
+		if exec.Command("kill", "-0", strconv.Itoa(pid)).Run() != nil {
+			return // gone
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("process %d outlived the cancelled run", pid)
 }

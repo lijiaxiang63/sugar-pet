@@ -78,6 +78,16 @@ func (a *app) demo() {
 		a.cmp.g2.files = append(a.cmp.g2.files, control(i))
 		a.ref.files.files = append(a.ref.files.files, control(i))
 	}
+	sp := &a.spatial
+	sp.spm, sp.matlab, sp.output = "/Users/ada/spm12", "/Applications/MATLAB_R2025b.app", "/Users/ada/study/patients"
+	sp.outDir = sp.output
+	for i := 1; i <= 6; i++ {
+		native := fmt.Sprintf("/Users/ada/study/raw/sub-pt%02d_pet.nii.gz", i)
+		sp.files.files = append(sp.files.files, native)
+		sp.rows = append(sp.rows, spatialRow{image: filepath.Base(native), output: core.SpatialOutputName(native)})
+		sp.written = append(sp.written, patient(i))
+	}
+	sp.st.ok = Tf("%d image(s) warped to MNI space.", "已完成：%d 幅图像已配准到 MNI 空间。", 6)
 	a.norm.methods["cerebellum"] = true
 	a.setReference("/Users/ada/study/hc_reference")
 	a.norm.output = "/Users/ada/study/normalised"

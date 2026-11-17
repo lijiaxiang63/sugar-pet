@@ -71,7 +71,7 @@ func (a *app) masksView(c *ui.Context) {
 					}
 				})
 			})
-			section(c, T("CerebrA atlas labels", "CerebrA 图谱标签"), T("Combine label numbers into a custom region on the Normalise page, e.g. 34,85 for the lateral occipital cortex of both sides.",
+			section(c, T("CerebrA atlas labels", "CerebrA 图谱标签"), T("Combine label numbers into a custom region on the Intensity Normalisation page, e.g. 34,85 for the lateral occipital cortex of both sides.",
 				"在“强度归一化”页面可用标签编号组合出自选区域，例如 34,85 为双侧外侧枕叶皮层。"), func() {
 				all := core.AtlasLabels()
 				shown := all

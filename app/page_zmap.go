@@ -97,8 +97,8 @@ func (a *app) zmapView(c *ui.Context) {
 	a.frame(c, T("Z-score Maps", "Z 值图"),
 		T("How far each voxel is from the healthy controls", "每个体素偏离健康对照的程度"),
 		func() {
-			section(c, T("Images", "图像"), T("Each image is normalised, smoothed like the controls, and compared with them voxel by voxel. Negative values mean lower uptake.",
-				"每幅图像先归一化，按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。"), func() {
+			section(c, T("Images", "图像"), T("Each image is intensity-normalised, smoothed like the controls, and compared with them voxel by voxel. Negative values mean lower uptake.",
+				"每幅图像先做强度归一化，按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。"), func() {
 				a.filesCard(c, "z-files", &p.files, T("Images", "图像"), T("FDG-PET images in MNI space", "MNI 空间的 FDG-PET 图像"))
 			})
 			section(c, T("Reference", "参考库"), "", func() {

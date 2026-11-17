@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -142,7 +143,7 @@ func TestWorkflow(t *testing.T) {
 	out := filepath.Join(dir, "normalised")
 	a.norm.files.files, a.norm.output = pt, out
 	a.norm.methods = map[string]bool{"hn": true, "cerebellum": true}
-	press("normalize", "开始归一化", &a.norm.st)
+	press("normalize", "开始强度归一化", &a.norm.st)
 	if len(a.norm.rows) != 2*len(pt) {
 		t.Fatalf("%d rows of factors, want %d", len(a.norm.rows), 2*len(pt))
 	}
@@ -189,14 +190,14 @@ func TestWorkflow(t *testing.T) {
 		t.Fatalf("the reference cluster has %g mL", a.cluster.volume)
 	}
 	exists(mask)
-	if err := tt.Click("用该区域做归一化"); err != nil {
+	if err := tt.Click("用该区域做强度归一化"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if a.page != "normalize" || a.norm.region.file != mask || !a.norm.methods["region"] {
-		t.Fatal("the cluster was not handed to the Normalise page")
+		t.Fatal("the cluster was not handed to the Intensity Normalisation page")
 	}
-	press("normalize", "开始归一化", &a.norm.st)
+	press("normalize", "开始强度归一化", &a.norm.st)
 	if len(a.norm.rows) != len(pt) || a.norm.rows[0].voxels == "" || a.norm.rows[0].mask != "custom" {
 		t.Fatalf("normalising by the cluster gave %+v", a.norm.rows)
 	}
@@ -208,6 +209,130 @@ func TestWorkflow(t *testing.T) {
 	exported, _ := filepath.Glob(filepath.Join(dir, "masks", "*.nii.gz"))
 	if len(exported) != len(core.Masks) {
 		t.Fatalf("%d masks exported, want %d", len(exported), len(core.Masks))
+	}
+}
+
+// fakeSPM makes a folder that passes for SPM and a program that passes for
+// MATLAB: it "warps" the images of the script it is given by copying them.
+func fakeSPM(t *testing.T, dir string) (spm, matlab string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in for MATLAB is a shell script")
+	}
+	spm = filepath.Join(dir, "spm12")
+	if err := os.MkdirAll(filepath.Join(spm, "toolbox", "OldNorm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"spm_jobman.m", "toolbox/OldNorm/PET.nii"} {
+		if err := os.WriteFile(filepath.Join(spm, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	matlab = filepath.Join(dir, "matlab")
+	script := `#!/bin/sh
+script=$(printf '%s' "$2" | sed "s/^run('//; s/')$//")
+grep "^'.*,1'$" "$script" | sed "s/^'//; s/,1'$//" | while read -r f; do
+  case "$f" in
+    *img00001.nii) echo "FAILED $f,1: the image would not fit" >&2 ;;
+    *) cp "$f" "$(dirname "$f")/w$(basename "$f")" ;;
+  esac
+done
+`
+	if err := os.WriteFile(matlab, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return spm, matlab
+}
+
+// TestSpatial warps images on the Spatial Normalisation page, with a
+// stand-in for MATLAB, and hands them to the Intensity Normalisation page.
+func TestSpatial(t *testing.T) {
+	dir := t.TempDir()
+	spm, matlab := fakeSPM(t, dir)
+	_, pt, _ := makeImages(t, filepath.Join(dir, "raw"), 0, 3)
+
+	a := newApp()
+	queue := make(chan func(), 256)
+	a.post = func(fn func()) { queue <- fn }
+	a.page = "spatial"
+	tt := ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
+	tt.Frame()
+	p := &a.spatial
+	out := filepath.Join(dir, "mni")
+	p.files.files, p.output, p.matlab, p.jobs = pt, out, matlab, 2
+	p.setSPM(dir)
+	if p.problem() == "" {
+		t.Fatal("a folder that is not SPM was taken for SPM")
+	}
+	p.setSPM(spm)
+	if msg := p.problem(); msg != "" {
+		t.Fatal(msg)
+	}
+	tt.Frame()
+	if err := tt.Click("Warp to MNI Space"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	timeout := time.After(2 * time.Minute)
+	for a.job != nil {
+		select {
+		case fn := <-queue:
+			fn()
+			tt.Frame()
+		case <-timeout:
+			t.Fatal("the task did not finish")
+		}
+	}
+	tt.Advance(time.Second)
+	if len(p.rows) != 3 || len(p.written) != 2 || !p.rows[1].failed || len(p.notes) != 1 {
+		t.Fatalf("rows %+v, written %v, notes %v, status %+v", p.rows, p.written, p.notes, p.st)
+	}
+	if want := "sub-pt01_pet.nii.gz: SPM: the image would not fit"; p.notes[0] != want {
+		t.Fatalf("note %q, want %q", p.notes[0], want)
+	}
+	if want := filepath.Join(out, "sub-pt00_space-MNI_pet.nii.gz"); p.written[0] != want {
+		t.Fatalf("written %q, want %q", p.written[0], want)
+	}
+	// The stand-in does not warp: the image is the prepared one, cropped
+	// around the head with the brain's centre moved to that of MNI space.
+	vol, err := core.LoadImage(p.written[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	dim, _ := core.AtlasGrid()
+	if vol.Dim != dim { // the made-up head is smaller than the box kept around it
+		t.Fatalf("prepared image of %v voxels, want %v", vol.Dim, dim)
+	}
+	var sum [3]float64
+	n := 0.0
+	for i, v := range vol.Data {
+		if v > 0 {
+			x, y, z := float64(i%dim[0]), float64(i/dim[0]%dim[1]), float64(i/(dim[0]*dim[1]))
+			for r := range sum {
+				sum[r] += vol.Aff[r][0]*x + vol.Aff[r][1]*y + vol.Aff[r][2]*z + vol.Aff[r][3]
+			}
+			n++
+		}
+	}
+	for r, want := range []float64{0, -18, 8} {
+		if got := sum[r] / n; got < want-6 || got > want+6 {
+			t.Fatalf("the brain's centre is at %g mm on axis %d, want about %g", got, r, want)
+		}
+	}
+	if err := tt.Click("Use for Intensity Normalisation"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.page != "normalize" || len(a.norm.files.files) != 2 || a.norm.files.files[0] != p.written[0] {
+		t.Fatalf("the warped images were not handed on: page %s, files %v", a.page, a.norm.files.files)
+	}
+
+	// Two images that would be written under one name.
+	a.page = "spatial"
+	other := filepath.Join(dir, "other", filepath.Base(pt[0]))
+	p.files.files = []string{pt[0], other}
+	if p.problem() == "" {
+		t.Fatal("two images with one output name were accepted")
 	}
 }
 

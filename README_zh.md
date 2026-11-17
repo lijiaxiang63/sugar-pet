@@ -53,7 +53,10 @@ Windows 和 Linux，用 Go 和 [MyGo](https://github.com/egoist/mygo) 的原生�
 SPM 文件夹需自行选择），只有图像还不在 MNI 空间时才用得到。**强度归一化**是本工具
 的主题：每幅图像除以各自的因子，不需要其他软件。
 
-用 Go 1.27+ 构建：
+macOS、Windows 和 Linux 的安装包在
+[发布页](https://github.com/lijiaxiang63/sugar-pet/releases)；推送标签 `v<版本号>`
+会自动构建并发布（[`release.yml`](.github/workflows/release.yml)）。也可以用
+Go 1.27+ 自行构建：
 
 ```bash
 cd app

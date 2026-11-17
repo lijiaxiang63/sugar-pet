@@ -62,7 +62,10 @@ and is only for images that are not in MNI space yet. *Intensity*
 normalisation, the subject of this package, divides each image by its
 factor and needs nothing else.
 
-Build it with Go 1.27+:
+Installers for macOS, Windows and Linux are on the
+[releases page](https://github.com/lijiaxiang63/sugar-pet/releases); pushing a tag
+`v<version>` builds and publishes them
+([`release.yml`](.github/workflows/release.yml)). Or build it with Go 1.27+:
 
 ```bash
 cd app

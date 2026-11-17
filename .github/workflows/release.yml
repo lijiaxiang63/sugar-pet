@@ -1,0 +1,145 @@
+name: Release
+
+# Builds SUGAR-PET for macOS, Windows and Linux.  A pull request that touches
+# the app only builds it; pushing a tag "v<version>" also publishes the
+# installers as a GitHub release.  The tag must match the version in
+# app/mygo.json.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "app/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Signing the app and making the disk image need macOS, and the
+          # Windows installer is made with NSIS, which mygo fetches on Windows.
+          - name: macOS
+            os: macos-latest
+            platform: darwin/universal
+          - name: Windows
+            os: windows-latest
+            platform: windows/amd64,windows/arm64
+          - name: Linux
+            os: ubuntu-latest
+            platform: linux/amd64,linux/arm64
+    defaults:
+      run:
+        shell: bash
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
+
+      - name: Read the version
+        id: version
+        run: |
+          version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' mygo.json)
+          core=$(sed -n 's/^const Version = "\([^"]*\)".*/\1/p' core/reference.go)
+          python=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' ../pyproject.toml)
+          echo "mygo.json $version, core/reference.go $core, pyproject.toml $python"
+          if [ -z "$version" ] || [ "$version" != "$core" ] || [ "$version" != "$python" ]; then
+            echo "::error::The versions in app/mygo.json, app/core/reference.go and pyproject.toml differ"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go tool mygo build -platform "${{ matrix.platform }}"
+
+      - name: Collect the installers
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          find build -type f \( -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \
+            -o -name '*.tar.gz' -o -name install.sh -o -name '*-setup-*.exe' \) \
+            -exec cp {} dist/ \;
+          # The bare Windows program has the same name for every architecture.
+          for dir in build/windows-*; do
+            [ -f "$dir/SUGAR-PET.exe" ] || continue
+            cp "$dir/SUGAR-PET.exe" "dist/sugar-pet-$VERSION-${dir#build/}-portable.exe"
+          done
+          ls -l dist
+          [ -n "$(ls -A dist)" ]
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sugar-pet-${{ matrix.name }}
+          path: app/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish the release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: sugar-pet-*
+          merge-multiple: true
+
+      - name: Write the notes
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          cat > notes.md <<EOF
+          ## Downloads
+
+          | System | File |
+          | --- | --- |
+          | macOS (Apple silicon and Intel) | \`sugar-pet-$version.dmg\` |
+          | Windows, installer | \`sugar-pet-setup-$version-amd64.exe\` (or \`arm64\`) |
+          | Windows, no installer | \`sugar-pet-$version-windows-amd64-portable.exe\` (or \`arm64\`) |
+          | Debian, Ubuntu | \`sugar-pet_${version}_amd64.deb\` (or \`arm64\`) |
+          | Fedora, RHEL | \`sugar-pet-$version-1.x86_64.rpm\` (or \`aarch64\`) |
+          | Other Linux | \`sugar-pet-$version-linux-amd64.tar.gz\` (or \`arm64\`) and \`install.sh\` in one folder, then \`sh install.sh\` |
+
+          The macOS app is signed ad hoc, not notarised: the first time, open it
+          with a right click and **Open**. \`SHA256SUMS.txt\` lists the checksum of
+          every file.
+          EOF
+          (cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "SUGAR-PET $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --generate-notes \
+            --verify-tag

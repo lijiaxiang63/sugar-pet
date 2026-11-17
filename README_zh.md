@@ -37,16 +37,21 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 ## 桌面应用
 
 [`app/`](app) 是 SUGAR-PET 桌面应用：方法与命令行相同，但不需要安装任何环境
-（不需要 Python，也不需要 MATLAB）。它是一个约 12 MB 的原生程序，支持 macOS、
+（不需要 Python；只有可选的“空间标准化”页面要调用 SPM，才需要 MATLAB）。它是一个约 12 MB 的原生程序，支持 macOS、
 Windows 和 Linux，用 Go 和 [MyGo](https://github.com/egoist/mygo) 的原生界面
 编写，界面有中文和英文。
 
 ![SUGAR-PET](app/screenshots/normalize-zh.png)
 
-页面按下文的推荐流程排列：**强度归一化**、**参考库**、**Z 值图**、**组间比较**、
-**参考簇**，以及内置的**掩膜与图谱**。文件可以直接拖到列表里。应用读写的文件
-与命令行完全一致（参考库文件夹、`factors.tsv`、输出文件名、团块报告），两者可以
-混用。空间标准化（`sugar-pet spatial-norm`，需调用 SPM）不在应用之内。
+页面按下文的推荐流程排列：**空间标准化**、**强度归一化**、**参考库**、**Z 值图**、
+**组间比较**、**参考簇**，以及内置的**掩膜与图谱**。文件可以直接拖到列表里。
+应用读写的文件与命令行完全一致（参考库文件夹、`factors.tsv`、输出文件名、
+团块报告），两者可以混用。
+
+两个“normalisation”是不同的步骤。**空间标准化**把原始空间的 PET 配准到 MNI 空间，
+即 `sugar-pet spatial-norm`，需要 MATLAB 和 SPM12/SPM25（应用会自动查找 MATLAB，
+SPM 文件夹需自行选择），只有图像还不在 MNI 空间时才用得到。**强度归一化**是本工具
+的主题：每幅图像除以各自的因子，不需要其他软件。
 
 用 Go 1.27+ 构建：
 
@@ -392,6 +397,7 @@ sugar-pet spatial-norm raw/*_pet.nii.gz -o mni/ --spm-path /path/to/spm12 --jobs
 ```
 
 它会围绕头部裁剪、把原点移到脑中心，输出 2 mm 的 MNI 空间图像。结果请务必目视检查。
+桌面应用的**空间标准化**页面做的是同一件事。
 
 ## 实现说明及与原文的差异
 

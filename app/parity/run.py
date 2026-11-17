@@ -7,9 +7,15 @@
 Needs the Python package installed (with GrouVox, for compare) beside this
 script's Python.  Images should agree to about 1e-6 of their range, tables
 and reports exactly.
+
+With SPM_PATH set to an SPM12/SPM25 folder (and MATLAB installed), the
+native-space images in <work>/native are also warped through both
+("spatial-norm"); SPM is the same program either way, so these agree as
+closely as it repeats itself.
 """
 import csv
 import json
+import os
 import subprocess
 import sys
 import time
@@ -25,6 +31,8 @@ GO = [str(S / "sugar-pet-cli")]
 hc = [str(p) for p in sorted(D.glob("sub-hc*"))]
 pt = [str(p) for p in sorted(D.glob("sub-pt*"))]
 tsv = str(D / "participants.tsv")
+native = [str(p) for p in sorted((S / "native").glob("*.nii*"))]
+SPM = os.environ.get("SPM_PATH")
 
 def commands(o):
     ref, ref0 = f"{o}/ref", f"{o}/ref0"
@@ -46,6 +54,7 @@ def commands(o):
         "compare-fdr": ["compare", "--group1", *pt, "--group2", *hc, "-m", "cerebellum", "-o", f"{o}/cmp_fdr", "--correction", "fdr", "--name", "pt_vs_hc"],
         "compare-loose": ["compare", "--group1", *pt[:5], "--group2", *hc[:6], "-m", "ps", "-o", f"{o}/cmp_loose", "--voxel-p", "0.01", "--fwhm", "10", "--analysis-mask", "parenchyma"],
         "masks": ["masks", "-o", f"{o}/masks"],
+        **({"spatial-norm": ["spatial-norm", *native, "-o", f"{o}/mni", "--spm-path", SPM, "--jobs", "2"]} if SPM and native else {}),
     }
 
 only = sys.argv[2:]

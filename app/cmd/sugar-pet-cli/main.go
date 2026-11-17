@@ -1,6 +1,5 @@
 // Command sugar-pet-cli is the command line of the Go port, with the same
-// commands and options as the Python "sugar-pet" program (except
-// spatial-norm, which needs MATLAB and SPM).
+// commands and options as the Python "sugar-pet" program.
 package main
 
 import (
@@ -153,7 +152,7 @@ func progress(done, total int) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <methods|normalize|build-reference|zmap|compare|reference-cluster|masks|labels> ...")
+		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <methods|normalize|build-reference|zmap|compare|reference-cluster|masks|labels|spatial-norm> ...")
 		os.Exit(2)
 	}
 	ctx := context.Background()
@@ -227,6 +226,30 @@ func main() {
 			}
 		}
 		fmt.Printf("Reference cluster (%.0f mL) written to %s\n", float64(n)*core.VoxelVolumeML(cluster.Aff), out)
+	case "spatial-norm":
+		a, err := parse(rest, nil, nil)
+		check(err)
+		out := need(a, "--output")
+		targets := make([]string, len(a.pos))
+		for i, path := range a.pos {
+			targets[i] = filepath.Join(out, core.SpatialOutputName(path))
+		}
+		results, err := core.SpatialNormalize(ctx, a.pos, targets, core.SpatialOptions{
+			SPMPath: need(a, "--spm-path"), Template: a.str("--template", ""), Matlab: a.str("--matlab", ""),
+			Jobs: int(a.num("--jobs", 1)), WorkDir: a.str("--work-dir", ""), Progress: progress})
+		check(err)
+		written := 0
+		for _, r := range results {
+			if r.Err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", r.Input, r.Err)
+				continue
+			}
+			written++
+		}
+		fmt.Printf("%d of %d images written to %s\n", written, len(targets), out)
+		if written != len(targets) {
+			os.Exit(1)
+		}
 	default:
 		fail(2, "unknown command '%s'", command)
 	}

@@ -1,11 +1,18 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 // The z-score of a t-statistic is finite however strong it is, and agrees
@@ -120,4 +127,139 @@ func TestNiftiScaling(t *testing.T) {
 	if got := read(2, 100); got[5] != 110 || got[0] != 100 {
 		t.Errorf("slope 2, intercept 100: read %v", got)
 	}
+}
+
+// spatialSetup makes, in dir, a folder that passes for SPM, a shell script
+// that passes for MATLAB and a made-up image of a head.
+func spatialSetup(t *testing.T, dir, script string) (spm, matlab, image string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in for MATLAB is a shell script")
+	}
+	spm = filepath.Join(dir, "spm12")
+	if err := os.MkdirAll(filepath.Join(spm, "toolbox", "OldNorm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"spm_jobman.m", "toolbox/OldNorm/PET.nii"} {
+		if err := os.WriteFile(filepath.Join(spm, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	matlab = filepath.Join(dir, "matlab")
+	if err := os.WriteFile(matlab, []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dim, aff := AtlasGrid()
+	vol := NewVolume(dim, aff)
+	brain, _ := BuiltinMask("parenchyma")
+	copy(vol.Data, brain.Data)
+	image = filepath.Join(dir, "sub-01_pet.nii.gz")
+	if err := SaveNifti(image, vol, false); err != nil {
+		t.Fatal(err)
+	}
+	return spm, matlab, image
+}
+
+// copyingMatlab "warps" the images of the script it is given by copying them.
+const copyingMatlab = `script=$(printf '%s' "$2" | sed "s/^run('//; s/')$//")
+grep "^'.*,1'$" "$script" | sed "s/^'//; s/,1'$//" | while read -r f; do
+  cp "$f" "$(dirname "$f")/w$(basename "$f")"
+done
+`
+
+// TestSpatialStaleWorkDir checks that a warped image left in a work folder
+// by an earlier run is not taken for the result of a run that failed.
+func TestSpatialStaleWorkDir(t *testing.T) {
+	dir := t.TempDir()
+	spm, matlab, src := spatialSetup(t, dir, "echo 'no licence' >&2\nexit 1\n")
+	work := filepath.Join(dir, "work")
+	stale := NewVolume([3]int{4, 4, 4}, Affine{{2, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1}})
+	if err := SaveNifti(filepath.Join(work, "wimg00000.nii"), stale, false); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "out.nii.gz")
+	results, err := SpatialNormalize(context.Background(), []string{src}, []string{out},
+		SpatialOptions{SPMPath: spm, Matlab: matlab, WorkDir: work})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results[0].Err == nil || !strings.Contains(results[0].Err.Error(), "no licence") {
+		t.Fatalf("the failed run reported %v, want what MATLAB printed", results[0].Err)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("the image of an earlier run was written as the result")
+	}
+}
+
+// TestSpatialSameOutput checks that two images that would be written to one
+// file are refused before anything runs.
+func TestSpatialSameOutput(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "pet_space-MNI.nii.gz")
+	_, err := SpatialNormalize(context.Background(), []string{"a/pet.nii.gz", "b/pet.nii.gz"},
+		[]string{out, filepath.Join(filepath.Dir(out), ".", filepath.Base(out))}, SpatialOptions{})
+	if err == nil || !strings.Contains(err.Error(), "a/pet.nii.gz and b/pet.nii.gz would both be written") {
+		t.Fatalf("error %v, want that of the shared output", err)
+	}
+}
+
+// TestSpatialRelativeMatlab checks that MATLAB given by a path relative to
+// the working folder is still found once it runs in the work folder.
+func TestSpatialRelativeMatlab(t *testing.T) {
+	dir := t.TempDir()
+	spm, _, src := spatialSetup(t, dir, copyingMatlab)
+	t.Chdir(dir)
+	out := filepath.Join(dir, "out.nii.gz")
+	results, err := SpatialNormalize(context.Background(), []string{src}, []string{out},
+		SpatialOptions{SPMPath: spm, Matlab: "./matlab"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results[0].Err != nil {
+		t.Fatal(results[0].Err)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSpatialCancel checks that cancelling a spatial normalisation returns
+// at once and takes with it what the stand-in for MATLAB started.
+func TestSpatialCancel(t *testing.T) {
+	dir := t.TempDir()
+	// As MATLAB's launcher, it starts another process and waits for it.
+	pidFile := filepath.Join(dir, "child.pid")
+	spm, matlab, src := spatialSetup(t, dir, "sleep 300 &\necho $! > '"+pidFile+"'\nwait\n")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for { // once the stand-in runs
+			if _, err := os.Stat(pidFile); err == nil {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	_, err := SpatialNormalize(ctx, []string{src}, []string{filepath.Join(dir, "out.nii.gz")},
+		SpatialOptions{SPMPath: spm, Matlab: matlab})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error %v, want that of the cancelled context", err)
+	}
+	if took := time.Since(start); took > 30*time.Second {
+		t.Fatalf("cancelling took %v", took)
+	}
+	raw, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	for i := 0; i < 100; i++ {
+		if exec.Command("kill", "-0", strconv.Itoa(pid)).Run() != nil {
+			return // gone
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("process %d outlived the cancelled run", pid)
 }

@@ -226,7 +226,7 @@ func (p *normPage) problem() string {
 	methods := p.chosen()
 	switch {
 	case len(p.files.files) == 0:
-		return T("Add the images to normalise.", "请添加要归一化的图像。")
+		return T("Add the images to intensity-normalise.", "请添加要做强度归一化的图像。")
 	case len(methods) == 0:
 		return T("Choose at least one method.", "请至少选择一种方法。")
 	}
@@ -251,11 +251,11 @@ func (p *normPage) problem() string {
 
 func (a *app) normalizeView(c *ui.Context) {
 	p := &a.norm
-	a.frame(c, T("Normalise", "强度归一化"),
+	a.frame(c, T("Intensity Normalisation", "强度归一化"),
 		T("Divide each image by its normalisation factor", "每幅图像除以各自的归一化因子"),
 		func() {
-			section(c, T("Images", "图像"), T("FDG-PET images that are already in MNI space.", "已配准到 MNI 空间的 FDG-PET 图像。"), func() {
-				a.filesCard(c, "norm-files", &p.files, T("Images to normalise", "待归一化的图像"),
+			section(c, T("Images", "图像"), T("FDG-PET images that are already in MNI space. If yours are not, warp them on the Spatial Normalisation page first.", "已在 MNI 空间的 FDG-PET 图像。尚未配准的，请先到“空间标准化”页面处理。"), func() {
+				a.filesCard(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
 					T("or use the buttons above · .nii and .nii.gz", "也可使用上方按钮添加 · 支持 .nii 与 .nii.gz"))
 			})
 			section(c, T("Methods", "方法"), T("Choose several to compare them: each image is written once per method.", "可多选以便比较：每种方法各输出一幅图像。"), func() {
@@ -273,7 +273,7 @@ func (a *app) normalizeView(c *ui.Context) {
 					},
 					func() {
 						a.pathSetting(c, "norm-out", T("Output folder", "输出文件夹"),
-							T("Normalised images and factors.tsv are written here.", "归一化图像和 factors.tsv 写入此处。"),
+							T("Intensity-normalised images and factors.tsv are written here.", "强度归一化后的图像和 factors.tsv 写入此处。"),
 							&p.output, pathFolder, nil, nil)
 					},
 				)
@@ -346,7 +346,7 @@ func (a *app) normalizeView(c *ui.Context) {
 			}
 		},
 		func() {
-			a.runBar(c, "normalize", p.problem(), T("Normalise", "开始归一化"), &p.st, a.runNormalize)
+			a.runBar(c, "normalize", p.problem(), T("Normalise Intensity", "开始强度归一化"), &p.st, a.runNormalize)
 		},
 	)
 }
@@ -379,7 +379,7 @@ func (a *app) runNormalize() {
 	}
 	reference, out, images, saveMasks := p.reference, p.output, p.images, p.saveMasks
 	p.rows, p.notes = nil, nil
-	a.start("normalize", T("Normalising", "正在归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
+	a.start("normalize", T("Normalising intensity", "正在做强度归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		if reference != "" {
 			ref, err := core.LoadReference(reference)
 			if err != nil {
@@ -462,7 +462,7 @@ func (a *app) runNormalize() {
 			if failed > 0 {
 				p.st.err = Tf("%d of %d failed; see the notes under the results.", "%d / %d 项失败，详见结果下方的说明。", failed, total)
 			} else {
-				p.st.ok = Tf("%d image(s) normalised with %d method(s).", "已完成：%d 幅图像 × %d 种方法。", len(files), len(methods))
+				p.st.ok = Tf("%d image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅图像 × %d 种方法。", len(files), len(methods))
 			}
 		}, nil
 	}, func(err error) { p.st.err = err.Error() })

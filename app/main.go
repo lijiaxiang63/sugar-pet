@@ -20,8 +20,9 @@ import (
 
 const (
 	titleBarHeight = 52
-	sidebarWidth   = 216
+	sidebarWidth   = 232
 	contentWidth   = 720
+	cardGap        = 8
 )
 
 // job is the task running in the background, if any.
@@ -41,6 +42,8 @@ type app struct {
 	job  *job
 	// reveal is the page whose results are new and should come into view.
 	reveal string
+	// scrolls is how far each page is scrolled.
+	scrolls map[string]*ui.ScrollState
 
 	spatial  spatialPage
 	norm     normPage
@@ -151,93 +154,145 @@ var pages = []pageInfo{
 }
 
 func (a *app) view(c *ui.Context) {
-	t := c.Theme()
-	vibrant := c.Vibrancy()
-	if vibrant {
-		c.Root().Background(ui.Transparent)
+	pal := paletteFor(c)
+	c.SetTheme(themeFor(c, pal))
+	// The wash lies over the window's material, which shows through a
+	// little where there is one.
+	wash := pal.wash
+	if c.Vibrancy() {
+		wash = wash.Alpha(0.86)
 	}
+	c.Root().Background(wash)
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		side := ui.Column(c).Width(sidebarWidth).Shrink(0)
-		if !vibrant {
-			side.Background(t.Surface)
-		}
-		side.Children(func() { a.sidebar(c, vibrant) })
-		ui.Box(c).Width(1).Background(hairline(t))
-		pane := ui.Column(c).Grow(1).MinWidth(0).Background(t.Background)
-		pane.Children(func() {
-			switch a.page {
-			case "spatial":
-				a.spatialView(c)
-			case "normalize":
-				a.normalizeView(c)
-			case "reference":
-				a.referenceView(c)
-			case "zmap":
-				a.zmapView(c)
-			case "classify":
-				a.classifyView(c)
-			case "compare":
-				a.compareView(c)
-			case "cluster":
-				a.clusterView(c)
-			case "masks":
-				a.masksView(c)
-			}
+		ui.Column(c).Width(sidebarWidth).Shrink(0).Children(func() { a.sidebar(c) })
+		ui.Column(c).Grow(1).MinWidth(0).Padding(cardGap, cardGap, cardGap, 0).Children(func() {
+			pane := ui.Column(c).Grow(1).MinHeight(0).Radius(12).Background(pal.card).Clip()
+			raised(pane, pal).Children(func() {
+				switch a.page {
+				case "spatial":
+					a.spatialView(c)
+				case "normalize":
+					a.normalizeView(c)
+				case "reference":
+					a.referenceView(c)
+				case "zmap":
+					a.zmapView(c)
+				case "classify":
+					a.classifyView(c)
+				case "compare":
+					a.compareView(c)
+				case "cluster":
+					a.clusterView(c)
+				case "masks":
+					a.masksView(c)
+				}
+			})
 		})
 	})
 }
 
-func (a *app) sidebar(c *ui.Context, vibrant bool) {
-	t := c.Theme()
+// done reports whether the last run of a page went well, which the
+// sidebar marks.
+func (a *app) done(page string) bool {
+	switch page {
+	case "spatial":
+		return a.spatial.st.ok != ""
+	case "normalize":
+		return a.norm.st.ok != ""
+	case "reference":
+		return a.ref.st.ok != ""
+	case "zmap":
+		return a.zmap.st.ok != ""
+	case "classify":
+		return a.classify.st.ok != ""
+	case "compare":
+		return a.cmp.st.ok != ""
+	case "cluster":
+		return a.cluster.st.ok != ""
+	}
+	return false
+}
+
+// navItem is a page of the sidebar: the chosen one a face raised off the
+// wash, with its icon in the accent.
+func (a *app) navItem(c *ui.Context, page *string, p pageInfo) {
+	pal := paletteFor(c)
+	title := T(p.en, p.zh)
+	item := ui.RadioBase(c.Key("nav-"+p.id), page, p.id).Height(32).Padding(0, 9, 0, 10).Gap(10).Radius(8).AlignItems(ui.Center).Label(title)
+	chosen := *page == p.id
+	bg, fg, tint := ui.Transparent, pal.text.Alpha(0.86), pal.muted
+	switch {
+	case chosen:
+		bg, fg, tint = pal.rowSelected, pal.text, pal.accent
+		face(item, pal)
+	case item.Hovered():
+		bg = pal.rowHover
+	}
+	item.Background(item.AnimateColor("bg", bg, quick)).Children(func() {
+		ui.Icon(c, p.icon).Size(16, 16).TextColor(tint).Shrink(0)
+		ui.Text(c, title).FontSize(13).TextColor(fg).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+		switch {
+		case a.job != nil && a.job.page == p.id:
+			ui.Spinner(c).Size(12, 12)
+		case a.done(p.id):
+			ui.Icon(c, iconTick).Size(11, 11).TextColor(pal.success).Shrink(0)
+		}
+	})
+}
+
+func (a *app) sidebar(c *ui.Context) {
+	pal := paletteFor(c)
 	bar := c.TitleBar()
 	ui.Box(c).Height(max(bar.Bottom+14, titleBarHeight)).Shrink(0).DragWindow()
-	ui.Row(c).Padding(0, 16, 10, 16).Gap(9).AlignItems(ui.Center).Shrink(0).DragWindow().Children(func() {
-		ui.Image(c, appLogo).Size(30, 30)
-		ui.Column(c).Gap(0).Children(func() {
-			ui.Text(c, "SUGAR-PET").FontSize(14).Bold().SingleLine()
-			ui.Text(c, T("FDG-PET normalisation", "FDG-PET 强度归一化")).FontSize(11).TextColor(t.TextMuted).SingleLine()
+	ui.Row(c).Padding(0, 16, 14, 16).Gap(10).AlignItems(ui.Center).Shrink(0).DragWindow().Children(func() {
+		ui.Image(c, appLogo).Size(32, 32)
+		ui.Column(c).Gap(1).MinWidth(0).Children(func() {
+			ui.Text(c, "SUGAR-PET").FontSize(14.5).FontWeight(700).LetterSpacing(0.2).SingleLine()
+			ui.Text(c, T("FDG-PET normalisation", "FDG-PET 强度归一化")).FontSize(11).TextColor(pal.muted).SingleLine()
 		})
 	})
 	page := a.page
-	list := ui.Sidebar(c, &page, func() {
-		ui.SidebarSection(c, T("Workflow", "工作流程"), nil, func() {
-			for _, p := range pages[:len(pages)-1] {
-				item := ui.SidebarItem(c, p.id, p.icon, T(p.en, p.zh))
-				if a.job != nil && a.job.page == p.id {
-					item.Children(func() { ui.Spinner(c).Size(12, 12) })
-				}
-			}
-		})
-		ui.SidebarSection(c, T("Resources", "资源"), nil, func() {
-			p := pages[len(pages)-1]
-			ui.SidebarItem(c, p.id, p.icon, T(p.en, p.zh))
-		})
-	}).Grow(1).Label(T("Pages", "页面"))
-	if vibrant {
-		list.Background(ui.Transparent)
+	group := func(title string, items []pageInfo) {
+		ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(pal.faint).LetterSpacing(0.3).Padding(10, 10, 5, 10).SingleLine()
+		for _, p := range items {
+			a.navItem(c, &page, p)
+		}
 	}
+	ui.Scroll(c.Key("nav")).Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).Padding(0, 10, 8, 10).Gap(2).Children(func() {
+			group(T("Workflow", "工作流程"), pages[:len(pages)-1])
+			group(T("Resources", "资源"), pages[len(pages)-1:])
+		})
+	})
 	if page != a.page {
 		a.page = page
 		a.saveSettings()
 	}
 
 	// The reference in use, and the language.
-	ui.Column(c).Padding(10, 14, 14, 14).Gap(10).Shrink(0).Children(func() {
+	ui.Column(c).Padding(8, 10, 12, 10).Gap(8).Shrink(0).Children(func() {
 		ref := a.norm.reference
-		box := ui.ButtonBase(c.Key("ref-chip")).Padding(8, 10).Radius(8).Gap(8).AlignItems(ui.Center).
-			Background(t.Text.Alpha(0.05)).Label(T("Reference in use", "当前参考库"))
+		box := ui.ButtonBase(c.Key("ref-chip")).Padding(8, 10).Radius(10).Gap(9).AlignItems(ui.Center).
+			Label(T("Reference in use", "当前参考库"))
+		bg := pal.text.Alpha(0.045)
 		if box.Hovered() {
-			box.Background(t.Text.Alpha(0.09))
+			bg = pal.text.Alpha(0.08)
 		}
-		box.Children(func() {
-			ui.Icon(c, iconLayers).Size(14, 14).TextColor(t.TextMuted)
+		box.Background(box.AnimateColor("bg", bg, quick)).Children(func() {
+			tint := pal.faint
+			if ref != "" {
+				tint = pal.accent
+			}
+			ui.Box(c).Size(26, 26).Radius(7).Center().Shrink(0).Background(tint.Alpha(0.14)).Children(func() {
+				ui.Icon(c, iconLayers).Size(14, 14).TextColor(tint)
+			})
 			ui.Column(c).Gap(1).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, T("Reference", "参考库")).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
-				name := T("None chosen", "尚未选择")
+				ui.Text(c, T("Reference", "参考库")).FontSize(10.5).TextColor(pal.muted).SingleLine()
 				if ref != "" {
-					name = filepath.Base(ref)
+					ui.Text(c, filepath.Base(ref)).FontSize(12.5).FontWeight(500).SingleLine().Ellipsis("…")
+				} else {
+					ui.Text(c, T("Choose…", "点击选择…")).FontSize(12.5).FontWeight(500).TextColor(pal.muted).SingleLine()
 				}
-				ui.Text(c, name).FontSize(12).SingleLine()
 			})
 		})
 		if ref != "" {
@@ -252,7 +307,7 @@ func (a *app) sidebar(c *ui.Context, vibrant bool) {
 		if chinese {
 			lang = 1
 		}
-		if ui.Segmented(c, &lang, "English", "中文").FillEqually().Label("Language").Changed() {
+		if segmentedIn(c.Key("lang"), &lang, true, "English", "中文") {
 			chinese = lang == 1
 			a.saveSettings()
 		}
@@ -375,7 +430,7 @@ func main() {
 			Title:         "SUGAR-PET",
 			Width:         1060,
 			Height:        740,
-			MinWidth:      860,
+			MinWidth:      880,
 			MinHeight:     560,
 			StateKey:      "main",
 			TitleBarStyle: mygo.TitleBarHiddenInset,

@@ -21,7 +21,7 @@ Z-scores conflate normal aging effects with disease.
 
 ## Fill in the page
 
-<Shot name="zmap" alt="The Z-score Maps page: images, reference and methods" :marks="[[1, 120], [2, 412], [3, 460], [4, 576]]" />
+<Shot name="zmap" alt="The Z-score Maps page: images, reference and methods" :marks="[[1, 180], [2, 499], [3, 563], [4, 723]]" />
 
 1. **Add the patient images** (in MNI space).
 2. **Reference:** pre-filled from Step 2. The line below shows the control
@@ -36,7 +36,7 @@ Z-scores conflate normal aging effects with disease.
 
 Scroll down.
 
-<Shot name="zmap-results" alt="The output folder and the results of the Z-score maps" :marks="[[5, 247], [6, 'run'], [7, 385]]" />
+<Shot name="zmap-results" alt="The output folder and the results of the Z-score maps" :marks="[[5, 379], [6, 'run'], [7, 551]]" />
 
 5. **Output folder:** Ada selects `study/zmaps/`.
 6. Click **Make Maps**.

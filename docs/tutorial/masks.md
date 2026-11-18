@@ -8,7 +8,7 @@ look up label IDs for a custom region.
 
 ## Built-in masks
 
-<Shot name="masks" alt="The built-in masks, with their short names and volumes" :marks="[[1, 122], [2, 645]]" />
+<Shot name="masks" alt="The built-in masks, with their short names and volumes" :marks="[[1, 192], [2, 805]]" />
 
 1. **Mask list:** each row shows the mask name, anatomical coverage, short
    name (used by the CLI and output filenames), and volume.
@@ -37,7 +37,7 @@ with a different MNI template or atlas, supply your own mask file.
 
 Scroll down to browse the CerebrA atlas labels.
 
-<Shot name="masks-atlas" alt="The labels of the CerebrA atlas" :marks="[[3, 334], [4, 407]]" />
+<Shot name="masks-atlas" alt="The labels of the CerebrA atlas" :marks="[[3, 503], [4, 577]]" />
 
 3. **Search** for a region by name.
 4. **Note the label numbers.** Each region has separate IDs for the right and

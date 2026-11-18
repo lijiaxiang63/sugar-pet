@@ -20,7 +20,7 @@ cross-validation.
 
 ## Fill in the page
 
-<Shot name="cluster" alt="The Reference Cluster page, filled in" :marks="[[1, 120], [2, 432], [3, 480], [4, 528], [5, 576]]" />
+<Shot name="cluster" alt="The Reference Cluster page, filled in" :marks="[[1, 181], [2, 514], [3, 571], [4, 627], [5, 683]]" />
 
 1. **Add the patient images** (at least 2 scans, all on the same grid).
 2. **Reference:** the healthy controls to compare against; pre-filled after
@@ -33,7 +33,7 @@ cross-validation.
 
 Scroll down, then click **Find Cluster**.
 
-<Shot name="cluster-results" alt="The reference cluster that was found" :marks="[[6, 'run'], [7, 588], [8, 636]]" />
+<Shot name="cluster-results" alt="The reference cluster that was found" :marks="[[6, 'run'], [7, 732], [8, 784]]" />
 
 6. Click **Find Cluster**.
 7. **Result:** reports the cluster volume and output path. Open the mask

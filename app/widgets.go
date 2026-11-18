@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -14,8 +15,7 @@ import (
 	"sugarpet/core"
 )
 
-func hairline(t *ui.Theme) ui.Color { return t.Text.Alpha(0.1) }
-func cardFill(t *ui.Theme) ui.Color { return t.Text.Alpha(0.035) }
+const pagePad = 32
 
 // status is what a page says about its last run.
 type status struct {
@@ -23,36 +23,73 @@ type status struct {
 	ok  string
 }
 
-// frame lays out a page: its title under the window controls, its content
-// in a scrolling column, and a bar at the bottom for its main action.
+// pageColumn is the column, in the middle of the page's card, that the
+// page's title, content and action line up in.
+func pageColumn(c *ui.Context) ui.Element {
+	return ui.Column(c).FillWidth().MaxWidth(contentWidth+2*pagePad).Margin(0, ui.Auto)
+}
+
+// scroll is how far a page is scrolled, kept while the app runs.
+func (a *app) scroll(page string) *ui.ScrollState {
+	if a.scrolls == nil {
+		a.scrolls = map[string]*ui.ScrollState{}
+	}
+	sc := a.scrolls[page]
+	if sc == nil {
+		sc = &ui.ScrollState{}
+		a.scrolls[page] = sc
+	}
+	return sc
+}
+
+// frame lays out a page on its card: its title at the top, its content in
+// a scrolling column under it, and a bar at the bottom for its main action.
 func (a *app) frame(c *ui.Context, title, subtitle string, body func(), footer func()) {
-	t := c.Theme()
+	pal := paletteFor(c)
 	bar := c.TitleBar()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Padding(0, bar.Right+24, 0, 28).Gap(12).DragWindow().Children(func() {
-		ui.Text(c, title).FontSize(15).Bold().SingleLine().Shrink(0)
-		ui.Text(c, subtitle).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0)
+	sc := a.scroll(a.page)
+	ui.Column(c).Shrink(0).Padding(0, bar.Right, 0, 0).DragWindow().Children(func() {
+		pageColumn(c).Padding(22, pagePad, 14, pagePad).Gap(3).Children(func() {
+			ui.Text(c, title).FontSize(21).FontWeight(700).LetterSpacing(-0.3).SingleLine()
+			ui.Text(c, subtitle).FontSize(12.5).TextColor(pal.muted).SingleLine().Ellipsis("…")
+		})
 	})
-	ui.Box(c).Height(1).Shrink(0).Background(hairline(t))
-	ui.Scroll(c.Key("scroll-" + a.page)).Grow(1).Children(func() {
-		ui.Column(c).Padding(22, 28, 30, 28).Gap(24).MaxWidth(contentWidth+56).Margin(0, ui.Auto).FillWidth().Children(body)
+	// A line under the title once the content is scrolled under it.
+	edge := ui.Box(c.Key("edge")).Height(1).Shrink(0)
+	shown := ui.Transparent
+	if sc.Y > 0.5 {
+		shown = pal.line
+	}
+	edge.Background(edge.AnimateColor("on", shown, ui.Animation{Duration: 140 * time.Millisecond}))
+	ui.Scroll(c.Key("scroll-" + a.page)).Grow(1).TrackScroll(sc).Children(func() {
+		pageColumn(c).Padding(10, pagePad, 34, pagePad).Gap(26).Children(body)
 	})
 	if footer != nil {
-		ui.Box(c).Height(1).Shrink(0).Background(hairline(t))
-		ui.Row(c).Height(62).Shrink(0).Padding(0, 28).Gap(16).AlignItems(ui.Center).Children(footer)
+		ui.Box(c).Height(1).Shrink(0).Background(pal.line)
+		ui.Column(c).Shrink(0).Children(func() {
+			pageColumn(c).Children(func() {
+				ui.Row(c).Height(60).Padding(0, pagePad).Gap(16).AlignItems(ui.Center).Children(footer)
+			})
+		})
 	}
 }
 
-// section is a titled group of the page.
+// section is a titled group of the page, with what it is for under its
+// title.
 func section(c *ui.Context, title, caption string, body func()) {
-	t := c.Theme()
-	ui.Column(c).Gap(8).Children(func() {
-		if title != "" {
-			ui.Text(c, title).FontSize(13).Bold().Padding(0, 4)
+	pal := paletteFor(c)
+	ui.Column(c).Gap(10).Children(func() {
+		if title != "" || caption != "" {
+			ui.Column(c).Gap(3).Padding(0, 2).Children(func() {
+				if title != "" {
+					ui.Text(c, title).FontSize(14).FontWeight(650)
+				}
+				if caption != "" {
+					ui.Text(c, caption).FontSize(12.5).TextColor(pal.muted).LineHeight(1.4)
+				}
+			})
 		}
 		body()
-		if caption != "" {
-			ui.Text(c, caption).FontSize(11.5).TextColor(t.TextMuted).Padding(0, 4)
-		}
 	})
 }
 
@@ -67,23 +104,27 @@ func (a *app) results(c *ui.Context, title, caption string, body func()) {
 	box.Children(func() { section(c, title, caption, body) })
 }
 
-// card is a rounded box holding rows, as the groups of System Settings.
+// card is a soft panel on the page holding rows, as the groups of System
+// Settings.
 func card(c *ui.Context) ui.Element {
-	t := c.Theme()
-	return ui.Column(c).Radius(10).Background(cardFill(t)).Border(1, hairline(t)).Clip()
+	return ui.Column(c).Radius(12).Background(paletteFor(c).panel).Clip()
+}
+
+// divider is the line between two rows of a card.
+func divider(c *ui.Context) {
+	ui.Box(c).Height(1).Shrink(0).Margin(0, 14).Background(paletteFor(c).line)
 }
 
 // rows builds a card of rows with a line between each two.
 func rows(c *ui.Context, builders ...func()) {
-	t := c.Theme()
-	card(c).Children(func() {
+	card(c).Padding(2, 0).Children(func() {
 		first := true
 		for _, build := range builders {
 			if build == nil {
 				continue
 			}
 			if !first {
-				ui.Box(c).Height(1).Margin(0, 0, 0, 14).Background(hairline(t))
+				divider(c)
 			}
 			first = false
 			build()
@@ -94,12 +135,12 @@ func rows(c *ui.Context, builders ...func()) {
 // setting is a row with a title and a description on the left and a
 // control on the right.
 func setting(c *ui.Context, title, desc string, control func()) {
-	t := c.Theme()
-	ui.Row(c).Padding(8, 14).Gap(16).MinHeight(42).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-			ui.Text(c, title).FontSize(13)
+	pal := paletteFor(c)
+	ui.Row(c).Padding(10, 14).Gap(16).MinHeight(46).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+			ui.Text(c, title).FontSize(13.5)
 			if desc != "" {
-				ui.Text(c, desc).FontSize(11.5).TextColor(t.TextMuted)
+				ui.Text(c, desc).FontSize(12).TextColor(pal.muted).LineHeight(1.35)
 			}
 		})
 		if control != nil {
@@ -108,8 +149,26 @@ func setting(c *ui.Context, title, desc string, control func()) {
 	})
 }
 
-func smallButton(c *ui.Context, label string) ui.Element {
-	return ui.Button(c, label).FontSize(12).Padding(3, 10)
+// options is a group of settings most runs leave alone, shown and hidden
+// by its title.
+func options(c *ui.Context, title string, open *bool, body func()) {
+	pal := paletteFor(c)
+	p := ui.CollapsibleBase(c, open)
+	trig := p.Trigger.Height(28).Padding(0, 10, 0, 6).Gap(6).Radius(7).AlignItems(ui.Center).AlignSelf(ui.Start).Label(title)
+	fg := pal.muted
+	if trig.Hovered() || *open {
+		fg = pal.text
+	}
+	if trig.Hovered() {
+		trig.Background(pal.rowHover)
+	}
+	trig.TextColor(fg).Children(func() {
+		ui.Icon(c, iconChevron).Size(12, 12).Rotate(90 * p.Progress())
+		ui.Text(c, title).FontSize(13).FontWeight(600).SingleLine()
+	})
+	p.Panel(func() {
+		ui.Column(c).Gap(14).Padding(10, 0, 0, 0).Children(body)
+	})
 }
 
 // selectOf is a drop-down of values shown by their labels.
@@ -202,62 +261,75 @@ func (f *fileList) remove(path string) {
 // filesCard shows a file list: drop files or folders on it, or add them
 // with its buttons.
 func (a *app) filesCard(c *ui.Context, key string, f *fileList, title, hint string) {
-	t := c.Theme()
-	box := card(c.Key(key))
+	pal := paletteFor(c)
+	n := len(f.files)
+	box := ui.Column(c.Key(key)).Radius(12).Clip().Background(pal.panel)
 	if files := box.DroppedFiles(); files != nil {
 		f.add(files)
 	}
-	if box.FileDragOver() {
-		box.Border(1.5, t.Accent).Background(t.Accent.Alpha(0.1))
+	over := box.FileDragOver()
+	if over {
+		box.Background(pal.accentSoft)
 	}
-	n := len(f.files)
+	switch {
+	case n == 0 && over:
+		box.Border(1, pal.accent).BorderStyle(ui.BorderDashed)
+	case n == 0:
+		box.Border(1, pal.text.Alpha(0.2)).BorderStyle(ui.BorderDashed)
+	case over:
+		box.InsetShadow(0, 0, 0, 1.5, pal.accent)
+	}
+	addButtons := func(kind buttonKind, height float32) {
+		if button(c.Key("files"), T("Add Files…", "添加文件…"), iconPlus, kind, height).Clicked() {
+			a.pick(pickOptions{Title: title, Multiple: true, Filters: niftiFilter}, f.add)
+		}
+		if button(c.Key("folder"), T("Add Folder…", "添加文件夹…"), iconFolder, kind, height).Clicked() {
+			a.pick(pickOptions{Title: title, Directory: true, Multiple: true}, f.add)
+		}
+	}
 	box.Children(func() {
-		ui.Row(c).Padding(8, 10, 8, 14).Gap(8).AlignItems(ui.Center).MinHeight(42).Children(func() {
-			ui.Text(c, title).FontSize(13)
+		ui.Row(c).Padding(11, 14, 0, 14).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, title).FontSize(13).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
 			if n > 0 {
-				ui.Badge(c, strconv.Itoa(n))
-			}
-			ui.Spacer(c)
-			if n > 0 {
-				if smallButton(c.Key("clear"), T("Clear", "清空")).Clicked() {
-					f.files = nil
-				}
-			}
-			if smallButton(c.Key("folder"), T("Add Folder…", "添加文件夹…")).Clicked() {
-				a.pick(pickOptions{Title: title, Directory: true, Multiple: true}, f.add)
-			}
-			if smallButton(c.Key("files"), T("Add Files…", "添加文件…")).Clicked() {
-				a.pick(pickOptions{Title: title, Multiple: true, Filters: niftiFilter}, f.add)
+				pill(c, strconv.Itoa(n), pal.accent)
 			}
 		})
-		ui.Box(c).Height(1).Background(hairline(t))
 		if n == 0 {
-			ui.Column(c).Padding(20, 16, 22, 16).Gap(5).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconTray).Size(22, 22).TextColor(t.TextMuted)
-				ui.Text(c, T("Drop NIfTI images or folders here", "将 NIfTI 图像或文件夹拖到这里")).FontSize(13).Margin(4, 0, 0, 0)
-				ui.Text(c, hint).FontSize(11.5).TextColor(t.TextMuted).TextAlign(ui.Center)
+			ui.Column(c).Padding(4, 16, 22, 16).Gap(3).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Size(38, 38).Radius(19).Center().Background(pal.accentSoft).Children(func() {
+					ui.Icon(c, iconTray).Size(18, 18).TextColor(pal.accent)
+				})
+				ui.Text(c, T("Drop NIfTI images or folders here", "将 NIfTI 图像或文件夹拖到这里")).FontSize(13.5).FontWeight(600).
+					Margin(8, 0, 0, 0).TextAlign(ui.Center)
+				ui.Text(c, hint).FontSize(12).TextColor(pal.muted).TextAlign(ui.Center).LineHeight(1.35)
+				ui.Row(c).Gap(8).Margin(11, 0, 0, 0).Wrap().GapY(6).Justify(ui.Center).Children(func() {
+					addButtons(buttonPlain, 28)
+				})
 			})
 			return
 		}
 		ui.List(c, &f.state, n, func(i int) {
 			path := f.files[i]
-			row := ui.Row(c.Key(path)).Padding(0, 10, 0, 14).Height(28).Gap(8).AlignItems(ui.Center)
+			row := ui.Row(c.Key(path)).Margin(0, 6).Padding(0, 4, 0, 8).Height(30).Radius(7).Gap(8).AlignItems(ui.Center)
 			if row.Hovered() {
-				row.Background(t.Text.Alpha(0.045))
+				row.Background(pal.rowHover)
 			}
 			row.Children(func() {
-				ui.Icon(c, iconDoc).Size(14, 14).TextColor(t.TextMuted)
+				ui.Icon(c, iconDoc).Size(14, 14).TextColor(pal.faint).Shrink(0)
 				ui.Text(c, filepath.Base(path)).FontSize(12.5).SingleLine().MinWidth(80)
-				ui.Text(c, shortDir(filepath.Dir(path))).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0).TextAlign(ui.End)
-				del := ui.ButtonBase(c).Size(18, 18).Radius(9).Center().Shrink(0).TextColor(t.TextMuted).
-					Label(T("Remove", "移除")).Tooltip(T("Remove", "移除"))
-				if del.Hovered() {
-					del.Background(t.Text.Alpha(0.12))
-				}
-				del.Children(func() { ui.Icon(c, iconClose).Size(10, 10) })
+				ui.Text(c, shortDir(filepath.Dir(path))).FontSize(11.5).TextColor(pal.faint).SingleLine().Grow(1).MinWidth(0).TextAlign(ui.End)
+				del := iconButton(c, iconClose, T("Remove", "移除")).Tooltip(T("Remove", "移除"))
 				del.OnClick(func() { f.remove(path) })
 			})
-		}).MaxHeight(196).Padding(4, 0)
+		}).MaxHeight(205).Padding(6, 0, 4, 0)
+		divider(c)
+		ui.Row(c).Padding(6, 8).Gap(2).AlignItems(ui.Center).Children(func() {
+			addButtons(buttonGhost, 26)
+			ui.Spacer(c)
+			if button(c.Key("clear"), T("Clear", "清空"), nil, buttonGhost, 26).Clicked() {
+				f.files = nil
+			}
+		})
 	})
 }
 
@@ -280,22 +352,19 @@ const (
 // pathControl shows a chosen file or folder with a button to choose it,
 // for the right side of a setting.  It reports a new choice.
 func (a *app) pathControl(c *ui.Context, key string, value *string, kind pathKind, title string, filters []mygo.FileFilter, changed func()) {
-	t := c.Theme()
+	pal := paletteFor(c)
 	if *value != "" {
-		chip := ui.Row(c.Key(key+"-chip")).Padding(3, 4, 3, 8).Gap(6).Radius(6).AlignItems(ui.Center).MaxWidth(300).
-			Background(t.Text.Alpha(0.06)).Tooltip(*value)
+		chip := ui.Row(c.Key(key+"-chip")).Height(26).Padding(0, 3, 0, 9).Gap(6).Radius(7).AlignItems(ui.Center).MaxWidth(280).
+			Background(pal.control).Tooltip(*value)
+		face(chip, pal)
 		chip.Children(func() {
 			ic := iconFolder
 			if kind != pathFolder {
 				ic = iconDoc
 			}
-			ui.Icon(c, ic).Size(13, 13).TextColor(t.TextMuted)
-			ui.Text(c, filepath.Base(*value)).FontSize(12.5).SingleLine().MinWidth(0)
-			clear := ui.ButtonBase(c).Size(16, 16).Radius(8).Center().Shrink(0).TextColor(t.TextMuted).Label(T("Clear", "清除"))
-			if clear.Hovered() {
-				clear.Background(t.Text.Alpha(0.12))
-			}
-			clear.Children(func() { ui.Icon(c, iconClose).Size(9, 9) })
+			ui.Icon(c, ic).Size(13, 13).TextColor(pal.accent).Shrink(0)
+			ui.Text(c, filepath.Base(*value)).FontSize(12.5).FontWeight(500).SingleLine().Ellipsis("…").MinWidth(0)
+			clear := iconButton(c, iconClose, T("Clear", "清除"))
 			clear.OnClick(func() {
 				*value = ""
 				if changed != nil {
@@ -308,7 +377,11 @@ func (a *app) pathControl(c *ui.Context, key string, value *string, kind pathKin
 	if *value != "" {
 		label = T("Change…", "更改…")
 	}
-	if smallButton(c.Key(key+"-pick"), label).Clicked() {
+	kindOf := buttonPlain
+	if *value != "" {
+		kindOf = buttonGhost
+	}
+	if button(c.Key(key+"-pick"), label, nil, kindOf, 26).Clicked() {
 		set := func(path string) {
 			*value = path
 			if changed != nil {
@@ -331,7 +404,7 @@ func (a *app) pathControl(c *ui.Context, key string, value *string, kind pathKin
 // pathSetting is a setting whose control chooses a file or folder; files
 // dropped on the row are taken too.
 func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string, kind pathKind, filters []mygo.FileFilter, changed func()) {
-	t := c.Theme()
+	pal := paletteFor(c)
 	row := ui.Column(c.Key(key + "-row"))
 	if kind != pathSave {
 		if files := row.DroppedFiles(); len(files) > 0 {
@@ -344,7 +417,7 @@ func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string,
 			}
 		}
 		if row.FileDragOver() {
-			row.Background(t.Accent.Alpha(0.1))
+			row.Background(pal.accentSoft)
 		}
 	}
 	row.Children(func() {
@@ -356,19 +429,20 @@ func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string,
 // last run went on the left, and the button that starts the work, or the
 // progress of the work and a button that stops it.
 func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, run func()) {
-	t := c.Theme()
+	pal := paletteFor(c)
 	if j := a.job; j != nil && j.page == page {
-		ui.Column(c).Grow(1).Gap(6).MinWidth(0).Children(func() {
-			text := j.label
+		ui.Column(c).Grow(1).Gap(7).MinWidth(0).Children(func() {
 			value := -1.0
-			if j.total > 0 {
-				text += "  " + strconv.Itoa(j.done) + " / " + strconv.Itoa(j.total)
-				value = float64(j.done) / float64(j.total)
-			}
-			ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).SingleLine()
-			ui.Progress(c, value).Label(j.label)
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, j.label).FontSize(12.5).FontWeight(500).SingleLine().Grow(1).MinWidth(0)
+				if j.total > 0 {
+					value = float64(j.done) / float64(j.total)
+					ui.Text(c, strconv.Itoa(j.done)+" / "+strconv.Itoa(j.total)).FontSize(12).TextColor(pal.muted).SingleLine()
+				}
+			})
+			ui.Progress(c, value).Label(j.label).TextColor(pal.accent).Background(pal.well)
 		})
-		if ui.Button(c, T("Cancel", "取消")).Clicked() {
+		if button(c, T("Cancel", "取消"), nil, buttonPlain, 32).Clicked() {
 			j.cancel()
 			j.label = T("Stopping…", "正在停止…")
 		}
@@ -377,22 +451,22 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 	message := func(ic *ui.SVG, color ui.Color, text string) {
 		ui.Row(c).Grow(1).MinWidth(0).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, ic).Size(15, 15).TextColor(color).Shrink(0)
-			ui.Text(c, text).FontSize(12.5).TextColor(color).MaxLines(2).Grow(1).MinWidth(0).Selectable()
+			ui.Text(c, text).FontSize(12.5).TextColor(color).MaxLines(2).LineHeight(1.3).Grow(1).MinWidth(0).Selectable()
 		})
 	}
 	switch {
 	case st.err != "":
-		message(iconWarn, t.Danger, st.err)
+		message(iconWarn, pal.danger, st.err)
 	case problem != "":
-		message(iconInfo, t.TextMuted, problem)
+		message(iconInfo, pal.muted, problem)
 	case st.ok != "":
-		message(iconCheck, t.Success, st.ok)
+		message(iconCheck, pal.success, st.ok)
 	case a.job != nil:
-		message(iconInfo, t.TextMuted, T("Another task is running.", "另一项任务正在运行。"))
+		message(iconInfo, pal.muted, T("Another task is running.", "另一项任务正在运行。"))
 	default:
-		message(iconCheck, t.TextMuted, T("Ready.", "准备就绪。"))
+		message(iconCheck, pal.muted, T("Ready.", "准备就绪。"))
 	}
-	btn := ui.PrimaryButton(c, runLabel).Padding(7, 18).Disabled(problem != "" || a.job != nil)
+	btn := button(c, runLabel, nil, buttonPrimary, 34).Disabled(problem != "" || a.job != nil)
 	if btn.Clicked() {
 		st.err, st.ok = "", ""
 		run()
@@ -401,12 +475,7 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 
 // revealButton shows a file or folder in Finder, Explorer or the file manager.
 func revealButton(c *ui.Context, key, label, path string) {
-	b := ui.Button(c.Key(key), "").FontSize(12).Padding(3, 10).Gap(5)
-	b.Children(func() {
-		ui.Icon(c, iconReveal).Size(12, 12)
-		ui.Text(c, label).FontSize(12).SingleLine()
-	})
-	if b.Clicked() {
+	if button(c.Key(key), label, iconReveal, buttonPlain, 26).Clicked() {
 		info, err := os.Stat(path)
 		if err == nil && info.IsDir() {
 			mygo.Shell.OpenPath(path)
@@ -420,41 +489,41 @@ func revealLabel() string {
 	return T("Show in Finder", "在访达中显示")
 }
 
-// notes shows warnings below results.
+// notesCard shows warnings below results.
 func notesCard(c *ui.Context, lines []string) {
 	if len(lines) == 0 {
 		return
 	}
-	t := c.Theme()
-	ui.Column(c).Radius(10).Padding(10, 14).Gap(4).Background(t.Warning.Alpha(0.1)).Border(1, t.Warning.Alpha(0.3)).Selectable().Children(func() {
+	pal := paletteFor(c)
+	callout(c, iconWarn, pal.warning, func() {
 		for i, line := range lines {
 			if i == 8 {
-				ui.Text(c, Tf("… and %d more", "……另有 %d 条", len(lines)-8)).FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, Tf("… and %d more", "……另有 %d 条", len(lines)-8)).FontSize(12).TextColor(pal.muted)
 				break
 			}
-			ui.Text(c, line).FontSize(12)
+			ui.Text(c, line).FontSize(12).LineHeight(1.35)
 		}
+	}).Selectable()
+}
+
+// caution is a note of what to mind before going on.
+func caution(c *ui.Context, text string) {
+	pal := paletteFor(c)
+	callout(c, iconWarn, pal.warning, func() {
+		ui.Text(c, text).FontSize(12.5).LineHeight(1.4)
 	})
 }
 
-// stat is a number with a caption, for the summary of a result.
-func stat(c *ui.Context, value, caption string) {
-	t := c.Theme()
-	ui.Column(c).Gap(2).Grow(1).Basis(0).Padding(10, 14).Children(func() {
-		ui.Text(c, value).FontSize(17).Bold().SingleLine()
-		ui.Text(c, caption).FontSize(11.5).TextColor(t.TextMuted).SingleLine()
-	})
-}
-
-// stats is a card of numbers side by side.
+// stats shows numbers side by side, each with a caption, as the summary
+// of a result.
 func stats(c *ui.Context, items ...[2]string) {
-	t := c.Theme()
-	ui.Row(c).Radius(10).Background(cardFill(t)).Border(1, hairline(t)).AlignItems(ui.Stretch).Children(func() {
-		for i, it := range items {
-			if i > 0 {
-				ui.Box(c).Width(1).Margin(10, 0).Background(hairline(t))
-			}
-			stat(c, it[0], it[1])
+	pal := paletteFor(c)
+	ui.Row(c).Gap(8).AlignItems(ui.Stretch).Children(func() {
+		for _, it := range items {
+			ui.Column(c).Gap(3).Grow(1).Basis(0).MinWidth(0).Padding(12, 14).Radius(12).Background(pal.panel).Children(func() {
+				ui.Text(c, it[0]).FontSize(20).FontWeight(700).LetterSpacing(-0.3).SingleLine()
+				ui.Text(c, it[1]).FontSize(12).TextColor(pal.muted).SingleLine()
+			})
 		}
 	})
 }

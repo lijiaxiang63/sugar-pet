@@ -137,8 +137,8 @@ func (a *app) zmapView(c *ui.Context) {
 				})
 			})
 			section(c, "", "", func() {
-				ui.Collapsible(c, T("Options for iPS and iHN", "iPS 与 iHN 的选项"), &p.advanced, func() {
-					ui.Column(c).Padding(8, 0, 0, 0).Children(func() { rows(c, iterRows(c, "z", &p.iter)...) })
+				options(c, T("Options for iPS and iHN", "iPS 与 iHN 的选项"), &p.advanced, func() {
+					ui.Column(c).Children(func() { rows(c, iterRows(c, "z", &p.iter)...) })
 				})
 			})
 			if len(p.rows) > 0 || len(p.notes) > 0 {

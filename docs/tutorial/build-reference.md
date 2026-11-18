@@ -15,7 +15,7 @@ You need a reference for:
 
 ## Add the controls
 
-<Shot name="reference" alt="The Reference page: the reference in use, and the controls for a new one" :marks="[[1, 380], [8, 127]]" />
+<Shot name="reference" alt="The Reference page: the reference in use, and the controls for a new one" :marks="[[1, 469], [8, 160]]" />
 
 1. **Add the control images** under *Build a new reference*. Ada drops the
    `study/controls/` folder onto the list (16 images). All controls must be in
@@ -28,7 +28,7 @@ You need a reference for:
 
 Scroll down.
 
-<Shot name="reference-settings" alt="The settings of a new reference" :marks="[[2, 132], [3, 180], [4, 276], [5, 453], [6, 647], [7, 'run']]" />
+<Shot name="reference-settings" alt="The settings of a new reference" :marks="[[2, 170], [3, 227], [4, 356], [5, 578], [6, 768], [7, 'run']]" />
 
 2. **Mask:** the voxels used to estimate normalisation factors. Keep **Gray
    matter**, matching the original paper.

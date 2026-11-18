@@ -39,7 +39,6 @@ func (p *clusterPage) problem() string {
 
 func (a *app) clusterView(c *ui.Context) {
 	p := &a.cluster
-	t := c.Theme()
 	a.frame(c, T("Reference Cluster", "参考簇"),
 		T("A reference region found from the data of a patient group", "从患者组数据中找出的参考区"),
 		func() {
@@ -66,11 +65,8 @@ func (a *app) clusterView(c *ui.Context) {
 					},
 				)
 			})
-			ui.Row(c).Radius(10).Padding(10, 14).Gap(10).AlignItems(ui.Start).Background(t.Warning.Alpha(0.1)).Border(1, t.Warning.Alpha(0.3)).Children(func() {
-				ui.Icon(c, iconWarn).Size(15, 15).TextColor(t.Warning).Shrink(0).Margin(1, 0, 0, 0)
-				ui.Text(c, T("The mask depends on the group it came from. Using it to compare that same group with controls is circular: derive it from other patients, or cross-validate.",
-					"掩膜依赖于产生它的患者组。再用它去比较同一组患者与对照属于循环论证：请用另一批患者得出掩膜，或做交叉验证。")).FontSize(12).Grow(1).MinWidth(0)
-			})
+			caution(c, T("The mask depends on the group it came from. Using it to compare that same group with controls is circular: derive it from other patients, or cross-validate.",
+				"掩膜依赖于产生它的患者组。再用它去比较同一组患者与对照属于循环论证：请用另一批患者得出掩膜，或做交叉验证。"))
 			if p.saved != "" {
 				a.results(c, T("Result", "结果"), "", func() {
 					stats(c,
@@ -78,7 +74,7 @@ func (a *app) clusterView(c *ui.Context) {
 						[2]string{filepath.Base(p.saved), shortDir(filepath.Dir(p.saved))},
 					)
 					ui.Row(c).Gap(8).Children(func() {
-						b := ui.PrimaryButton(c, T("Normalise Intensity with This Region", "用该区域做强度归一化")).FontSize(12).Padding(3, 12)
+						b := button(c, T("Normalise Intensity with This Region", "用该区域做强度归一化"), nil, buttonPrimary, 26)
 						if b.Clicked() {
 							a.norm.methods = map[string]bool{"region": true}
 							a.norm.region.kind, a.norm.region.file = 1, p.saved

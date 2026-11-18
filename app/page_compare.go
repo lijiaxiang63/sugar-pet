@@ -142,7 +142,7 @@ func (a *app) compareView(c *ui.Context) {
 						T("Cluster-level, by Gaussian random field theory; two-tailed.", "团块水平，基于高斯随机场理论；双侧。"),
 						T("Voxel-level false discovery rate; two-tailed.", "体素水平的错误发现率；双侧。"),
 						T("Only the unthresholded T-map is written.", "仅输出未阈值化的 T 图。"),
-					}[p.correction], func() { ui.Segmented(c, &p.correction, "GRF", "FDR", T("None", "不校正")) })
+					}[p.correction], func() { segmented(c, &p.correction, "GRF", "FDR", T("None", "不校正")) })
 				}}
 				switch p.correction {
 				case 0:
@@ -181,7 +181,7 @@ func (a *app) compareView(c *ui.Context) {
 				)
 			})
 			section(c, "", "", func() {
-				ui.Collapsible(c, T("Options", "选项"), &p.advanced, func() {
+				options(c, T("Options", "选项"), &p.advanced, func() {
 					ids, names := []string{}, []string{}
 					for _, m := range core.Masks {
 						ids, names = append(ids, m.Name), append(names, maskName(m.Name))
@@ -193,7 +193,7 @@ func (a *app) compareView(c *ui.Context) {
 							a.pathSetting(c, "cmp-mask", T("Mask file", "掩膜文件"), "", &p.maskFile, pathFile, niftiFilter, nil)
 						}
 					}
-					ui.Column(c).Padding(8, 0, 0, 0).Children(func() {
+					ui.Column(c).Children(func() {
 						rows(c,
 							func() {
 								setting(c, T("Voxels to test", "检验的体素"), T("Voxels that any image does not cover are left out.", "任何一幅图像未覆盖的体素会被排除。"),
@@ -207,13 +207,13 @@ func (a *app) compareView(c *ui.Context) {
 								}
 								setting(c, T("Smoothing before the test", "检验前的平滑"), about,
 									func() {
-										ui.Checkbox(c, &p.fwhmAuto, T("Automatic", "自动"))
+										check(c, &p.fwhmAuto, T("Automatic", "自动"))
 										number(c, &p.fwhm, 0, 30, 1).Disabled(p.fwhmAuto).Tooltip("FWHM, mm")
 									})
 							},
 							func() {
 								setting(c, T("Keep the images that were tested", "保留参与检验的图像"), T("The intensity-normalised, smoothed images of both groups.", "两组强度归一化并平滑后的图像。"),
-									func() { ui.Switch(c, &p.keep).Label(T("Keep images", "保留图像")) })
+									func() { toggle(c, &p.keep, T("Keep images", "保留图像")) })
 							},
 						)
 					})
@@ -258,7 +258,7 @@ func (a *app) compareView(c *ui.Context) {
 								}
 								e := ui.Text(c, text).FontSize(12.5).SingleLine()
 								if col == 2 && cl.Peak < 0 {
-									e.TextColor(ui.Hex("#0A84FF"))
+									e.TextColor(paletteFor(c).cool)
 								} else if col == 2 {
 									e.TextColor(t.Danger)
 								}

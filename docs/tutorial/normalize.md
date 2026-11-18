@@ -15,7 +15,7 @@ to run this step beforehand.
 
 ## Choose the images and methods
 
-<Shot name="normalize" alt="The Intensity Normalisation page: images and methods" :marks="[[1, 120], [2, 432], [3, 565]]" />
+<Shot name="normalize" alt="The Intensity Normalisation page: images and methods" :marks="[[1, 163], [2, 492], [3, 650]]" />
 
 1. **Add the images** (in MNI space). Ada adds six patient scans from
    `study/patients/`.
@@ -48,7 +48,7 @@ define your region:
 
 Scroll down.
 
-<Shot name="normalize-results" alt="The reference, the output folder and the results" :marks="[[4, 157], [5, 205], [6, 266], [7, 'run'], [8, 342], [9, 636]]" />
+<Shot name="normalize-results" alt="The reference, the output folder and the results" :marks="[[4, 278], [5, 335], [6, 405], [7, 'run'], [8, 487], [9, 784]]" />
 
 4. **Reference:** pre-filled if you completed Step 2. Only required for HN,
    iPS, and iHN.

@@ -80,10 +80,10 @@ func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []f
 		out = append(out, func() {
 			ui.Column(c).Padding(9, 14, 10, 14).Gap(6).Children(func() {
 				ui.Text(c, T("Adjust for", "校正的列")).FontSize(13)
-				ui.Row(c).Wrap().GapY(4).GapX(18).Children(func() {
+				ui.Row(c).Wrap().GapY(8).GapX(18).Children(func() {
 					for _, col := range cv.table.Columns() {
 						on := cv.adjust[col]
-						ui.Checkbox(c.Key(col), &on, col)
+						check(c.Key(col), &on, col)
 						cv.adjust[col] = on
 					}
 				})
@@ -220,7 +220,10 @@ func (a *app) referenceView(c *ui.Context) {
 					)
 				})
 			})
-			ui.Text(c, T("Build a new reference", "新建参考库")).FontSize(17).Bold().Padding(6, 4, 0, 4)
+			ui.Column(c).Gap(18).Children(func() {
+				ui.Box(c).Height(1).Background(paletteFor(c).line)
+				ui.Text(c, T("Build a new reference", "新建参考库")).FontSize(17).FontWeight(700).LetterSpacing(-0.2).Padding(0, 2)
+			})
 			section(c, T("Healthy controls", "健康对照"), T("MNI-space FDG-PET images, all on the same grid. Below about 10 controls the voxel statistics get unreliable.",
 				"MNI 空间的 FDG-PET 图像，须在同一网格上。少于约 10 例时，体素统计不够可靠。"), func() {
 				a.filesCard(c, "ref-files", &p.files, T("Control images", "对照图像"), T("at least 3 images · .nii and .nii.gz", "至少 3 幅 · 支持 .nii 与 .nii.gz"))
@@ -252,13 +255,12 @@ func (a *app) referenceView(c *ui.Context) {
 			})
 			section(c, T("Z-score maps with other methods", "其他方法的 Z 值图"),
 				T("PS, iPS, HN and iHN never need this. Tick the methods you also want z-score maps for.", "PS、iPS、HN、iHN 无需勾选。若还要用以上方法制作 Z 值图，请勾选。"), func() {
-					card(c).Children(func() {
-						ui.Row(c).Wrap().GapY(4).Padding(10, 14).Children(func() {
+					cols := tileColumns(c)
+					card(c).Padding(8, 11).Children(func() {
+						ui.Row(c).Wrap().Children(func() {
 							for _, m := range core.StatsMethods() {
 								on := p.statsFor[m]
-								ui.Row(c.Key(m)).WidthPercent(33.33).MinWidth(180).Height(26).AlignItems(ui.Center).Children(func() {
-									ui.Checkbox(c, &on, methodName(m)).Tooltip(methodAbout(m))
-								})
+								tile(c, m, cols, func() { checkTile(c, &on, methodName(m), nil).Tooltip(methodAbout(m)) })
 								p.statsFor[m] = on
 							}
 						})

@@ -9,7 +9,7 @@ and outputs the surviving clusters with anatomical labels.
 
 ## Fill in the page
 
-<Shot name="compare" alt="The Compare Groups page: groups, normalisation and statistics" :marks="[[1, 120], [2, 1016, 120], [3, 433], [4, 480], [5, 576], [6, 624]]" />
+<Shot name="compare" alt="The Compare Groups page: groups, normalisation and statistics" :marks="[[1, 181], [2, 1027, 181], [3, 514], [4, 570], [5, 682], [6, 739]]" />
 
 1. **Group 1:** add the patient scans (12 images).
 2. **Group 2:** add the control scans (16 images). The contrast is *group 1
@@ -29,7 +29,7 @@ and outputs the surviving clusters with anatomical labels.
 
 Scroll down.
 
-<Shot name="compare-results" alt="Covariates, output and the results of the comparison" :marks="[[7, 119], [8, 234], [9, 279], [10, 'run'], [11, 427], [12, 481]]" />
+<Shot name="compare-results" alt="Covariates, output and the results of the comparison" :marks="[[7, 246], [8, 354], [9, 403], [10, 'run'], [11, 592], [12, 647]]" />
 
 7. **Covariate table** (recommended): select `participants.tsv` and tick
    **age** and **sex** to include them as covariates. The table must cover
@@ -45,8 +45,8 @@ Scroll down.
     T-value and MNI coordinates, peak region, and covered brain regions. Blue
     peaks are negative (Group 1 lower); red peaks are positive.
 
-The line beneath the table summarises the exact correction applied, ready to
-adapt for your methods section.
+The line under the **Results** heading summarises the exact correction
+applied, ready to adapt for your methods section.
 
 ## Output files
 
@@ -84,7 +84,7 @@ sensitivity check. If they change, report that transparently.
 ::: tip In your paper
 Report the method (`HN`), the number, age range, and sex of the controls, the
 smoothing kernel (8 mm by default), the multiple-comparison correction (from
-the line under the cluster table), and the SUGAR-PET version.
+the line under the **Results** heading), and the SUGAR-PET version.
 :::
 
 ::: details The same from the command line

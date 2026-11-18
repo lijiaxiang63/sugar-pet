@@ -242,6 +242,14 @@ func TestWorkflow(t *testing.T) {
 	if a.cmp.pic.key != res.File("thresholded") {
 		t.Fatalf("the picture is of %q, want the thresholded map", a.cmp.pic.key)
 	}
+	// A second run writes files of the same names: the picture is not the
+	// one of the first run.
+	first := a.cmp.pic.bitmap
+	press("compare", "开始比较", &a.cmp.st)
+	drawn(&a.cmp.pic)
+	if a.cmp.pic.bitmap == first || a.cmp.pic.key != a.cmp.result.File("thresholded") {
+		t.Fatal("the picture of the first run is shown for the second")
+	}
 
 	// The reference cluster: the cerebellum, which the disease spares.
 	mask := filepath.Join(dir, "cluster.nii.gz")

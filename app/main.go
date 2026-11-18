@@ -459,6 +459,11 @@ func (a *app) start(page, label string, work func(ctx context.Context, step func
 			a.job = nil
 			cancelled := ctx.Err() != nil
 			cancel()
+			// However the run ended, it may have written over the files the
+			// page's picture was drawn from.
+			if pic := a.pictureOf(page); pic != nil {
+				pic.forget()
+			}
 			switch {
 			case cancelled:
 				failed(errorString(T("Cancelled.", "已取消。")))

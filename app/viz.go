@@ -17,12 +17,39 @@ import (
 
 // picture is a picture of the brain in the results of a page.  It is of
 // one thing at a time, named by key: when the page asks for another, it is
-// drawn anew.
+// drawn anew.  It is also drawn anew after a run, which may have written
+// other things under the same names: forget says so.
 type picture struct {
 	key     string
+	run     int // counts the runs: what was drawn of an earlier one is dropped
 	bitmap  *ui.Bitmap
 	err     string
 	loading bool
+}
+
+// forget drops the picture, and the one being drawn: the files it is of
+// may have been written anew.
+func (pic *picture) forget() {
+	*pic = picture{run: pic.run + 1}
+}
+
+// pictureOf is the picture of a page's results, nil for a page without one.
+func (a *app) pictureOf(page string) *picture {
+	switch page {
+	case "spatial":
+		return &a.spatial.pic
+	case "reference":
+		return &a.ref.pic
+	case "zmap":
+		return &a.zmap.pic
+	case "classify":
+		return &a.classify.pic
+	case "compare":
+		return &a.cmp.pic
+	case "cluster":
+		return &a.cluster.pic
+	}
+	return nil
 }
 
 // show asks for the picture of key, which draw makes in the background.
@@ -31,6 +58,7 @@ func (a *app) show(pic *picture, key string, draw func() (*image.RGBA, error)) {
 		return
 	}
 	pic.key, pic.err, pic.loading = key, "", true
+	run := pic.run
 	if a.win == nil && a.post == nil {
 		pic.loading = false // nothing to draw it for, as in the snapshots
 		return
@@ -47,8 +75,8 @@ func (a *app) show(pic *picture, key string, draw func() (*image.RGBA, error)) {
 			img, err = draw()
 		}()
 		a.update(func() {
-			if pic.key != key {
-				return // another was asked for meanwhile
+			if pic.key != key || pic.run != run {
+				return // another was asked for meanwhile, or the files were written anew
 			}
 			pic.loading = false
 			if err != nil {

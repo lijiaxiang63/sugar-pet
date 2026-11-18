@@ -22,7 +22,7 @@ apart, under **Settings › Classify Parkinsonism**.
 
 ### How do I update the app?
 
-From the version after 0.6.0 on, the app updates itself: it checks GitHub
+From version 0.7.0 on, the app updates itself: it checks GitHub
 soon after it opens and once a day, shows what is new, and installs the new
 version when you agree. To check right now, open **Settings › General** and
 click **Check for Updates…**; the two switches below it turn the automatic

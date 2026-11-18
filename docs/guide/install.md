@@ -8,7 +8,7 @@ environment and no MATLAB installation (unless you use the optional
 
 Go to the [latest release](https://github.com/lijiaxiang63/sugar-pet/releases/latest)
 and download the package for your operating system (`<version>` denotes the
-release number, e.g. `0.6.0`):
+release number, e.g. `0.7.0`):
 
 | System | File |
 | --- | --- |
@@ -75,7 +75,7 @@ and Chinese, click **Settings** at the bottom of the sidebar and choose under
 
 ## 4. Updates
 
-From the version after 0.6.0 on, the app keeps itself up to date: it checks
+From version 0.7.0 on, the app keeps itself up to date: it checks
 GitHub soon after it opens and once a day, shows what is new, and installs
 the new version when you agree. **Settings › General › Check for Updates…**
 checks at once, and the switches below it turn the automatic check and the

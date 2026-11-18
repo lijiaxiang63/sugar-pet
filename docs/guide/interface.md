@@ -93,7 +93,7 @@ effect at once and is saved: there is no OK button.
 
 ### Updates {#updates}
 
-From the version after 0.6.0 on, the app updates itself from its
+From version 0.7.0 on, the app updates itself from its
 [GitHub releases](https://github.com/lijiaxiang63/sugar-pet/releases). It
 checks soon after it opens and then once a day. When there is a newer
 version, a window shows what is new and offers to install it, and

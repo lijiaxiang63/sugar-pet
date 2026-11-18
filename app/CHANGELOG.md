@@ -4,7 +4,7 @@ What changed in SUGAR-PET, the desktop app, from version to version. The
 section of a version is what the app's update window shows when it offers
 that version, so write it for the people who use the app.
 
-## [Unreleased]
+## [0.7.0] - 2026-11
 
 ### Added
 

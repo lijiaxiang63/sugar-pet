@@ -71,8 +71,8 @@ the correction of a group comparison, SPM and MATLAB, the language) are in
 the app's settings: the gear at the bottom of the sidebar, or ⌘, / Ctrl+,.
 
 Installers for macOS, Windows and Linux are on the
-[releases page](https://github.com/lijiaxiang63/sugar-pet/releases). From the
-version after 0.6.0 on, the app updates itself from there: it checks soon
+[releases page](https://github.com/lijiaxiang63/sugar-pet/releases). From
+version 0.7.0 on, the app updates itself from there: it checks soon
 after it opens and once a day, and **Check for Updates…** in the settings
 checks at once (copies installed from the `.deb` or `.rpm` package are
 updated by the package manager).

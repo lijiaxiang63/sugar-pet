@@ -130,31 +130,26 @@ func (r *refInfo) covariateNames() []string {
 }
 
 type refPage struct {
-	files    fileList
-	mask     string // a built-in mask, or "file"
-	maskFile string
-	fwhm     float64
-	statsFor map[string]bool
-	cov      covChoice
-	output   string
+	files  fileList
+	cov    covChoice
+	output string
 
 	st      status
 	current string // the reference the summary below is of
 	info    *refInfo
+	pic     picture
 }
 
 func (p *refPage) init() {
-	p.mask, p.fwhm = "gray-matter", 8
-	p.statsFor = map[string]bool{}
 	p.cov.adjust = map[string]bool{}
 }
-
-func (p *refPage) problem() string {
+func (p *refPage) problem(o *options) string {
 	switch {
 	case len(p.files.files) < 3:
 		return T("Add at least 3 healthy-control images (10 or more is better).", "请添加至少 3 幅健康对照图像（建议 10 幅以上）。")
-	case p.mask == "file" && p.maskFile == "":
-		return T("Choose the mask file.", "请选择掩膜文件。")
+	}
+	if o.RefMask == "file" && o.RefMaskFile == "" {
+		return T("Choose the mask file of the reference in the settings.", "请在设置中选择参考库的掩膜文件。")
 	}
 	if msg := p.cov.problem(); msg != "" {
 		return msg
@@ -218,6 +213,8 @@ func (a *app) referenceView(c *ui.Context) {
 						},
 						func() { setting(c, T("Z-score maps available for", "可制作 Z 值图的方法"), extra, nil) },
 					)
+					a.show(&p.pic, p.current, referencePicture(p.current))
+					a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
 				})
 			})
 			ui.Column(c).Gap(18).Children(func() {
@@ -228,44 +225,6 @@ func (a *app) referenceView(c *ui.Context) {
 				"MNI 空间的 FDG-PET 图像，须在同一网格上。少于约 10 例时，体素统计不够可靠。"), func() {
 				a.filesCard(c, "ref-files", &p.files, T("Control images", "对照图像"), T("at least 3 images · .nii and .nii.gz", "至少 3 幅 · 支持 .nii 与 .nii.gz"))
 			})
-			section(c, T("Settings", "设置"), "", func() {
-				ids, names := []string{}, []string{}
-				for _, m := range core.Masks {
-					ids, names = append(ids, m.Name), append(names, maskName(m.Name))
-				}
-				ids, names = append(ids, "file"), append(names, T("Mask file…", "掩膜文件…"))
-				var maskRow func()
-				if p.mask == "file" {
-					maskRow = func() {
-						a.pathSetting(c, "ref-maskfile", T("Mask file", "掩膜文件"), T("A NIfTI image in MNI space.", "MNI 空间的 NIfTI 图像。"),
-							&p.maskFile, pathFile, niftiFilter, nil)
-					}
-				}
-				rows(c,
-					func() {
-						setting(c, T("Mask", "掩膜"), T("The voxels the factors are estimated from. The paper uses gray matter.", "用于估计因子的体素。文章使用灰质。"),
-							func() { selectOf(c, &p.mask, ids, names).Width(190) })
-					},
-					maskRow,
-					func() {
-						setting(c, T("Smoothing (FWHM, mm)", "平滑 (FWHM, mm)"), T("Applied before the statistics are computed. Use 0 if the images are already smoothed.", "计算统计量之前施加。图像已平滑时填 0。"),
-							func() { number(c, &p.fwhm, 0, 30, 1) })
-					},
-				)
-			})
-			section(c, T("Z-score maps with other methods", "其他方法的 Z 值图"),
-				T("PS, iPS, HN and iHN never need this. Tick the methods you also want z-score maps for.", "PS、iPS、HN、iHN 无需勾选。若还要用以上方法制作 Z 值图，请勾选。"), func() {
-					cols := tileColumns(c)
-					card(c).Padding(8, 11).Children(func() {
-						ui.Row(c).Wrap().Children(func() {
-							for _, m := range core.StatsMethods() {
-								on := p.statsFor[m]
-								tile(c, m, cols, func() { checkTile(c, &on, methodName(m), nil).Tooltip(methodAbout(m)) })
-								p.statsFor[m] = on
-							}
-						})
-					})
-				})
 			section(c, T("Age and sex (W-scores)", "年龄和性别（W 值）"),
 				T("Optional. Rows are matched to images by an “image” or “participant_id” column (sub-01 matches sub-01_…_pet.nii.gz), as in a BIDS participants.tsv.",
 					"可选。通过 image 或 participant_id 列将行与图像对应（sub-01 匹配 sub-01_…_pet.nii.gz），与 BIDS 的 participants.tsv 一致。"), func() {
@@ -276,10 +235,11 @@ func (a *app) referenceView(c *ui.Context) {
 					a.pathSetting(c, "ref-out", T("Reference folder", "参考库文件夹"), T("A folder for this reference; it becomes the reference in use.", "用于存放该参考库的文件夹，建好后自动成为当前参考库。"),
 						&p.output, pathFolder, nil, nil)
 				})
+				a.optionsLine(c, "reference", "reference", groupReference)
 			})
 		},
 		func() {
-			a.runBar(c, "reference", p.problem(), T("Build Reference", "建立参考库"), &p.st, a.runReference)
+			a.runBar(c, "reference", p.problem(&a.opt), T("Build Reference", "建立参考库"), &p.st, a.runReference)
 		},
 	)
 }
@@ -287,14 +247,10 @@ func (a *app) referenceView(c *ui.Context) {
 func (a *app) runReference() {
 	p := &a.ref
 	files := append([]string(nil), p.files.files...)
-	opt := core.BuildOptions{FWHM: p.fwhm, Mask: core.MaskSpec{Name: p.mask}}
-	if p.mask == "file" {
-		opt.Mask = core.MaskSpec{Name: p.maskFile}
-	}
-	for _, m := range core.StatsMethods() {
-		if p.statsFor[m] {
-			opt.StatsFor = append(opt.StatsFor, m)
-		}
+	o := a.opt
+	opt := core.BuildOptions{FWHM: o.RefFWHM, Mask: core.MaskSpec{Name: o.RefMask}, StatsFor: o.statsFor()}
+	if o.RefMask == "file" {
+		opt.Mask = core.MaskSpec{Name: o.RefMaskFile}
 	}
 	if p.cov.table != nil {
 		names := p.cov.names()
@@ -318,7 +274,6 @@ func (a *app) runReference() {
 		}
 		return func() {
 			a.setReference(out)
-			a.saveSettings()
 			p.current = ""
 			p.st.ok = Tf("Reference built from %d controls; it is now the reference in use.", "已用 %d 例对照建立参考库，并设为当前参考库。", len(files))
 		}, nil

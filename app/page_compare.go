@@ -18,34 +18,23 @@ type comparePage struct {
 	region    regionChoice
 	cov       covChoice
 	covExtra  string // a second table, when the two groups are listed apart
-	fwhmAuto  bool
-	fwhm      float64
 	// The smoothing of the reference, as last read from its folder.
-	fwhmKnown  bool
-	fwhmOf     string
-	fwhmRef    *float64
-	analysis   string // a built-in mask, or "file"
-	maskFile   string
-	correction int // 0 GRF, 1 FDR, 2 none
-	voxelP     float64
-	clusterP   float64
-	q          float64
-	name       string
-	keep       bool
-	output     string
-	advanced   bool
+	fwhmKnown bool
+	fwhmOf    string
+	fwhmRef   *float64
+	name      string
+	output    string
 
 	st     status
 	result *core.GroupComparison
 	how    string
 	table  ui.ListState
+	pic    picture
 }
 
 func (p *comparePage) init() {
-	p.method, p.analysis, p.name = "hn", "gray-matter", "group1_vs_group2"
+	p.method, p.name = "hn", "group1_vs_group2"
 	p.region.mask = "brainstem"
-	p.fwhmAuto, p.fwhm = true, 8
-	p.voxelP, p.clusterP, p.q = 0.001, 0.05, 0.05
 	p.cov.adjust = map[string]bool{}
 }
 
@@ -69,9 +58,9 @@ func (p *comparePage) referenceFWHM() (fwhm float64, ok bool) {
 // smoothing is the smoothing (mm) before the test.  Left to the app, it is
 // that of the chosen reference, whether or not the method needs one, or 8 mm
 // without a reference.
-func (p *comparePage) smoothing() float64 {
-	if !p.fwhmAuto {
-		return p.fwhm
+func (p *comparePage) smoothing(o *options) float64 {
+	if !o.CmpFWHMAuto {
+		return o.CmpFWHM
 	}
 	if fwhm, ok := p.referenceFWHM(); ok {
 		return fwhm
@@ -79,7 +68,7 @@ func (p *comparePage) smoothing() float64 {
 	return 8
 }
 
-func (p *comparePage) problem() string {
+func (p *comparePage) problem(o *options) string {
 	switch {
 	case len(p.g1.files) < 2 || len(p.g2.files) < 2:
 		return T("Add at least 2 images to each group.", "每组请至少添加 2 幅图像。")
@@ -87,8 +76,8 @@ func (p *comparePage) problem() string {
 		return Tf("%s needs a reference: choose one, or build it on the Reference page.", "%s 需要参考库：请选择参考库，或先到“参考库”页面建立。", methodName(p.method))
 	case p.method == "region" && p.region.problem() != "":
 		return p.region.problem()
-	case p.analysis == "file" && p.maskFile == "":
-		return T("Choose the analysis mask file.", "请选择分析掩膜文件。")
+	case o.Analysis == "file" && o.AnalysisFile == "":
+		return T("Choose the mask file of the voxels to test in the settings.", "请在设置中选择检验范围的掩膜文件。")
 	}
 	if msg := p.cov.problem(); msg != "" {
 		return msg
@@ -132,31 +121,8 @@ func (a *app) compareView(c *ui.Context) {
 				}
 				list = append(list, func() {
 					a.pathSetting(c, "cmp-ref", T("Reference", "参考库"), T("Needed by HN, iPS and iHN; the same for both groups.", "HN、iPS、iHN 需要；两组使用同一个参考库。"),
-						&p.reference, pathFolder, nil, func() { a.setReference(p.reference); a.saveSettings() })
+						&p.reference, pathFolder, nil, func() { a.setReference(p.reference) })
 				})
-				rows(c, list...)
-			})
-			section(c, T("Statistics", "统计"), "", func() {
-				list := []func(){func() {
-					setting(c, T("Multiple-comparison correction", "多重比较校正"), [...]string{
-						T("Cluster-level, by Gaussian random field theory; two-tailed.", "团块水平，基于高斯随机场理论；双侧。"),
-						T("Voxel-level false discovery rate; two-tailed.", "体素水平的错误发现率；双侧。"),
-						T("Only the unthresholded T-map is written.", "仅输出未阈值化的 T 图。"),
-					}[p.correction], func() { segmented(c, &p.correction, "GRF", "FDR", T("None", "不校正")) })
-				}}
-				switch p.correction {
-				case 0:
-					list = append(list,
-						func() {
-							setting(c, T("Voxel-level p", "体素水平 p 值"), T("Two-tailed threshold that forms the clusters.", "形成团块的双侧阈值。"),
-								func() { number(c, &p.voxelP, 0.00001, 0.1, 0.001) })
-						},
-						func() {
-							setting(c, T("Cluster-level p", "团块水平 p 值"), "", func() { number(c, &p.clusterP, 0.0001, 0.5, 0.01) })
-						})
-				case 1:
-					list = append(list, func() { setting(c, T("q value", "q 值"), "", func() { number(c, &p.q, 0.0001, 0.5, 0.01) }) })
-				}
 				rows(c, list...)
 			})
 			section(c, T("Covariates", "协变量"),
@@ -179,45 +145,7 @@ func (a *app) compareView(c *ui.Context) {
 						setting(c, T("Name of the result files", "结果文件名称"), "", func() { ui.TextInput(c, &p.name).Width(210) })
 					},
 				)
-			})
-			section(c, "", "", func() {
-				options(c, T("Options", "选项"), &p.advanced, func() {
-					ids, names := []string{}, []string{}
-					for _, m := range core.Masks {
-						ids, names = append(ids, m.Name), append(names, maskName(m.Name))
-					}
-					ids, names = append(ids, "file"), append(names, T("Mask file…", "掩膜文件…"))
-					var fileRow func()
-					if p.analysis == "file" {
-						fileRow = func() {
-							a.pathSetting(c, "cmp-mask", T("Mask file", "掩膜文件"), "", &p.maskFile, pathFile, niftiFilter, nil)
-						}
-					}
-					ui.Column(c).Children(func() {
-						rows(c,
-							func() {
-								setting(c, T("Voxels to test", "检验的体素"), T("Voxels that any image does not cover are left out.", "任何一幅图像未覆盖的体素会被排除。"),
-									func() { selectOf(c, &p.analysis, ids, names).Width(190) })
-							},
-							fileRow,
-							func() {
-								about := T("Automatic: 8 mm, as no reference is chosen. Use 0 if the images are already smoothed.", "自动：未选择参考库，采用 8 mm。图像已平滑时填 0。")
-								if fwhm, ok := p.referenceFWHM(); ok {
-									about = Tf("Automatic: %g mm, that of the reference. Use 0 if the images are already smoothed.", "自动：采用参考库的平滑 %g mm。图像已平滑时填 0。", fwhm)
-								}
-								setting(c, T("Smoothing before the test", "检验前的平滑"), about,
-									func() {
-										check(c, &p.fwhmAuto, T("Automatic", "自动"))
-										number(c, &p.fwhm, 0, 30, 1).Disabled(p.fwhmAuto).Tooltip("FWHM, mm")
-									})
-							},
-							func() {
-								setting(c, T("Keep the images that were tested", "保留参与检验的图像"), T("The intensity-normalised, smoothed images of both groups.", "两组强度归一化并平滑后的图像。"),
-									func() { toggle(c, &p.keep, T("Keep images", "保留图像")) })
-							},
-						)
-					})
-				})
+				a.optionsLine(c, "compare", "compare", groupCompare)
 			})
 			if r := p.result; r != nil {
 				a.results(c, T("Results", "结果"), p.how, func() {
@@ -229,6 +157,13 @@ func (a *app) compareView(c *ui.Context) {
 						items = append(items, [2]string{strconv.Itoa(r.NClusters), T("Significant clusters", "显著团块")})
 					}
 					stats(c, items...)
+					if thresholded := r.File("thresholded"); r.Corrected && thresholded != "" {
+						a.show(&p.pic, thresholded, overlayPicture(thresholded, core.PictureOptions{From: 1e-6, Full: 8}))
+						a.figure(c, &p.pic, T("T-map of the clusters that survive the correction", "通过校正的团块的 T 图"), legend{kind: legendScores, unit: "T", from: "0", full: "8"})
+					} else {
+						a.show(&p.pic, r.TMap, overlayPicture(r.TMap, core.PictureOptions{From: 3, Full: 8}))
+						a.figure(c, &p.pic, T("T-map, uncorrected, where |T| > 3", "未校正的 T 图，仅显示 |T| > 3"), legend{kind: legendScores, unit: "T", from: "3", full: "8"})
+					}
 					if len(r.Clusters) > 0 {
 						cols := []ui.TableColumn{
 							{Title: "#", Width: 36, Align: ui.End},
@@ -279,7 +214,7 @@ func (a *app) compareView(c *ui.Context) {
 				})
 			}
 		},
-		func() { a.runBar(c, "compare", p.problem(), T("Compare", "开始比较"), &p.st, a.runCompare) },
+		func() { a.runBar(c, "compare", p.problem(&a.opt), T("Compare", "开始比较"), &p.st, a.runCompare) },
 	)
 }
 
@@ -287,15 +222,16 @@ func (a *app) runCompare() {
 	p := &a.cmp
 	g1, g2 := append([]string(nil), p.g1.files...), append([]string(nil), p.g2.files...)
 	opt := core.DefaultCompareOptions()
-	opt.Method, opt.Name, opt.KeepImages = p.method, strings.TrimSpace(p.name), p.keep
-	opt.Correction = [...]string{"grf", "fdr", "none"}[p.correction]
-	opt.VoxelP, opt.ClusterP, opt.Q = p.voxelP, p.clusterP, p.q
+	o := a.opt
+	opt.Method, opt.Name, opt.KeepImages = p.method, strings.TrimSpace(p.name), o.KeepImages
+	opt.Correction = [...]string{"grf", "fdr", "none"}[o.Correction]
+	opt.VoxelP, opt.ClusterP, opt.Q = o.VoxelP, o.ClusterP, o.Q
 	p.fwhmKnown = false // the reference may have been built anew
-	fwhm := p.smoothing()
+	fwhm := p.smoothing(&o)
 	opt.FWHM = &fwhm
-	opt.AnalysisMask = core.MaskSpec{Name: p.analysis}
-	if p.analysis == "file" {
-		opt.AnalysisMask = core.MaskSpec{Name: p.maskFile}
+	opt.AnalysisMask = core.MaskSpec{Name: o.Analysis}
+	if o.Analysis == "file" {
+		opt.AnalysisMask = core.MaskSpec{Name: o.AnalysisFile}
 	}
 	if p.method == "region" {
 		spec, _, err := p.region.spec()

@@ -42,7 +42,13 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 
 需要注意区分两个“normalisation”：**空间标准化**是指把原始空间的 PET 图像配准到 MNI 标准空间（对应 `sugar-pet spatial-norm`），需要 MATLAB 和 SPM12/SPM25（应用会自动查找 MATLAB，SPM 路径需手动指定），只有图像尚未配准到 MNI 空间时才需要这一步。**强度归一化**则是本工具的核心：将每幅图像除以各自估计出的因子，不依赖任何外部软件。
 
-macOS、Windows 和 Linux 的预编译安装包可在[发布页](https://github.com/lijiaxiang63/sugar-pet/releases)下载；向仓库推送 `v<版本号>` 标签会自动触发构建与发布（[`release.yml`](.github/workflows/release.yml)）。也可以用 Go 1.27+ 自行编译：
+大多数分析用不着改动的选项（平滑、迭代方法、组间比较的校正方式、SPM 与 MATLAB、界面语言）都收在应用的“设置”里：点击侧边栏底部的齿轮，或按 ⌘, / Ctrl+,。
+
+macOS、Windows 和 Linux 的预编译安装包可在[发布页](https://github.com/lijiaxiang63/sugar-pet/releases)下载。从 0.6.0 之后的版本起，应用会从发布页自动更新：启动后不久检查一次，此后每天检查一次；也可以在“设置”里点击**检查更新…**立即检查（通过 `.deb` 或 `.rpm` 安装的版本由系统的包管理器更新）。
+
+发布新版本的步骤：把 `app/mygo.json`、`app/core/reference.go` 和 `pyproject.toml` 中的版本号改为新版本，在 [`app/CHANGELOG.md`](app/CHANGELOG.md) 中写好该版本的小节（更新窗口会显示这段内容），然后推送 `v<版本号>` 标签。[`release.yml`](.github/workflows/release.yml) 会构建各个平台、为更新包签名并发布。更新包用一对密钥签名：公钥是 `app/mygo.json` 里的 `updates.publicKey`，私钥保存在仓库的 Secret `MYGO_UPDATER_PRIVATE_KEY` 中，不在仓库里。请务必备份私钥：已安装的应用不接受用其他密钥签名的更新。
+
+也可以用 Go 1.27+ 自行编译：
 
 ```bash
 cd app

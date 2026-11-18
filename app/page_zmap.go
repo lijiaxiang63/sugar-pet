@@ -15,6 +15,8 @@ import (
 
 type zmapRow struct {
 	image, method, file, lowest, share string
+	source, path                       string // the image, and the map made of it
+	wscore                             bool
 }
 
 type zmapPage struct {
@@ -24,8 +26,6 @@ type zmapPage struct {
 	loadedFrom string
 	info       *refInfo
 	covTable   string
-	iter       iterOptions
-	advanced   bool
 	output     string
 
 	st     status
@@ -33,11 +33,33 @@ type zmapPage struct {
 	table  ui.ListState
 	notes  []string
 	outDir string
+	shown  int // the row the picture is of
+	pic    picture
 }
 
 func (p *zmapPage) init() {
 	p.methods = map[string]bool{"hn": true}
-	p.iter = iterOptions{pThreshold: 0.01, maxIter: 1}
+}
+
+// load reads what the reference in use says about itself.
+func (p *zmapPage) load() {
+	if p.reference != p.loadedFrom {
+		p.loadedFrom, p.info = p.reference, nil
+		if p.reference != "" {
+			p.info = readRefInfo(p.reference)
+		}
+	}
+}
+
+// iterative is whether a chosen method leaves voxels out and estimates
+// again, so that the options of iPS and iHN apply.
+func (p *zmapPage) iterative() bool {
+	for _, m := range p.chosen() {
+		if m == "ips" || m == "ihn" {
+			return true
+		}
+	}
+	return false
 }
 
 // allowed tells whether the reference can serve a method.
@@ -87,12 +109,7 @@ func (p *zmapPage) problem() string {
 
 func (a *app) zmapView(c *ui.Context) {
 	p := &a.zmap
-	if p.reference != p.loadedFrom {
-		p.loadedFrom, p.info = p.reference, nil
-		if p.reference != "" {
-			p.info = readRefInfo(p.reference)
-		}
-	}
+	p.load()
 	hasModels := p.info != nil && len(p.info.Covariates) > 0
 	a.frame(c, T("Z-score Maps", "Z 值图"),
 		T("How far each voxel is from the healthy controls", "每个体素偏离健康对照的程度"),
@@ -122,7 +139,7 @@ func (a *app) zmapView(c *ui.Context) {
 				rows(c,
 					func() {
 						a.pathSetting(c, "z-ref", T("Reference", "参考库"), desc, &p.reference, pathFolder, nil,
-							func() { a.setReference(p.reference); a.saveSettings() })
+							func() { a.setReference(p.reference) })
 					},
 					covRow,
 				)
@@ -135,26 +152,34 @@ func (a *app) zmapView(c *ui.Context) {
 					a.pathSetting(c, "z-out", T("Output folder", "输出文件夹"), T("One map per image and method, e.g. sub-01_desc-hn_zmap.nii.gz.", "每幅图像每种方法输出一幅，如 sub-01_desc-hn_zmap.nii.gz。"),
 						&p.output, pathFolder, nil, nil)
 				})
-			})
-			section(c, "", "", func() {
-				options(c, T("Options for iPS and iHN", "iPS 与 iHN 的选项"), &p.advanced, func() {
-					ui.Column(c).Children(func() { rows(c, iterRows(c, "z", &p.iter)...) })
-				})
+				if p.iterative() {
+					a.optionsLine(c, "zmap", "normalize", groupIterative)
+				}
 			})
 			if len(p.rows) > 0 || len(p.notes) > 0 {
 				a.results(c, T("Results", "结果"), T("“Below −2” is the share of brain voxels with z < −2 (about 2.3% is expected by chance).", "“低于 −2”为脑内 z < −2 的体素比例（随机情况下约为 2.3%）。"), func() {
 					if len(p.rows) > 0 {
+						p.shown = min(max(p.shown, 0), len(p.rows)-1)
+						r := p.rows[p.shown]
+						picker(c, "z-pick", &p.shown, len(p.rows), r.image+" · "+methodName(r.method))
+						unit := "z"
+						if r.wscore {
+							unit = "W"
+						}
+						a.show(&p.pic, r.path, mapPicture(r.source, r.path))
+						a.figure(c, &p.pic, r.file, legend{kind: legendScores, unit: unit, from: "2", full: "5"})
 						cols := []ui.TableColumn{
 							{Title: T("Image", "图像")},
 							{Title: T("Method", "方法"), Width: 150},
 							{Title: T("Lowest", "最低值"), Width: 80, Align: ui.End},
 							{Title: T("Below −2", "低于 −2"), Width: 90, Align: ui.End},
 						}
+						p.table.Selected = &p.shown
 						card(c).Children(func() {
 							ui.Table(c, &p.table, cols, len(p.rows), func(row, col int) {
 								r := p.rows[row]
 								ui.Text(c, [...]string{r.image, methodName(r.method), r.lowest, r.share}[col]).FontSize(12.5).SingleLine()
-							}).Height(float32(min(len(p.rows), 8)*32 + 34))
+							}).Height(float32(min(len(p.rows), 6)*32 + 34))
 						})
 						ui.Row(c).Children(func() { revealButton(c, "z-reveal", revealLabel(), p.outDir) })
 					}
@@ -174,8 +199,8 @@ func (a *app) runZMap() {
 		table = ""
 	}
 	base := core.DefaultZMapOptions()
-	base.PThreshold, base.Exclude, base.MaxIter = p.iter.pThreshold, excludeName(p.iter.exclude), int(p.iter.maxIter)
-	p.rows, p.notes = nil, nil
+	base.PThreshold, base.Exclude, base.MaxIter = a.opt.PThreshold, excludeName(a.opt.Exclude), int(a.opt.MaxIter)
+	p.rows, p.notes, p.shown = nil, nil, 0
 	a.start("zmap", T("Making maps", "正在生成 Z 值图"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		ref, err := core.LoadReference(reference)
 		if err != nil {
@@ -255,7 +280,8 @@ func (a *app) runZMap() {
 						}
 					}
 				}
-				row := zmapRow{image: name, method: method, file: file, lowest: "–", share: "–"}
+				row := zmapRow{image: name, method: method, file: file, lowest: "–", share: "–",
+					source: path, path: filepath.Join(out, file), wscore: opt.Covariates != nil}
 				if inside > 0 {
 					row.lowest = strconv.FormatFloat(lowest, 'f', 2, 64)
 					row.share = strconv.FormatFloat(100*float64(below)/float64(inside), 'f', 1, 64) + "%"

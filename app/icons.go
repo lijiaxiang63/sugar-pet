@@ -35,5 +35,7 @@ var (
 	iconTray    = icon(`<path d="M8 2v7.5M5 6.8l3 3 3-3"/><path d="M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2"/>`)
 	iconTick    = icon(`<path d="M3.2 8.6l3.1 3.1 6.5-7.2" stroke-width="1.8"/>`)
 	iconChevron = icon(`<path d="M6 3.5 10.5 8 6 12.5" stroke-width="1.6"/>`)
+	iconGear    = icon(`<circle cx="8" cy="8" r="2.1"/><path d="M8 1.5l1 1.9 2.1-.5.5 2.1 1.9 1-1 2 1 2-1.9 1-.5 2.1-2.1-.5-1 1.9-1-1.9-2.1.5-.5-2.1-1.9-1 1-2-1-2 1.9-1 .5-2.1 2.1.5z"/>`)
+	iconRefresh = icon(`<path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.7"/><path d="M13.4 2.4v2.4H11"/>`)
 	iconTable   = icon(`<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M1.8 6.3h12.4M6 6.3v6.9"/>`)
 )

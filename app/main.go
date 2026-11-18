@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -45,6 +46,20 @@ type app struct {
 	// scrolls is how far each page is scrolled.
 	scrolls map[string]*ui.ScrollState
 
+	// opt are the options of the analyses, which the settings window changes.
+	opt options
+	// The settings window while it is open, and the section it shows.
+	settingsWin  *mygo.Window
+	settingsPage string
+	// dialogs is the window that file dialogs and alerts belong to: the one
+	// whose view was built last.
+	dialogs *mygo.Window
+	// allMethods is whether the pages list every method, the reference
+	// regions too.
+	allMethods bool
+	// updates is whether the update plugin is used (useUpdater).
+	updates bool
+
 	spatial  spatialPage
 	norm     normPage
 	ref      refPage
@@ -55,21 +70,23 @@ type app struct {
 	masks    masksPage
 
 	settingsPath string
+	saved        string // the settings as last written
 }
 
 // settings is what the app remembers between launches.
 type settings struct {
-	Language  string `json:"language"`
-	Page      string `json:"page"`
-	Reference string `json:"reference"`
-	Output    string `json:"output"`
-	SPM       string `json:"spm,omitempty"`
-	Matlab    string `json:"matlab,omitempty"`
+	Language   string   `json:"language"`
+	Page       string   `json:"page"`
+	Reference  string   `json:"reference"`
+	Output     string   `json:"output"`
+	SPM        string   `json:"spm,omitempty"`
+	Matlab     string   `json:"matlab,omitempty"`
+	AllMethods bool     `json:"all_methods,omitempty"`
+	Options    *options `json:"options,omitempty"`
 }
 
 func newApp() *app {
-	a := &app{page: "normalize"}
-	a.spatial.init()
+	a := &app{page: "normalize", opt: defaultOptions()}
 	a.norm.init()
 	a.ref.init()
 	a.zmap.init()
@@ -89,9 +106,15 @@ func (a *app) loadSettings() {
 	if err != nil {
 		return
 	}
-	var s settings
+	// What the file leaves out stays as the app first has it.
+	opt := defaultOptions()
+	s := settings{Options: &opt}
 	if json.Unmarshal(raw, &s) != nil {
 		return
+	}
+	if s.Options != nil {
+		a.opt = *s.Options
+		a.opt.sound()
 	}
 	switch s.Language {
 	case "zh":
@@ -109,23 +132,38 @@ func (a *app) loadSettings() {
 			a.setReference(s.Reference)
 		}
 	}
+	a.allMethods = s.AllMethods
 	a.spatial.setSPM(s.SPM)
 	if _, err := core.ResolveMatlab(s.Matlab); err == nil {
 		a.spatial.matlab = s.Matlab
 	}
+	a.saved = a.settingsText()
 }
 
-func (a *app) saveSettings() {
-	if a.settingsPath == "" {
-		return
-	}
-	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, SPM: a.spatial.spm, Matlab: a.spatial.matlab}
+// settingsText is what the app remembers between launches, as it is now.
+func (a *app) settingsText() string {
+	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, SPM: a.spatial.spm, Matlab: a.spatial.matlab,
+		AllMethods: a.allMethods, Options: &a.opt}
 	if chinese {
 		s.Language = "zh"
 	}
 	raw, _ := json.MarshalIndent(s, "", "  ")
-	os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
-	os.WriteFile(a.settingsPath, raw, 0o644)
+	return string(raw)
+}
+
+// saveSettings keeps what the app remembers between launches, and reports
+// whether any of it changed since it was last kept.
+func (a *app) saveSettings() bool {
+	text := a.settingsText()
+	if text == a.saved {
+		return false
+	}
+	a.saved = text
+	if a.settingsPath != "" {
+		os.MkdirAll(filepath.Dir(a.settingsPath), 0o755)
+		os.WriteFile(a.settingsPath, []byte(text), 0o644)
+	}
+	return true
 }
 
 // setReference makes a reference folder the one every page uses.
@@ -156,6 +194,10 @@ var pages = []pageInfo{
 func (a *app) view(c *ui.Context) {
 	pal := paletteFor(c)
 	c.SetTheme(themeFor(c, pal))
+	a.dialogs = a.win
+	if runtime.GOOS != "darwin" { // on macOS the menu bar has the item
+		c.OnShortcut(ui.Cmd, ui.KeyComma, func() { a.openSettings("") })
+	}
 	// The wash lies over the window's material, which shows through a
 	// little where there is one.
 	wash := pal.wash
@@ -189,6 +231,10 @@ func (a *app) view(c *ui.Context) {
 			})
 		})
 	})
+	// What changed is kept, and shows in the settings window.
+	if a.saveSettings() && a.settingsWin != nil {
+		a.settingsWin.Invalidate()
+	}
 }
 
 // done reports whether the last run of a page went well, which the
@@ -264,13 +310,10 @@ func (a *app) sidebar(c *ui.Context) {
 			group(T("Resources", "资源"), pages[len(pages)-1:])
 		})
 	})
-	if page != a.page {
-		a.page = page
-		a.saveSettings()
-	}
+	a.page = page
 
-	// The reference in use, and the language.
-	ui.Column(c).Padding(8, 10, 12, 10).Gap(8).Shrink(0).Children(func() {
+	// The reference in use, and the settings.
+	ui.Column(c).Padding(8, 10, 10, 10).Gap(6).Shrink(0).Children(func() {
 		ref := a.norm.reference
 		box := ui.ButtonBase(c.Key("ref-chip")).Padding(8, 10).Radius(10).Gap(9).AlignItems(ui.Center).
 			Label(T("Reference in use", "当前参考库"))
@@ -303,13 +346,28 @@ func (a *app) sidebar(c *ui.Context) {
 		if box.Clicked() {
 			a.chooseReference()
 		}
-		lang := 0
-		if chinese {
-			lang = 1
+		// The settings, with the version, or the new one there is.
+		title := T("Settings", "设置")
+		gear := ui.ButtonBase(c.Key("settings")).Height(32).Padding(0, 9, 0, 10).Gap(10).Radius(8).AlignItems(ui.Center).Label(title)
+		if gear.Hovered() {
+			gear.Background(pal.rowHover)
 		}
-		if segmentedIn(c.Key("lang"), &lang, true, "English", "中文") {
-			chinese = lang == 1
-			a.saveSettings()
+		newer := a.updates && availableVersion() != ""
+		gear.Children(func() {
+			ui.Icon(c, iconGear).Size(16, 16).TextColor(pal.muted).Shrink(0)
+			ui.Text(c, title).FontSize(13).TextColor(pal.text.Alpha(0.86)).SingleLine().Grow(1).MinWidth(0)
+			if newer {
+				pill(c, T("Update", "有新版本"), pal.accent)
+			} else {
+				ui.Text(c, appVersion()).FontSize(11).TextColor(pal.faint).SingleLine()
+			}
+		})
+		if gear.Clicked() {
+			section := ""
+			if newer {
+				section = "general"
+			}
+			a.openSettings(section)
 		}
 	})
 }
@@ -324,7 +382,6 @@ func (a *app) chooseReference() {
 			return
 		}
 		a.setReference(paths[0])
-		a.saveSettings()
 	})
 }
 
@@ -334,7 +391,12 @@ func (a *app) update(fn func()) {
 		a.post(fn)
 		return
 	}
-	a.win.Update(fn)
+	a.win.Update(func() {
+		fn()
+		if a.settingsWin != nil {
+			a.settingsWin.Invalidate()
+		}
+	})
 }
 
 type pickOptions struct {
@@ -352,9 +414,10 @@ var (
 // pick shows the system's file dialog and gives what was chosen to done, on
 // the main thread.
 func (a *app) pick(opt pickOptions, done func(paths []string)) {
+	parent := a.dialogs
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-			Parent: a.win, Title: opt.Title, Directory: opt.Directory, Multiple: opt.Multiple,
+			Parent: parent, Title: opt.Title, Directory: opt.Directory, Multiple: opt.Multiple,
 			Filters: opt.Filters, CreateDirectories: true,
 		})
 		if err != nil || len(paths) == 0 {
@@ -365,7 +428,7 @@ func (a *app) pick(opt pickOptions, done func(paths []string)) {
 }
 
 func (a *app) alert(title, detail string) {
-	go mygo.Dialog.Message(mygo.MessageOptions{Parent: a.win, Type: mygo.MessageWarning, Message: title, Detail: detail,
+	go mygo.Dialog.Message(mygo.MessageOptions{Parent: a.dialogs, Type: mygo.MessageWarning, Message: title, Detail: detail,
 		Buttons: []string{T("OK", "好")}})
 }
 
@@ -419,6 +482,7 @@ func main() {
 		snapshots(os.Args[2:])
 		return
 	}
+	a.useUpdater()
 	mygo.App.WhenReady(func() {
 		chinese = strings.HasPrefix(strings.ToLower(mygo.App.Locale()), "zh")
 		for _, tag := range mygo.App.PreferredLanguages() {
@@ -437,6 +501,7 @@ func main() {
 			Vibrancy:      mygo.VibrancySidebar,
 			Content:       ui.View(a.view),
 		})
+		a.applyLanguage()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

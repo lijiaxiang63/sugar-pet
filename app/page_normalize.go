@@ -14,6 +14,7 @@ import (
 
 type normRow struct {
 	image, method, factor, voxels, excluded, mask string
+	value                                         float64 // the factor
 }
 
 type normPage struct {
@@ -21,16 +22,7 @@ type normPage struct {
 	methods   map[string]bool
 	reference string
 	region    regionChoice
-	statistic int // 0 mean, 1 median
-	target    float64
-	fwhmAuto  bool
-	fwhm      float64
-	iter      iterOptions
-	literal   bool
-	images    bool // write the normalised images
-	saveMasks bool
 	output    string
-	advanced  bool
 
 	st     status
 	rows   []normRow
@@ -48,19 +40,9 @@ type regionChoice struct {
 	labels string
 }
 
-// iterOptions are the settings of the iterative methods.
-type iterOptions struct {
-	pThreshold float64
-	exclude    int // 0 hypo, 1 both
-	maxIter    float64
-}
-
 func (p *normPage) init() {
 	p.methods = map[string]bool{"hn": true}
 	p.region.mask = "brainstem"
-	p.target, p.fwhmAuto, p.fwhm = 1, true, 8
-	p.iter = iterOptions{pThreshold: 0.01, maxIter: 1}
-	p.images = true
 }
 
 // spec turns the choice into a mask and the text that names it in tables.
@@ -136,26 +118,6 @@ func (a *app) regionRows(c *ui.Context, key string, r *regionChoice) []func() {
 	return out
 }
 
-// iterRows are the settings of the iterative methods.
-func iterRows(c *ui.Context, key string, o *iterOptions) []func() {
-	return []func(){
-		func() {
-			setting(c, T("Exclusion p-value", "剔除体素的 p 值"),
-				T("Voxels that differ from the controls at this uncorrected p are left out.", "与对照相比达到该未校正 p 值的体素被剔除。"),
-				func() { number(c.Key(key+"-p"), &o.pThreshold, 0.0001, 0.5, 0.001) })
-		},
-		func() {
-			setting(c, T("Exclude", "剔除范围"), "", func() {
-				segmented(c.Key(key+"-excl"), &o.exclude, T("Hypometabolic only", "仅低代谢"), T("Hypo- and hypermetabolic", "低代谢和高代谢"))
-			})
-		},
-		func() {
-			setting(c, T("Re-estimations", "重新估计次数"), T("The paper uses 1.", "文章中为 1 次。"),
-				func() { number(c.Key(key+"-iter"), &o.maxIter, 0, 20, 1) })
-		},
-	}
-}
-
 func excludeName(i int) string {
 	if i == 1 {
 		return "both"
@@ -188,12 +150,25 @@ func tile(c *ui.Context, key string, cols float32, build func()) {
 	ui.Column(c.Key(key)).WidthPercent(100 / cols).Padding(3).Children(build)
 }
 
-// methodPicker is a card of check tiles, one per method.
+// methodPicker is a card of check tiles, one per method.  The reference
+// regions, which are many, stay out of sight until they are asked for or
+// one of them is chosen.
 func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(id string) (ok bool, why string)) {
 	pal := paletteFor(c)
 	cols := tileColumns(c)
 	card(c).Padding(3, 0, 8, 0).Children(func() {
-		for _, group := range methodGroups {
+		hidden := 0
+		for n, group := range methodGroups {
+			if n >= 2 && !a.allMethods {
+				used := false
+				for _, id := range group.methods {
+					used = used || chosen[id]
+				}
+				if !used {
+					hidden += len(group.methods)
+					continue
+				}
+			}
 			ui.Column(c).Padding(9, 11, 0, 11).Gap(4).Children(func() {
 				ui.Text(c, group.title.String()).FontSize(11.5).FontWeight(600).TextColor(pal.muted).Padding(0, 3)
 				ui.Row(c).Wrap().Children(func() {
@@ -222,9 +197,20 @@ func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(i
 				})
 			})
 		}
+		if hidden > 0 || a.allMethods {
+			label := Tf("Reference regions: %d more methods", "参考区法：另有 %d 种方法", hidden)
+			if a.allMethods {
+				label = T("Fewer methods", "收起参考区法")
+			}
+			ui.Row(c).Padding(6, 8, 0, 8).Children(func() {
+				more := button(c.Key("more-methods"), label, iconChevron, buttonGhost, 26)
+				if more.Clicked() {
+					a.allMethods = !a.allMethods
+				}
+			})
+		}
 	})
 }
-
 func (p *normPage) chosen() []string {
 	var out []string
 	for _, m := range core.Methods {
@@ -282,7 +268,7 @@ func (a *app) normalizeView(c *ui.Context) {
 					func() {
 						a.pathSetting(c, "norm-ref", T("Reference", "参考库"),
 							T("Needed by HN, iPS and iHN. With one, PS uses the same voxels as they do.", "HN、iPS、iHN 需要。选了参考库后，PS 与它们使用相同的体素。"),
-							&p.reference, pathFolder, nil, func() { a.setReference(p.reference); a.saveSettings() })
+							&p.reference, pathFolder, nil, func() { a.setReference(p.reference) })
 					},
 					func() {
 						a.pathSetting(c, "norm-out", T("Output folder", "输出文件夹"),
@@ -290,49 +276,12 @@ func (a *app) normalizeView(c *ui.Context) {
 							&p.output, pathFolder, nil, nil)
 					},
 				)
-			})
-			section(c, "", "", func() {
-				options(c, T("Options", "选项"), &p.advanced, func() {
-					ui.Column(c).Gap(14).Children(func() {
-						rows(c,
-							func() {
-								setting(c, T("Region statistic", "区域统计量"), T("For the reference regions and PS.", "用于参考区法和 PS。"), func() {
-									segmented(c, &p.statistic, T("Mean", "均值"), T("Median", "中位数"))
-								})
-							},
-							func() {
-								setting(c, T("Target value", "目标值"), T("The reference takes this value in the output, e.g. 50 for “global mean = 50”.", "输出图像中参考值等于该数，例如 50 即“全局均值 = 50”。"),
-									func() { number(c, &p.target, 0.001, 100000, 1) })
-							},
-							func() {
-								setting(c, T("Smoothing before estimating", "估计因子前的平滑"),
-									T("Automatic: that of the reference for HN, iPS and iHN, none otherwise. The output is never smoothed.", "自动：HN、iPS、iHN 采用参考库的平滑，其他方法不平滑。输出图像不会被平滑。"),
-									func() {
-										check(c, &p.fwhmAuto, T("Automatic", "自动"))
-										number(c, &p.fwhm, 0, 30, 1).Disabled(p.fwhmAuto).Tooltip("FWHM, mm")
-									})
-							},
-						)
-						rows(c, append(iterRows(c, "norm", &p.iter), func() {
-							setting(c, T("Plain mean for iPS", "iPS 用普通均值"), T("As written in the paper, instead of the mean relative to the control template.", "按文章字面实现，而非相对对照模板的均值。"),
-								func() { toggle(c, &p.literal, T("Plain mean for iPS", "iPS 用普通均值")) })
-						})...)
-						rows(c,
-							func() {
-								setting(c, T("Write normalised images", "输出归一化图像"), T("Turn off to write only the table of factors.", "关闭后只输出因子表。"),
-									func() { toggle(c, &p.images, T("Write normalised images", "输出归一化图像")) })
-							},
-							func() {
-								setting(c, T("Save masks", "保存掩膜"), T("Also save the voxels each factor came from.", "同时保存估计每个因子所用的体素。"),
-									func() { toggle(c, &p.saveMasks, T("Save masks", "保存掩膜")) })
-							},
-						)
-					})
-				})
+				a.optionsLine(c, "normalize", "normalize", groupNormalize, groupIterative)
 			})
 			if len(p.rows) > 0 || len(p.notes) > 0 {
 				a.results(c, T("Results", "结果"), "", func() {
 					if len(p.rows) > 0 {
+						factorChart(c, p.rows)
 						cols := []ui.TableColumn{
 							{Title: T("Image", "图像")},
 							{Title: T("Method", "方法"), Width: 150},
@@ -368,16 +317,17 @@ func (a *app) runNormalize() {
 	p := &a.norm
 	files := append([]string(nil), p.files.files...)
 	methods := p.chosen()
+	o := a.opt
 	opt := core.DefaultNormOptions()
-	if !p.fwhmAuto {
-		fwhm := p.fwhm
+	if !o.FWHMAuto {
+		fwhm := o.FWHM
 		opt.FWHM = &fwhm
 	}
-	if p.statistic == 1 {
+	if o.Statistic == 1 {
 		opt.Statistic = "median"
 	}
-	opt.Target, opt.PThreshold, opt.Exclude = p.target, p.iter.pThreshold, excludeName(p.iter.exclude)
-	opt.MaxIter, opt.LiteralIPS = int(p.iter.maxIter), p.literal
+	opt.Target, opt.PThreshold, opt.Exclude = o.Target, o.PThreshold, excludeName(o.Exclude)
+	opt.MaxIter, opt.LiteralIPS = int(o.MaxIter), o.LiteralIPS
 	var regionSpec core.MaskSpec
 	regionText, regionLabel := "", "region"
 	if p.methods["region"] {
@@ -390,7 +340,7 @@ func (a *app) runNormalize() {
 			regionLabel = p.region.mask // name the files after the mask
 		}
 	}
-	reference, out, images, saveMasks := p.reference, p.output, p.images, p.saveMasks
+	reference, out, images, saveMasks := p.reference, p.output, o.Images, o.SaveMasks
 	p.rows, p.notes = nil, nil
 	a.start("normalize", T("Normalising intensity", "正在做强度归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		if reference != "" {
@@ -422,12 +372,12 @@ func (a *app) runNormalize() {
 					step(done, total)
 					continue
 				}
-				o := opt
+				run := opt
 				label := method
 				if method == "region" {
-					o.Mask, label = regionSpec, regionLabel
+					run.Mask, label = regionSpec, regionLabel
 				}
-				res, err := core.Normalize(img, method, o)
+				res, err := core.Normalize(img, method, run)
 				if err != nil { // keep going with the other images
 					failed++
 					notes = append(notes, name+" ["+method+"]: "+err.Error())
@@ -449,7 +399,7 @@ func (a *app) runNormalize() {
 						return nil, err
 					}
 				}
-				row := normRow{image: name, method: method, factor: strconv.FormatFloat(res.Factor, 'g', 6, 64), mask: res.MaskName}
+				row := normRow{image: name, method: method, factor: strconv.FormatFloat(res.Factor, 'g', 6, 64), mask: res.MaskName, value: res.Factor}
 				if res.Mask != nil {
 					row.voxels = strconv.Itoa(res.NVoxels)
 				}

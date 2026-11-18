@@ -6,7 +6,7 @@
 #
 # Needs Go (to build the app) and pngquant (to keep the files small).  Run it
 # after the look of a page changes, then check the numbered marks of the
-# <Shot> pictures in the tutorial: they are placed by hand.
+# <Shot> pictures in the tutorial: they are placed by hand, for each language.
 set -eu
 
 cd "$(dirname "$0")/../.."
@@ -15,26 +15,26 @@ trap 'rm -rf "$tmp"' EXIT
 
 (cd app && go build -o "$tmp/sugar-pet" .)
 
-# <snapshot of the app>:<name in the docs>.  A snapshot "page-N" is the Nth
-# screen of that page, scrolling down.
+# The window of the screenshots is taller than the one the app opens, so that
+# a screenshot holds everything its numbered steps name.
+height=900
+
+# <snapshot of the app>:<name in the docs>.  A snapshot "page-end" is the end
+# of that page, scrolled all the way down.
 shots="
-spatial:spatial                 spatial-2:spatial-results
-reference:reference             reference-2:reference-settings
-normalize:normalize             normalize-3:normalize-results
-zmap:zmap                       zmap-3:zmap-results
-classify:classify               classify-2:classify-results
-compare:compare                 compare-3:compare-results
-cluster:cluster                 cluster-2:cluster-results
-masks:masks                     masks-2:masks-atlas
+spatial:spatial                 spatial-end:spatial-results
+reference:reference             reference-end:reference-settings
+normalize:normalize             normalize-end:normalize-results
+zmap:zmap                       zmap-end:zmap-results
+classify:classify               classify-end:classify-results
+compare:compare                 compare-end:compare-results
+cluster:cluster                 cluster-end:cluster-results
+masks:masks                     masks-end:masks-atlas
 normalize-dark:normalize-dark
 "
 
 for lang in en zh; do
-  if [ "$lang" = zh ]; then
-    "$tmp/sugar-pet" --snapshot "$tmp/$lang" zh
-  else
-    "$tmp/sugar-pet" --snapshot "$tmp/$lang"
-  fi
+  "$tmp/sugar-pet" --snapshot "$tmp/$lang" "$lang" "$height"
   out=docs/public/screenshots/$lang
   rm -rf "$out"
   mkdir -p "$out"

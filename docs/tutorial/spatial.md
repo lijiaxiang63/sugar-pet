@@ -15,7 +15,7 @@ warped them) and go straight to [Step 2](./build-reference).
 
 ## Fill in the page
 
-<Shot name="spatial" alt="The Spatial Normalisation page, filled in" :marks="[[1, 120], [2, 412], [3, 458], [4, 573], [5, 634], [6, 'run']]" />
+<Shot name="spatial" alt="The Spatial Normalisation page, filled in" :marks="[[1, 181], [2, 520], [3, 571], [4, 679], [5, 748], [6, 'run']]" />
 
 1. **Add the native-space images.** Drag and drop them onto the list, or use
    **Add Files…** / **Add Folder…**. Ada adds the six scans from `study/raw/`.
@@ -36,7 +36,7 @@ warped them) and go straight to [Step 2](./build-reference).
 
 ## Check the results
 
-<Shot name="spatial-results" alt="The results of the spatial normalisation" :marks="[[7, 360], [8, 598], [9, 636]]" />
+<Shot name="spatial-results" alt="The results of the spatial normalisation" :marks="[[7, 502], [8, 741], [9, 784]]" />
 
 7. **The table** lists each input image and its output path. A filename shown
    in red indicates a failure; the reason appears below the table.

@@ -25,7 +25,7 @@ dopamine-transporter imaging.
 
 ## Fill in the page
 
-<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 120], [2, 328], [3, 376], [4, 472], [5, 520], [6, 567], [7, 621]]" />
+<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 181], [2, 409], [3, 473], [4, 601], [5, 666], [6, 718], [7, 778]]" />
 
 1. **Add the patient images** (in MNI space, one per patient).
 2. **Reference:** already filled in. The status line beneath it warns if
@@ -43,7 +43,7 @@ dopamine-transporter imaging.
 
 Scroll down, then click **Classify**.
 
-<Shot name="classify-results" alt="The results of the classification" :marks="[[8, 'run'], [9, 497]]" />
+<Shot name="classify-results" alt="The results of the classification" :marks="[[8, 'run'], [9, 604]]" />
 
 8. Click **Classify**.
 9. **Results:** one row per patient, showing the conclusion in bold and the

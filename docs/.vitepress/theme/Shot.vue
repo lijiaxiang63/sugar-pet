@@ -5,10 +5,11 @@
 //   <Shot name="reference" alt="The Reference page" :marks="[[1, 127], [2, 380]]" />
 //
 // `name` is a file of public/screenshots/<en|zh>/ (see scripts/screenshots.sh).
-// A mark is [number, y] or [number, x, y], in points of the 1060 x 740 window
+// A mark is [number, y] or [number, x, y], in points of the 1060 x 900 window
 // the screenshots are drawn at.  Without x the mark sits in the margin left
-// of the page's cards, which is the same place in both languages; 'run' as y
-// puts it on the button that starts the task.
+// of the page's cards; 'run' as y puts it on the button that starts the task.
+// Text wraps differently in the two languages, so each page gives the marks
+// of its own language.
 import { computed } from 'vue'
 import { useData, withBase } from 'vitepress'
 
@@ -17,8 +18,8 @@ type Mark = [number, number | 'run'] | [number, number, number]
 const props = defineProps<{ name: string; alt?: string; marks?: Mark[] }>()
 
 const WIDTH = 1060
-const HEIGHT = 740
-const MARGIN = 262 // between the sidebar and the cards
+const HEIGHT = 900
+const MARGIN = 257 // between the edge of the page and its cards
 
 const { lang } = useData()
 const src = computed(() => withBase(`/screenshots/${lang.value.startsWith('zh') ? 'zh' : 'en'}/${props.name}.png`))
@@ -26,7 +27,7 @@ const src = computed(() => withBase(`/screenshots/${lang.value.startsWith('zh') 
 const marks = computed(() =>
   (props.marks ?? []).map((mark) => {
     let [n, x, y] = mark.length === 3 ? mark : [mark[0], MARGIN, mark[1]]
-    if (y === 'run') [x, y] = [1037, 691]
+    if (y === 'run') [x, y] = [1002, 845]
     return { n, left: `${(x / WIDTH) * 100}%`, top: `${((y as number) / HEIGHT) * 100}%` }
   }),
 )
@@ -56,7 +57,7 @@ const marks = computed(() =>
   overflow: hidden;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
   /* The screenshots are of the light appearance. */
-  background: #f5f5f5;
+  background: #f0eee6;
 }
 
 .shot-frame img {

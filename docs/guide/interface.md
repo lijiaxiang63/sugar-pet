@@ -3,18 +3,19 @@
 Every page in SUGAR-PET shares the same core layout and controls. Once you
 know where things live here, the tutorial will simply tell you what to select.
 
-<Shot name="normalize" alt="The parts of the window" :marks="[[1, 208, 113], [2, 208, 664], [3, 208, 711], [4, 120], [5, 432], [6, 262, 688], [7, 'run']]" />
+<Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 112], [2, 222, 831], [3, 222, 874], [4, 163], [5, 492], [6, 257, 862], [7, 'run']]" />
 
 1. **Navigation sidebar.** Lists the pages in the order of a typical workflow,
    from spatial normalisation to group comparison. Click any item to switch
-   pages.
+   pages. A tick marks the pages whose last run succeeded, and a spinner the
+   one that is running.
 2. **Reference in use.** Displays the active healthy-control reference folder.
    Click it to switch to a different reference. This selection is shared across
    all pages.
 3. **Language toggle.** Switch between English and Chinese.
 4. **Image list.** Where you load input scans (see [below](#lists-of-images)).
-5. **Settings.** Checkboxes, dropdowns, and path selectors grouped into cards,
-   with brief helper text beneath each card.
+5. **Settings.** Tiles to tick, dropdowns, and path selectors grouped into
+   cards, with brief helper text under each heading.
 6. **Status bar.** Shows what is still needed before running (e.g., "Choose
    the output folder."), tracks progress during execution, and reports success
    or errors when finished.

@@ -92,7 +92,7 @@ func (a *app) spatialView(c *ui.Context) {
 			section(c, T("Images", "图像"), T("FDG-PET images as they come from the scanner; no MRI is needed. Skip this page if your images are in MNI space already.",
 				"扫描得到的原始空间 FDG-PET 图像，不需要 MRI。图像已在 MNI 空间的可跳过本页。"), func() {
 				a.filesCard(c, "sp-files", &p.files, T("Native-space images", "原始空间的图像"),
-					T("or use the buttons above · .nii and .nii.gz · 4D images are averaged over time", "也可使用上方按钮添加 · 支持 .nii 与 .nii.gz · 4D 图像按时间取平均"))
+					T(".nii and .nii.gz files, or whole folders · 4D images are averaged over time", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹 · 4D 图像按时间取平均"))
 			})
 			section(c, T("SPM and MATLAB", "SPM 与 MATLAB"), T("The warp is SPM's “Old Normalise” onto a PET template, run by MATLAB in the background. No other page needs them.",
 				"配准使用 SPM 的 “Old Normalise” 和 PET 模板，由 MATLAB 在后台运行。其他页面都不需要它们。"), func() {
@@ -127,8 +127,8 @@ func (a *app) spatialView(c *ui.Context) {
 				})
 			})
 			section(c, "", "", func() {
-				ui.Collapsible(c, T("Options", "选项"), &p.advanced, func() {
-					ui.Column(c).Gap(14).Padding(8, 0, 0, 0).Children(func() {
+				options(c, T("Options", "选项"), &p.advanced, func() {
+					ui.Column(c).Gap(14).Children(func() {
 						rows(c,
 							func() {
 								a.pathSetting(c, "sp-template", T("PET template", "PET 模板"),
@@ -160,13 +160,10 @@ func (a *app) spatialView(c *ui.Context) {
 						}).Height(float32(min(len(p.rows), 8)*32 + 34))
 					})
 					if len(p.written) > 0 {
-						ui.Row(c).Radius(10).Padding(10, 14).Gap(10).AlignItems(ui.Start).Background(t.Warning.Alpha(0.1)).Border(1, t.Warning.Alpha(0.3)).Children(func() {
-							ui.Icon(c, iconWarn).Size(15, 15).TextColor(t.Warning).Shrink(0).Margin(1, 0, 0, 0)
-							ui.Text(c, T("Look at every image before going on: a warp from PET alone can go wrong without an error.",
-								"继续之前请逐幅目视检查：只凭 PET 的配准可能出错而不报错。")).FontSize(12).Grow(1).MinWidth(0)
-						})
+						caution(c, T("Look at every image before going on: a warp from PET alone can go wrong without an error.",
+							"继续之前请逐幅目视检查：只凭 PET 的配准可能出错而不报错。"))
 						ui.Row(c).Gap(8).Children(func() {
-							b := ui.PrimaryButton(c, T("Use for Intensity Normalisation", "用于强度归一化")).FontSize(12).Padding(3, 12)
+							b := button(c, T("Use for Intensity Normalisation", "用于强度归一化"), nil, buttonPrimary, 26)
 							if b.Clicked() {
 								a.norm.files.files = nil
 								a.norm.files.add(p.written)

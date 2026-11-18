@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -15,49 +16,56 @@ import (
 func openPath(path string) { mygo.Shell.OpenPath(path) }
 
 // snapshots draws every page without a window and saves the pictures, to
-// check the look: sugar-pet --snapshot <folder> [zh].
+// check the look and for the documentation:
+// sugar-pet --snapshot <folder> [en|zh] [height].  The window is 1060 points
+// wide and, unless told otherwise, 740 high, as it first opens.
 func snapshots(args []string) {
 	dir := "."
 	if len(args) > 0 {
 		dir = args[0]
 	}
 	chinese = len(args) > 1 && args[1] == "zh"
+	height := 740
+	if len(args) > 2 {
+		if h, err := strconv.Atoi(args[2]); err == nil && h >= 560 {
+			height = h
+		}
+	}
 	os.MkdirAll(dir, 0o755)
+	save := func(tt *ui.Tester, name string) {
+		file, err := os.Create(filepath.Join(dir, name+".png"))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		png.Encode(file, tt.Image())
+		file.Close()
+	}
 	for _, dark := range []bool{false, true} {
 		for _, p := range pages {
 			a := newApp()
 			a.demo()
 			a.page = p.id
-			tt := ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{Dark: dark})
+			tt := ui.NewTesterWith(a.view, 1060, height, ui.TesterOptions{Dark: dark})
 			tt.SetScale(2)
 			tt.Frame()
-			name := p.id
 			if dark {
-				name += "-dark"
-			}
-			file, err := os.Create(filepath.Join(dir, name+".png"))
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-			png.Encode(file, tt.Image())
-			file.Close()
-			if dark {
+				save(tt, p.id+"-dark")
 				continue
 			}
-			// The rest of the page, a screen at a time.
-			for n := 2; n <= 5; n++ {
-				before := tt.Image().Pix
-				before = append([]byte(nil), before...)
-				tt.Scroll(1052, 400, 0, 560)
+			save(tt, p.id)
+			// The rest of the page, a screen at a time: page-2, page-3,
+			// and the last of them once more as page-end.
+			for n := 2; n <= 6; n++ {
+				before := append([]byte(nil), tt.Image().Pix...)
+				tt.Scroll(640, 400, 0, 560)
 				tt.Frame()
 				if string(before) == string(tt.Image().Pix) {
 					break
 				}
-				file, _ := os.Create(filepath.Join(dir, fmt.Sprintf("%s-%d.png", p.id, n)))
-				png.Encode(file, tt.Image())
-				file.Close()
+				save(tt, fmt.Sprintf("%s-%d", p.id, n))
 			}
+			save(tt, p.id+"-end")
 		}
 	}
 }

@@ -106,7 +106,7 @@ func (r *regionChoice) problem() string {
 func (a *app) regionRows(c *ui.Context, key string, r *regionChoice) []func() {
 	out := []func(){func() {
 		setting(c, T("Region from", "区域来源"), "", func() {
-			ui.Segmented(c.Key(key+"-kind"), &r.kind, T("Built-in mask", "内置掩膜"), T("Mask file", "掩膜文件"), T("Atlas labels", "图谱标签"))
+			segmented(c.Key(key+"-kind"), &r.kind, T("Built-in mask", "内置掩膜"), T("Mask file", "掩膜文件"), T("Atlas labels", "图谱标签"))
 		})
 	}}
 	switch r.kind {
@@ -146,7 +146,7 @@ func iterRows(c *ui.Context, key string, o *iterOptions) []func() {
 		},
 		func() {
 			setting(c, T("Exclude", "剔除范围"), "", func() {
-				ui.Segmented(c.Key(key+"-excl"), &o.exclude, T("Hypometabolic only", "仅低代谢"), T("Hypo- and hypermetabolic", "低代谢和高代谢"))
+				segmented(c.Key(key+"-excl"), &o.exclude, T("Hypometabolic only", "仅低代谢"), T("Hypo- and hypermetabolic", "低代谢和高代谢"))
 			})
 		},
 		func() {
@@ -172,34 +172,47 @@ var methodGroups = []struct {
 	{label{"Reference regions", "参考区"}, []string{"cerebellum", "cerebellar-gm", "pons", "white-matter", "occipital", "sensorimotor", "region"}},
 }
 
-// methodPicker is a card of check boxes, one per method.
+// tileColumns is how many check tiles go side by side in a card of the
+// page, by the room the window gives it.
+func tileColumns(c *ui.Context) float32 {
+	w, _ := c.Size()
+	if min(w-sidebarWidth-cardGap-2*pagePad, contentWidth) < 600 {
+		return 2
+	}
+	return 3
+}
+
+// tile is a cell of a grid of check tiles, cols to a row; build makes the
+// tile.
+func tile(c *ui.Context, key string, cols float32, build func()) {
+	ui.Column(c.Key(key)).WidthPercent(100 / cols).Padding(3).Children(build)
+}
+
+// methodPicker is a card of check tiles, one per method.
 func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(id string) (ok bool, why string)) {
-	t := c.Theme()
-	card(c).Children(func() {
-		for g, group := range methodGroups {
-			if g > 0 {
-				ui.Box(c).Height(1).Margin(0, 0, 0, 14).Background(hairline(t))
-			}
-			ui.Column(c).Padding(10, 14, 10, 14).Gap(6).Children(func() {
-				ui.Text(c, group.title.String()).FontSize(11.5).TextColor(t.TextMuted)
-				ui.Row(c).Wrap().GapY(4).Children(func() {
+	pal := paletteFor(c)
+	cols := tileColumns(c)
+	card(c).Padding(3, 0, 8, 0).Children(func() {
+		for _, group := range methodGroups {
+			ui.Column(c).Padding(9, 11, 0, 11).Gap(4).Children(func() {
+				ui.Text(c, group.title.String()).FontSize(11.5).FontWeight(600).TextColor(pal.muted).Padding(0, 3)
+				ui.Row(c).Wrap().Children(func() {
 					for _, id := range group.methods {
 						ok, why := true, ""
 						if allowed != nil {
 							ok, why = allowed(id)
 						}
 						on := chosen[id] && ok
-						cell := ui.Row(c.Key(id)).WidthPercent(33.33).MinWidth(180).Gap(6).AlignItems(ui.Center).Height(26)
-						cell.Children(func() {
-							box := ui.Checkbox(c, &on, methodName(id)).Disabled(!ok)
+						tile(c, id, cols, func() {
+							var extra func()
+							if id == "hn" {
+								extra = func() { tag(c, T("Recommended", "推荐")) }
+							}
+							box := checkTile(c, &on, methodName(id), extra).Disabled(!ok)
 							if ok {
 								box.Tooltip(methodAbout(id))
 							} else {
 								box.Tooltip(why)
-							}
-							if id == "hn" {
-								ui.Text(c, T("Recommended", "推荐")).FontSize(10).TextColor(t.Accent).
-									Padding(1, 6).Radius(999).Background(t.Accent.Alpha(0.13)).SingleLine()
 							}
 						})
 						if ok {
@@ -256,7 +269,7 @@ func (a *app) normalizeView(c *ui.Context) {
 		func() {
 			section(c, T("Images", "图像"), T("FDG-PET images that are already in MNI space. If yours are not, warp them on the Spatial Normalisation page first.", "已在 MNI 空间的 FDG-PET 图像。尚未配准的，请先到“空间标准化”页面处理。"), func() {
 				a.filesCard(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
-					T("or use the buttons above · .nii and .nii.gz", "也可使用上方按钮添加 · 支持 .nii 与 .nii.gz"))
+					T(".nii and .nii.gz files, or whole folders", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹"))
 			})
 			section(c, T("Methods", "方法"), T("Choose several to compare them: each image is written once per method.", "可多选以便比较：每种方法各输出一幅图像。"), func() {
 				a.methodPicker(c, p.methods, nil)
@@ -279,12 +292,12 @@ func (a *app) normalizeView(c *ui.Context) {
 				)
 			})
 			section(c, "", "", func() {
-				ui.Collapsible(c, T("Options", "选项"), &p.advanced, func() {
-					ui.Column(c).Gap(14).Padding(8, 0, 0, 0).Children(func() {
+				options(c, T("Options", "选项"), &p.advanced, func() {
+					ui.Column(c).Gap(14).Children(func() {
 						rows(c,
 							func() {
 								setting(c, T("Region statistic", "区域统计量"), T("For the reference regions and PS.", "用于参考区法和 PS。"), func() {
-									ui.Segmented(c, &p.statistic, T("Mean", "均值"), T("Median", "中位数"))
+									segmented(c, &p.statistic, T("Mean", "均值"), T("Median", "中位数"))
 								})
 							},
 							func() {
@@ -295,23 +308,23 @@ func (a *app) normalizeView(c *ui.Context) {
 								setting(c, T("Smoothing before estimating", "估计因子前的平滑"),
 									T("Automatic: that of the reference for HN, iPS and iHN, none otherwise. The output is never smoothed.", "自动：HN、iPS、iHN 采用参考库的平滑，其他方法不平滑。输出图像不会被平滑。"),
 									func() {
-										ui.Checkbox(c, &p.fwhmAuto, T("Automatic", "自动"))
+										check(c, &p.fwhmAuto, T("Automatic", "自动"))
 										number(c, &p.fwhm, 0, 30, 1).Disabled(p.fwhmAuto).Tooltip("FWHM, mm")
 									})
 							},
 						)
 						rows(c, append(iterRows(c, "norm", &p.iter), func() {
 							setting(c, T("Plain mean for iPS", "iPS 用普通均值"), T("As written in the paper, instead of the mean relative to the control template.", "按文章字面实现，而非相对对照模板的均值。"),
-								func() { ui.Switch(c, &p.literal).Label(T("Plain mean for iPS", "iPS 用普通均值")) })
+								func() { toggle(c, &p.literal, T("Plain mean for iPS", "iPS 用普通均值")) })
 						})...)
 						rows(c,
 							func() {
 								setting(c, T("Write normalised images", "输出归一化图像"), T("Turn off to write only the table of factors.", "关闭后只输出因子表。"),
-									func() { ui.Switch(c, &p.images).Label(T("Write normalised images", "输出归一化图像")) })
+									func() { toggle(c, &p.images, T("Write normalised images", "输出归一化图像")) })
 							},
 							func() {
 								setting(c, T("Save masks", "保存掩膜"), T("Also save the voxels each factor came from.", "同时保存估计每个因子所用的体素。"),
-									func() { ui.Switch(c, &p.saveMasks).Label(T("Save masks", "保存掩膜")) })
+									func() { toggle(c, &p.saveMasks, T("Save masks", "保存掩膜")) })
 							},
 						)
 					})

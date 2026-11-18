@@ -209,7 +209,7 @@ func (a *app) classifyView(c *ui.Context) {
 					},
 					func() {
 						setting(c, T("Language of the report", "报告语言"), "", func() {
-							ui.Segmented(c.Key("cls-lang"), &p.language, T("As the app", "与界面一致"), "English", "中文")
+							segmented(c.Key("cls-lang"), &p.language, T("As the app", "与界面一致"), "English", "中文")
 						})
 					},
 					func() {
@@ -219,23 +219,20 @@ func (a *app) classifyView(c *ui.Context) {
 					},
 				)
 			})
-			ui.Row(c).Radius(10).Padding(10, 14).Gap(10).AlignItems(ui.Start).Background(t.Warning.Alpha(0.1)).Border(1, t.Warning.Alpha(0.3)).Children(func() {
-				ui.Icon(c, iconWarn).Size(15, 15).TextColor(t.Warning).Shrink(0).Margin(1, 0, 0, 0)
-				ui.Text(c, T("Decision support, not a diagnosis. The patterns are matched by fixed rules from the literature that were not validated on your patients. Read the result with the clinical findings, MRI and dopamine-transporter imaging.",
-					"本功能仅为辅助决策，不构成诊断。模式匹配依据文献中的固定规则，未经本单位患者数据验证。结果须结合临床表现、MRI 和多巴胺转运体显像综合判断。")).FontSize(12).Grow(1).MinWidth(0)
-			})
+			caution(c, T("Decision support, not a diagnosis. The patterns are matched by fixed rules from the literature that were not validated on your patients. Read the result with the clinical findings, MRI and dopamine-transporter imaging.",
+				"本功能仅为辅助决策，不构成诊断。模式匹配依据文献中的固定规则，未经本单位患者数据验证。结果须结合临床表现、MRI 和多巴胺转运体显像综合判断。"))
 			if len(p.rows) > 0 || len(p.notes) > 0 {
 				a.results(c, T("Results", "结果"), "", func() {
 					if len(p.rows) > 0 {
-						card(c).Children(func() {
+						card(c).Padding(2, 0).Children(func() {
 							for i, r := range p.rows {
 								if i > 0 {
-									ui.Box(c).Height(1).Margin(0, 0, 0, 14).Background(hairline(t))
+									divider(c)
 								}
-								ui.Row(c.Key("cls-row-"+strconv.Itoa(i))).Padding(8, 14).Gap(14).AlignItems(ui.Center).Children(func() {
-									ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-										ui.Text(c, r.reading).FontSize(13).Bold()
-										ui.Text(c, r.image+" · "+r.detail).FontSize(11.5).TextColor(t.TextMuted)
+								ui.Row(c.Key("cls-row-"+strconv.Itoa(i))).Padding(11, 14).Gap(14).AlignItems(ui.Center).Children(func() {
+									ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+										ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
+										ui.Text(c, r.image+" · "+r.detail).FontSize(12).TextColor(t.TextMuted)
 									})
 									if smallButton(c.Key("open"), T("Open Report", "打开报告")).Clicked() {
 										openPath(r.report)

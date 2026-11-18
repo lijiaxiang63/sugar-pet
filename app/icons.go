@@ -33,5 +33,7 @@ var (
 	iconInfo    = icon(`<circle cx="8" cy="8" r="6.2"/><path d="M8 7.3v3.8M8 4.9v.1"/>`)
 	iconReveal  = icon(`<path d="M6.5 3.5h-3v9h9v-3"/><path d="M9 3h4v4M13 3 7.5 8.5"/>`)
 	iconTray    = icon(`<path d="M8 2v7.5M5 6.8l3 3 3-3"/><path d="M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2"/>`)
+	iconTick    = icon(`<path d="M3.2 8.6l3.1 3.1 6.5-7.2" stroke-width="1.8"/>`)
+	iconChevron = icon(`<path d="M6 3.5 10.5 8 6 12.5" stroke-width="1.6"/>`)
 	iconTable   = icon(`<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M1.8 6.3h12.4M6 6.3v6.9"/>`)
 )

@@ -4,7 +4,7 @@ SUGAR-PET 安装包只有约 12 MB，开箱即用，不需要配置 Python 环�
 
 ## 1. 下载安装包
 
-前往[最新发布页](https://github.com/lijiaxiang63/sugar-pet/releases/latest)，根据你的操作系统选择对应的文件（下文中的 `<版本号>` 如 `0.5.0`）：
+前往[最新发布页](https://github.com/lijiaxiang63/sugar-pet/releases/latest)，根据你的操作系统选择对应的文件（下文中的 `<版本号>` 如 `0.6.0`）：
 
 | 系统平台 | 下载文件 |
 | --- | --- |

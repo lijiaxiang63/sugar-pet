@@ -69,8 +69,25 @@ Open SUGAR-PET. It opens on the **Intensity Normalisation** page by default.
 
 <Shot name="normalize" alt="SUGAR-PET after it starts (here already filled with images)" />
 
-Use the **English** / **中文** buttons in the bottom-left corner to switch
-languages; the app remembers your preference.
+The app starts in the language of your system. To switch between English
+and Chinese, click **Settings** at the bottom of the sidebar and choose under
+**General › Language of the app**; the app remembers your preference.
+
+## 4. Updates
+
+From the version after 0.6.0 on, the app keeps itself up to date: it checks
+GitHub soon after it opens and once a day, shows what is new, and installs
+the new version when you agree. **Settings › General › Check for Updates…**
+checks at once, and the switches below it turn the automatic check and the
+automatic download on or off (see [Updates](./interface#updates)).
+
+::: info Two exceptions
+* Copies installed from the `.deb` or `.rpm` package do not replace
+  themselves: update them with your package manager, by installing the newer
+  package from the releases page.
+* Version 0.6.0 and earlier have no updater. Download the newer version from
+  the releases page and install it over the old one, once.
+:::
 
 ## Build from source
 

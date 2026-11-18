@@ -15,7 +15,7 @@ to run this step beforehand.
 
 ## Choose the images and methods
 
-<Shot name="normalize" alt="The Intensity Normalisation page: images and methods" :marks="[[1, 163], [2, 492], [3, 650]]" />
+<Shot name="normalize" alt="The Intensity Normalisation page: images and methods" :marks="[[1, 163], [2, 512], [3, 637]]" />
 
 1. **Add the images** (in MNI space). Ada adds six patient scans from
    `study/patients/`.
@@ -30,6 +30,10 @@ to run this step beforehand.
      spared by the disease.
 3. **Select multiple methods to compare them.** Each ticked method writes a
    separate normalised image per input scan. Ada also ticks **Cerebellum**.
+   The reference regions are folded away at first: click **Reference
+   regions: 7 more methods** under the *Global* row to show them, and
+   **Fewer methods** to fold them again. They always stay in view while one
+   of them is ticked.
 
 Not sure which to choose? See [Choosing a method](../reference/methods).
 
@@ -48,20 +52,29 @@ define your region:
 
 Scroll down.
 
-<Shot name="normalize-results" alt="The reference, the output folder and the results" :marks="[[4, 278], [5, 335], [6, 405], [7, 'run'], [8, 487], [9, 784]]" />
+<Shot name="normalize-output" alt="The reference, the output folder, the options and the chart of factors" :marks="[[4, 275], [5, 331], [6, 391], [7, 'run'], [8, 575]]" />
 
 4. **Reference:** pre-filled if you completed Step 2. Only required for HN,
    iPS, and iHN.
 5. **Output folder:** Ada selects `study/normalised/`.
-6. **Options:** the defaults work well for most studies (see
-   [below](#options) for details).
+6. **Options in effect:** the defaults (*Mean of the region · target 1 ·
+   smoothing automatic*) work well for most studies. **Options…** opens
+   **Settings › Intensity Normalisation** to change them (see
+   [below](#options)).
 7. Click **Normalise Intensity**.
-8. **Results:** one row per image and method:
+8. **Chart of factors:** one line per method, one point per image, numbered
+   in the order of the table below; hover over a point to read the image and
+   its factor. An image whose factor stands apart from the others, or two
+   methods whose lines do not run in parallel, are worth a second look.
+
+<Shot name="normalize-results" alt="The table of factors" :marks="[[9, 520], [10, 784]]" />
+
+9. **Table:** one row per image and method:
    * *Factor*: the divisor applied to the image.
    * *Voxels*: number of voxels used to estimate the factor.
    * *Excluded*: for iPS and iHN, the fraction of voxels excluded as abnormal.
-9. **Open factors.tsv** opens the saved table directly; **Show in Finder**
-   opens the output folder.
+10. **Open factors.tsv** opens the saved table directly; **Show in Finder**
+    opens the output folder.
 
 ## Output files
 
@@ -84,17 +97,29 @@ normalised, scaling them again would overwrite your chosen method.
 
 ## Options
 
+The options of this page are in **Settings › Intensity Normalisation**
+(**Options…** on the page opens it). They are remembered between launches,
+and **Restore Defaults** at the bottom of the section puts them back.
+
+<Shot name="settings-normalize" alt="Settings › Intensity Normalisation" />
+
 | Option | Default | Description |
 | --- | --- | --- |
+| **Factors** | | |
 | Region statistic | Mean | Mean or median of the region, used by reference regions and PS |
 | Target value | 1 | Target value for the reference in the output (e.g. `50` for "global mean = 50") |
 | Smoothing before estimating | Automatic | Matches the reference for HN, iPS, and iHN; none otherwise (used only for factor estimation) |
+| **Output** | | |
+| Write normalised images | on | Turn off to output only `factors.tsv` |
+| Save masks | off | Also save the voxel mask used to estimate each factor |
+| **Iterative methods** | | |
 | Exclusion p-value | 0.01 | iPS and iHN: voxels differing from controls below this uncorrected p-value are excluded |
 | Exclude | Hypometabolic only | iPS and iHN: exclude only hypometabolic voxels (as in the paper), or hypermetabolic ones too |
 | Re-estimations | 1 | iPS and iHN: number of iterative re-estimation passes |
 | Plain mean for iPS | off | Uses the literal mean formula from the paper instead of dividing by the control template mean over the remaining voxels |
-| Write normalised images | on | Turn off to output only `factors.tsv` |
-| Save masks | off | Also save the voxel mask used to estimate each factor |
+
+The *Iterative methods* apply wherever iPS and iHN are used: on this page
+and on the [Z-score Maps](./zmap) page alike.
 
 ::: details The same from the command line
 ```bash

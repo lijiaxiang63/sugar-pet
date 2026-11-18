@@ -20,35 +20,56 @@ dopamine-transporter imaging.
   classification, 30 or more controls are recommended, acquired under the same
   conditions (eyes open or closed) as the patients.
 * Whenever possible, build the reference with a **covariate table** and with
-  **White matter** ticked: the former adjusts scores for age and sex, and the
-  latter adds a cross-check that does not depend on gray matter.
+  **White matter** ticked under *Z-score maps with other methods*
+  ([Step 2](./build-reference#options)): the former adjusts scores for age
+  and sex, and the latter adds a cross-check that does not depend on gray
+  matter.
 
 ## Fill in the page
 
-<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 181], [2, 409], [3, 473], [4, 601], [5, 666], [6, 718], [7, 778]]" />
+<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 181], [2, 409], [3, 465], [4, 601], [5, 669], [6, 'run']]" />
 
 1. **Add the patient images** (in MNI space, one per patient).
 2. **Reference:** already filled in. The status line beneath it warns if
    fewer than 30 controls are available.
 3. **Covariate table:** select `participants.tsv` so each patient is compared
    against controls of the same age and sex.
-4. **Intensity normalisation:** keep **Histogram (HN)**. It requires no prior
-   assumption about which regions are spared, making it well suited to
-   undiagnosed cases.
-5. **Checked with:** read-only reminder of the secondary normalisations used
-   for cross-checking—always PS, plus white matter if included in the
-   reference.
-6. **Language of the report:** match the app, English, or Chinese.
-7. **Output folder:** Ada selects `study/reports/`.
+4. **Output folder:** Ada selects `study/reports/`.
+5. **Options in effect:** which normalisation the maps are made with and the
+   language of the report. The defaults (*Normalised with Histogram (HN) ·
+   report in the app's language*) suit most cases; **Options…** opens
+   **Settings › Classify Parkinsonism** (below).
+6. Click **Classify**.
 
-Scroll down, then click **Classify**.
+### The options of the classification {#options}
 
-<Shot name="classify-results" alt="The results of the classification" :marks="[[8, 'run'], [9, 604]]" />
+<Shot name="settings-classify" alt="Settings › Classify Parkinsonism" />
 
-8. Click **Classify**.
-9. **Results:** one row per patient, showing the conclusion in bold and the
-   pattern scores below it. Click **Open Report** to view that patient's
-   report in your browser.
+* **Intensity normalisation:** keep **Histogram (HN)**. It requires no prior
+  assumption about which regions are spared, making it well suited to
+  undiagnosed cases. Other methods are listed once the reference in use
+  holds their statistics.
+* **Checked with:** read-only reminder of the secondary normalisations used
+  for cross-checking—always PS, plus white matter if included in the
+  reference.
+* **Language of the report:** as the app, English, or Chinese.
+
+## Check the results
+
+<Shot name="classify-results" alt="The results of the classification" :marks="[[7, 163], [8, 751, 121], [9, 1012, 163], [10, 560], [11, 784]]" />
+
+7. **Results:** one row per patient, showing the conclusion in bold and, under
+   it, the image and how the conclusion was reached.
+8. **Pattern bars:** how well the patient matches each of the six patterns
+   (MSA-P, MSA-C, PSP, CBD, DLB, PD), from 0 to 100. The leading pattern is
+   in colour; hover over a bar to read its score. Two bars of similar height,
+   as for the second patient, mean the two syndromes cannot be told apart.
+9. **Open Report** shows that patient's report in your browser.
+10. **The picture** draws the deviation map of one patient on axial slices of
+    their image: blue to cyan where uptake is lower than in the controls
+    (−2 down to −5), red to yellow where it is higher. Click a row to draw
+    that patient.
+11. **Show in Finder** opens the output folder.
 
 ## Reading the conclusion
 

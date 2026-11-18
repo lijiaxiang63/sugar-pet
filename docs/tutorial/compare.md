@@ -9,7 +9,7 @@ and outputs the surviving clusters with anatomical labels.
 
 ## Fill in the page
 
-<Shot name="compare" alt="The Compare Groups page: groups, normalisation and statistics" :marks="[[1, 181], [2, 1027, 181], [3, 514], [4, 570], [5, 682], [6, 739]]" />
+<Shot name="compare" alt="The Compare Groups page: groups, normalisation and covariates" :marks="[[1, 181], [2, 1027, 181], [3, 514], [4, 570], [5, 702]]" />
 
 1. **Group 1:** add the patient scans (12 images).
 2. **Group 2:** add the control scans (16 images). The contrast is *group 1
@@ -18,35 +18,41 @@ and outputs the surviving clusters with anatomical labels.
 3. **Method:** keep **Histogram (HN)** for the primary analysis.
 4. **Reference:** pre-filled automatically; required for HN, iPS, and iHN.
    Both groups share the same reference.
-5. **Multiple-comparison correction:**
-   * **GRF**: cluster-level correction via Gaussian random field theory (default).
-   * **FDR**: voxel-level false discovery rate.
-   * **None**: outputs only the unthresholded T-map.
-6. **Thresholds:** for GRF, the *voxel-level p* that forms clusters (0.001)
-   and the *cluster-level p* (0.05); for FDR, the *q value* (0.05). All tests
-   are two-tailed. Leave the defaults unless you have a specific reason to
-   change them.
-
-Scroll down.
-
-<Shot name="compare-results" alt="Covariates, output and the results of the comparison" :marks="[[7, 246], [8, 354], [9, 403], [10, 'run'], [11, 592], [12, 647]]" />
-
-7. **Covariate table** (recommended): select `participants.tsv` and tick
+5. **Covariate table** (recommended): select `participants.tsv` and tick
    **age** and **sex** to include them as covariates. The table must cover
    every scan in both groups. If patients and controls live in separate
    tables, a **Second table** field appears for the other file.
-8. **Output folder:** Ada selects `study/compare/`.
-9. **Name of the result files:** filename prefix for all outputs (here
+
+Scroll down.
+
+<Shot name="compare-output" alt="The output, the options and the start of the results" :marks="[[6, 249], [7, 298], [8, 355], [9, 'run']]" />
+
+6. **Output folder:** Ada selects `study/compare/`.
+7. **Name of the result files:** filename prefix for all outputs (here
    `patients_vs_controls`).
-10. Click **Compare**.
+8. **Options in effect:** the multiple-comparison correction and its
+   thresholds, the voxels that are tested, and the smoothing. Leave the
+   defaults (*GRF correction: voxel p < 0.001, cluster p < 0.05 · within Gray
+   matter · smoothing automatic*) unless you have a specific reason to change
+   them; **Options…** opens **Settings › Compare Groups** (see
+   [Options](#options)).
+9. Click **Compare**.
+
+## Check the results
+
+<Shot name="compare-results" alt="The results of the comparison" :marks="[[10, 158], [11, 208], [12, 430], [13, 712]]" />
+
+10. **The line under the Results heading** summarises the exact correction
+    applied, ready to adapt for your methods section.
 11. **Summary:** degrees of freedom, estimated data smoothness used by the
     correction, and the number of significant clusters.
-12. **Clusters:** one row per surviving cluster, listing voxel count, peak
+12. **The picture** draws the T-map of the clusters that survive the
+    correction on axial slices of the template: blue to cyan where Group 1
+    is lower, red to yellow where it is higher. Without a correction, it
+    shows the uncorrected T-map where |T| > 3.
+13. **Clusters:** one row per surviving cluster, listing voxel count, peak
     T-value and MNI coordinates, peak region, and covered brain regions. Blue
     peaks are negative (Group 1 lower); red peaks are positive.
-
-The line under the **Results** heading summarises the exact correction
-applied, ready to adapt for your methods section.
 
 ## Output files
 
@@ -61,8 +67,17 @@ applied, ready to adapt for your methods section.
 
 ## Options
 
+The statistics of the comparison are set in **Settings › Compare Groups**
+(**Options…** on the page opens it).
+
+<Shot name="settings-compare" alt="Settings › Compare Groups" />
+
 | Option | Default | Description |
 | --- | --- | --- |
+| Multiple-comparison correction | GRF | **GRF**: cluster-level correction via Gaussian random field theory. **FDR**: voxel-level false discovery rate. **None**: outputs only the unthresholded T-map. All tests are two-tailed |
+| Voxel-level p | 0.001 | GRF: the two-tailed threshold that forms the clusters |
+| Cluster-level p | 0.05 | GRF: the significance level of a cluster |
+| q value | 0.05 | FDR: the false discovery rate (shown in place of the two p-values when FDR is chosen) |
 | Voxels to test | Gray matter | A built-in mask or your own file; voxels missing coverage in any scan are excluded |
 | Smoothing before the test | Automatic | Matches the reference (8 mm if none); set to `0` if scans are already smoothed |
 | Keep the images that were tested | off | Also write the normalised, smoothed scans for both groups |

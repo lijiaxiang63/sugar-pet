@@ -15,7 +15,24 @@ Click **More info**, then **Run anyway**.
 
 ### How do I change the language?
 
-Use the **English** / **中文** buttons in the bottom-left corner of the window.
+Click **Settings** at the bottom of the sidebar (or press <kbd>⌘</kbd>
+<kbd>,</kbd> / <kbd>Ctrl</kbd> <kbd>,</kbd>) and choose under **General ›
+Language of the app**. The language of the classification reports can be set
+apart, under **Settings › Classify Parkinsonism**.
+
+### How do I update the app?
+
+From the version after 0.6.0 on, the app updates itself: it checks GitHub
+soon after it opens and once a day, shows what is new, and installs the new
+version when you agree. To check right now, open **Settings › General** and
+click **Check for Updates…**; the two switches below it turn the automatic
+check and the automatic download on or off.
+
+Two cases need a manual update: copies installed from the `.deb` or `.rpm`
+package (install the newer package from the
+[releases page](https://github.com/lijiaxiang63/sugar-pet/releases) with your
+package manager), and version 0.6.0 or earlier, which has no updater
+(download and install the newer version once).
 
 ## Images and files
 
@@ -41,8 +58,12 @@ folders.
 
 ### My images are already smoothed
 
-Set smoothing to `0` when building the reference, and under **Options** on
-any page that exposes a smoothing setting.
+Set the smoothing to `0` in the settings, in each section that has one:
+**Settings › Reference** (*Smoothing*, before building the reference),
+**Settings › Intensity Normalisation** (*Smoothing before estimating*, with
+*Automatic* unticked), and **Settings › Compare Groups** (*Smoothing before
+the test*, with *Automatic* unticked). **Options…** on a page opens its
+section.
 
 ## The reference
 
@@ -76,14 +97,14 @@ paper and interpret the results cautiously.
 
 Generating Z-score maps with a reference region requires the controls to have
 been scaled by that same region. Rebuild the reference with that region
-ticked under **Z-score maps with other methods**
+ticked under **Z-score maps with other methods** in **Settings › Reference**
 ([Step 2](../tutorial/build-reference), item 4). PS, iPS, HN, and iHN are
 always available.
 
 ### Only plain Z-scores are available
 
 The active reference was built without a covariate table. Rebuild it with a
-covariate table ([Step 2](../tutorial/build-reference), item 5) to enable
+covariate table ([Step 2](../tutorial/build-reference), item 2) to enable
 W-scores.
 
 ### A warning says the patient's age is outside the control range
@@ -113,19 +134,23 @@ not robust—which is itself important to know and report transparently. See
 
 ### MATLAB was not found
 
-Click **Choose…** on the MATLAB row and point to the executable manually: on
+Open **Settings › Spatial Normalisation** (**Set Up…** or **Change…** in the
+*SPM and MATLAB* row of the Spatial Normalisation page opens it), click
+**Choose…** in the **MATLAB** row, and point to the program manually: on
 macOS, select the MATLAB application (`MATLAB_R20xx.app`); on Windows and
 Linux, select `matlab` inside the `bin` folder of your MATLAB installation.
 
 ### Which SPM folder should I select?
 
-Select the SPM12 or SPM25 directory that directly contains `spm.m`.
+Select the SPM12 or SPM25 directory that directly contains `spm.m`, under
+**Settings › Spatial Normalisation › SPM folder**.
 
 ### A warped image looks wrong
 
 PET-only registration is less robust than MRI-guided registration. Try
 supplying your own template (the mean of your warped controls) under
-**Options**, or warp the scan with another tool. Never include a poorly
+**Settings › Spatial Normalisation › PET template**, or warp the scan with
+another tool. Never include a poorly
 registered image in downstream analyses.
 
 ## Results
@@ -143,7 +168,8 @@ supportive evidence, and these rules have not been validated on your cohort.
 
 ### Where can I find the version number?
 
-In the downloaded installer filename and on the
+Next to **Settings** at the bottom of the sidebar, and in **Settings ›
+General**. The versions that exist are listed on the
 [releases page](https://github.com/lijiaxiang63/sugar-pet/releases).
 
 ## Something else

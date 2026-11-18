@@ -1,9 +1,15 @@
 name: Release
 
 # Builds SUGAR-PET for macOS, Windows and Linux.  A pull request that touches
-# the app only builds it; pushing a tag "v<version>" also publishes the
-# installers as a GitHub release.  The tag must match the version in
-# app/mygo.json.
+# the app only builds it.  Pushing a tag "v<version>" also signs the updates
+# of every platform, uploads them with the installers to a draft release of
+# the tag, and publishes it: installed apps update to it then.  The tag must
+# match the version in app/mygo.json.
+#
+# Signing needs the secret MYGO_UPDATER_PRIVATE_KEY, the key whose public
+# half is updates.publicKey in app/mygo.json:
+#
+#     gh secret set MYGO_UPDATER_PRIVATE_KEY < path/to/mygo-update.key
 
 on:
   push:
@@ -22,9 +28,78 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  draft:
+    name: Draft the release
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the version
+        working-directory: app
+        run: |
+          version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' mygo.json)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $version of app/mygo.json"
+            exit 1
+          fi
+          # The update window shows the version's section of the changelog.
+          if ! grep -q "^## \[\{0,1\}$version\]\{0,1\}" CHANGELOG.md; then
+            echo "::error::app/CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+
+      - name: Write the notes
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          {
+            # What is new: the version's section of the changelog.
+            awk -v v="$version" '
+              /^## / { if (found) exit; found = index($0, v) > 0; next }
+              found
+            ' app/CHANGELOG.md
+            cat <<EOF
+
+          ## Downloads
+
+          | System | File |
+          | --- | --- |
+          | macOS (Apple silicon and Intel) | \`sugar-pet-$version.dmg\` |
+          | Windows, installer | \`sugar-pet-setup-$version-amd64.exe\` (or \`arm64\`) |
+          | Windows, no installer | \`sugar-pet-$version-windows-amd64-portable.exe\` (or \`arm64\`) |
+          | Debian, Ubuntu | \`sugar-pet_${version}_amd64.deb\` (or \`arm64\`) |
+          | Fedora, RHEL | \`sugar-pet-$version-1.x86_64.rpm\` (or \`aarch64\`) |
+          | Other Linux | \`sugar-pet-$version-linux-amd64.tar.gz\` (or \`arm64\`) and \`install.sh\` in one folder, then \`sh install.sh\` |
+
+          The macOS app is signed ad hoc, not notarised: the first time, open it
+          with a right click and **Open**. From this version on the app updates
+          itself (the copies installed from the \`.deb\` and \`.rpm\` packages are
+          updated by the package manager). The other files, \`update-*.json\`,
+          \`*.delta\` and the archives of each system, are what it updates from;
+          \`SHA256SUMS\` lists the checksum of every file.
+          EOF
+          } > notes.md
+          cat notes.md
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "SUGAR-PET $GITHUB_REF_NAME" --notes-file notes.md
+          fi
+
   build:
     name: Build (${{ matrix.name }})
+    needs: draft
+    # A pull request has no draft to wait for.
+    if: ${{ !cancelled() && (needs.draft.result == 'success' || needs.draft.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # the uploads to the draft release
     strategy:
       fail-fast: false
       matrix:
@@ -63,17 +138,26 @@ jobs:
             echo "::error::The versions in app/mygo.json, app/core/reference.go and pyproject.toml differ"
             exit 1
           fi
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match version $version"
-            exit 1
-          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Test
         run: go test ./...
 
+      # Without the key, as in a pull request, the apps are built and their
+      # updates are not signed.
       - name: Build
+        if: github.ref_type != 'tag'
         run: go tool mygo build -platform "${{ matrix.platform }}"
+
+      # mygo uploads the installers, the update archives, the deltas from
+      # earlier versions and the manifests to the draft release of the
+      # version.  It stops before building when the key is missing.
+      - name: Build, sign the updates and upload
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform "${{ matrix.platform }}" -upload
 
       - name: Collect the installers
         env:
@@ -91,6 +175,13 @@ jobs:
           ls -l dist
           [ -n "$(ls -A dist)" ]
 
+      # The bare Windows program is not among what mygo uploads.
+      - name: Upload the portable Windows programs
+        if: github.ref_type == 'tag' && matrix.name == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/*-portable.exe --repo "$GITHUB_REPOSITORY" --clobber
+
       - uses: actions/upload-artifact@v7
         with:
           name: sugar-pet-${{ matrix.name }}
@@ -98,7 +189,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  release:
+  publish:
     name: Publish the release
     if: github.ref_type == 'tag'
     needs: build
@@ -106,40 +197,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: dist
-          pattern: sugar-pet-*
-          merge-multiple: true
-
-      - name: Write the notes
-        run: |
-          version=${GITHUB_REF_NAME#v}
-          cat > notes.md <<EOF
-          ## Downloads
-
-          | System | File |
-          | --- | --- |
-          | macOS (Apple silicon and Intel) | \`sugar-pet-$version.dmg\` |
-          | Windows, installer | \`sugar-pet-setup-$version-amd64.exe\` (or \`arm64\`) |
-          | Windows, no installer | \`sugar-pet-$version-windows-amd64-portable.exe\` (or \`arm64\`) |
-          | Debian, Ubuntu | \`sugar-pet_${version}_amd64.deb\` (or \`arm64\`) |
-          | Fedora, RHEL | \`sugar-pet-$version-1.x86_64.rpm\` (or \`aarch64\`) |
-          | Other Linux | \`sugar-pet-$version-linux-amd64.tar.gz\` (or \`arm64\`) and \`install.sh\` in one folder, then \`sh install.sh\` |
-
-          The macOS app is signed ad hoc, not notarised: the first time, open it
-          with a right click and **Open**. \`SHA256SUMS.txt\` lists the checksum of
-          every file.
-          EOF
-          (cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
-
-      - name: Publish
-        env:
+      # Every platform uploaded: the release becomes the latest one, which
+      # installed apps check.
+      - env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "SUGAR-PET $GITHUB_REF_NAME" \
-            --notes-file notes.md \
-            --generate-notes \
-            --verify-tag
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -15,10 +18,11 @@ import (
 
 func openPath(path string) { mygo.Shell.OpenPath(path) }
 
-// snapshots draws every page without a window and saves the pictures, to
-// check the look and for the documentation:
-// sugar-pet --snapshot <folder> [en|zh] [height].  The window is 1060 points
-// wide and, unless told otherwise, 740 high, as it first opens.
+// snapshots draws every page, and every section of the settings, without a
+// window and saves the pictures, to check the look and for the
+// documentation: sugar-pet --snapshot <folder> [en|zh] [height].  The window
+// is 1060 points wide and, unless told otherwise, 740 high, as it first
+// opens; the settings are as their window first opens.
 func snapshots(args []string) {
 	dir := "."
 	if len(args) > 0 {
@@ -40,6 +44,25 @@ func snapshots(args []string) {
 		}
 		png.Encode(file, tt.Image())
 		file.Close()
+	}
+	// The settings, with updates as an installed app has them.
+	checked := time.Now().Add(-2 * time.Hour)
+	lastUpdateCheck, availableVersion = func() time.Time { return checked }, func() string { return "" }
+	updateChecks, updateDownloads, canUpdate = func() bool { return true }, func() bool { return false }, func() bool { return true }
+	for _, dark := range []bool{false, true} {
+		for _, s := range settingsSections {
+			a := newApp()
+			a.demo()
+			a.updates, a.settingsPage = true, s.id
+			tt := ui.NewTesterWith(a.settingsView, settingsWidth, settingsHeight, ui.TesterOptions{Dark: dark})
+			tt.SetScale(2)
+			tt.Frame()
+			name := "settings-" + s.id
+			if dark {
+				name += "-dark"
+			}
+			save(tt, name)
+		}
 	}
 	for _, dark := range []bool{false, true} {
 		for _, p := range pages {
@@ -92,7 +115,7 @@ func (a *app) demo() {
 	for i := 1; i <= 6; i++ {
 		native := fmt.Sprintf("/Users/ada/study/raw/sub-pt%02d_pet.nii.gz", i)
 		sp.files.files = append(sp.files.files, native)
-		sp.rows = append(sp.rows, spatialRow{image: filepath.Base(native), output: core.SpatialOutputName(native)})
+		sp.rows = append(sp.rows, spatialRow{image: filepath.Base(native), output: core.SpatialOutputName(native), path: patient(i)})
 		sp.written = append(sp.written, patient(i))
 	}
 	sp.st.ok = Tf("%d image(s) warped to MNI space.", "已完成：%d 幅图像已配准到 MNI 空间。", 6)
@@ -102,9 +125,11 @@ func (a *app) demo() {
 	a.norm.outDir = a.norm.output
 	for i, f := range [][2]string{{"5.81437", "5.42206"}, {"6.20915", "5.96384"}, {"4.97203", "4.51870"}, {"5.53866", "5.30129"}, {"6.74052", "6.18845"}, {"5.12790", "4.89317"}} {
 		image := filepath.Base(patient(i + 1))
+		hn, _ := strconv.ParseFloat(f[0], 64)
+		cerebellum, _ := strconv.ParseFloat(f[1], 64)
 		a.norm.rows = append(a.norm.rows,
-			normRow{image: image, method: "hn", factor: f[0], voxels: "193204"},
-			normRow{image: image, method: "cerebellum", factor: f[1], voxels: "22750"})
+			normRow{image: image, method: "hn", factor: f[0], voxels: "193204", value: hn},
+			normRow{image: image, method: "cerebellum", factor: f[1], voxels: "22750", value: cerebellum})
 	}
 	a.norm.st.ok = Tf("%d image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅图像 × %d 种方法。", 6, 2)
 
@@ -114,7 +139,7 @@ func (a *app) demo() {
 	}{{"age"}, {"sex"}}
 	a.ref.current, a.ref.info = a.norm.reference, info
 	a.ref.output = "/Users/ada/study/hc_reference"
-	a.ref.statsFor["occipital"], a.ref.statsFor["white-matter"] = true, true
+	a.opt.RefStatsFor["occipital"], a.opt.RefStatsFor["white-matter"] = true, true
 	a.ref.cov.path = "/Users/ada/study/participants.tsv"
 	a.ref.cov.table = &core.Table{Path: a.ref.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 28)}
 	a.ref.cov.adjust = map[string]bool{"age": true, "sex": true}
@@ -124,7 +149,9 @@ func (a *app) demo() {
 	a.zmap.outDir = a.zmap.output
 	for i, r := range [][2]string{{"-6.41", "9.8%"}, {"-5.07", "6.3%"}, {"-3.12", "2.6%"}, {"-7.85", "12.4%"}, {"-4.66", "5.1%"}, {"-5.93", "8.7%"}} {
 		image := filepath.Base(patient(i + 1))
-		a.zmap.rows = append(a.zmap.rows, zmapRow{image: image, method: "hn", file: core.OutputName(image, "hn", "wmap"), lowest: r[0], share: r[1]})
+		file := core.OutputName(image, "hn", "wmap")
+		a.zmap.rows = append(a.zmap.rows, zmapRow{image: image, method: "hn", file: file, lowest: r[0], share: r[1],
+			source: patient(i + 1), path: filepath.Join(a.zmap.output, file), wscore: true})
 	}
 	a.zmap.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", 6)
 
@@ -132,6 +159,8 @@ func (a *app) demo() {
 	cl.files.files = a.zmap.files.files[:3]
 	cl.loadedFrom, cl.info = cl.reference, info
 	cl.covTable, cl.output, cl.outDir = a.zmap.covTable, "/Users/ada/study/reports", "/Users/ada/study/reports"
+	scores := [][]int{{84, 31, 22, 18, 12, 9}, {24, 12, 62, 55, 20, 14}, {11, 8, 14, 10, 16, 58}}
+	leading := []string{"msa-p", "psp", ""}
 	for i, r := range [][2]string{
 		{core.ReportText("name-msa-p", uiLang()), Tf("Pattern match %d/100, confidence %s", "模式匹配度 %d/100，置信度%s", 84, core.ReportText("confidence-high", uiLang()))},
 		{Tf("%s or %s", "%s 或 %s", core.ReportText("name-psp", uiLang()), core.ReportText("name-cbd", uiLang())),
@@ -139,7 +168,12 @@ func (a *app) demo() {
 		{T("No pattern of atypical parkinsonism", "未见非典型帕金森综合征的模式"), T("Favours Parkinson's disease in a patient with parkinsonism", "对帕金森综合征患者而言更倾向于帕金森病")},
 	} {
 		image := filepath.Base(cl.files.files[i])
-		cl.rows = append(cl.rows, classifyRow{image: image, reading: r[0], detail: r[1], report: filepath.Join(cl.output, core.ReportStem(image)+"_report.html")})
+		row := classifyRow{image: image, reading: r[0], detail: r[1], report: filepath.Join(cl.output, core.ReportStem(image)+"_report.html"),
+			source: cl.files.files[i], zmap: filepath.Join(cl.output, core.OutputName(image, "hn", "wmap")), wscore: true, leading: leading[i]}
+		for n, id := range core.Patterns {
+			row.scores = append(row.scores, patternScore{id, scores[i][n]})
+		}
+		cl.rows = append(cl.rows, row)
 	}
 	cl.st.ok = Tf("%d report(s) written.", "已生成 %d 份报告。", 3)
 
@@ -151,6 +185,7 @@ func (a *app) demo() {
 	a.cmp.result = &core.GroupComparison{
 		TMap: "/Users/ada/study/compare/patients_vs_controls_T.nii.gz", DOF: 26, FWHM: [3]float64{11.8, 12.4, 11.1},
 		Corrected: true, NClusters: 3, ZThreshold: 3.29, MinClusterVoxels: 187,
+		Files: []core.NamedFile{{Role: "thresholded", Path: "/Users/ada/study/compare/ClusterThresholded_patients_vs_controls_T.nii.gz"}},
 		Clusters: []core.Cluster{
 			{Size: 2841, Peak: -7.92, MNI: [3]float64{-44, -62, 38}, PeakAtlas: [3]string{"Angular_L"},
 				Regions: [3][]core.Region{{{Name: "Angular_L", Voxels: 902, Pct: 31.7}, {Name: "Parietal_Inf_L", Voxels: 744, Pct: 26.2}, {Name: "Temporal_Mid_L", Voxels: 510, Pct: 18}}}},
@@ -164,4 +199,55 @@ func (a *app) demo() {
 	a.cluster.output = "/Users/ada/study/reference_cluster.nii.gz"
 	a.cluster.saved, a.cluster.volume = a.cluster.output, 58
 	a.cluster.st.ok = Tf("Reference cluster of %.0f mL saved.", "已保存参考簇（%.0f mL）。", 58.0)
+
+	// The pictures, of a made-up patient.
+	pics := demoPictures()
+	show := func(pic *picture, key string, bitmap *ui.Bitmap) { pic.key, pic.bitmap = key, bitmap }
+	show(&sp.pic, sp.rows[0].path, pics.warped)
+	show(&a.ref.pic, a.ref.current, pics.mean)
+	show(&a.zmap.pic, a.zmap.rows[0].path, pics.scores)
+	show(&cl.pic, cl.rows[0].zmap, pics.scores)
+	show(&a.cmp.pic, a.cmp.result.File("thresholded"), pics.tmap)
+	show(&a.cluster.pic, a.cluster.saved, pics.cluster)
 }
+
+// demoPictures are the pictures of the snapshots: a made-up image, with
+// the parietal cortex and the precuneus taking up less and the cerebellum
+// more.
+var demoPictures = sync.OnceValue(func() (pics struct{ warped, mean, scores, tmap, cluster *ui.Bitmap }) {
+	img := core.TemplateImage()
+	img.Data = core.Smooth(img.Data, img.Dim, img.Aff, 6)
+	gray, _ := core.BuiltinMask("gray-matter")
+	scores := core.NewVolume(img.Dim, img.Aff)
+	blobs := []struct{ x, y, z, radius, peak float64 }{
+		{-44, -62, 38, 20, -6}, {46, -60, 38, 17, -5}, {2, -54, 30, 18, -6.5}, {-52, -40, -8, 14, -3.6}, {0, -60, -30, 22, 3.4},
+	}
+	nx, ny := img.Dim[0], img.Dim[1]
+	for i := range scores.Data {
+		if gray.Data[i] == 0 {
+			continue
+		}
+		x, y, z := float64(i%nx), float64(i/nx%ny), float64(i/(nx*ny))
+		var at [3]float64
+		for r := range at {
+			at[r] = img.Aff[r][0]*x + img.Aff[r][1]*y + img.Aff[r][2]*z + img.Aff[r][3]
+		}
+		for _, b := range blobs {
+			d2 := (at[0]-b.x)*(at[0]-b.x) + (at[1]-b.y)*(at[1]-b.y) + (at[2]-b.z)*(at[2]-b.z)
+			scores.Data[i] += float32(b.peak * math.Exp(-d2/(b.radius*b.radius)))
+		}
+	}
+	tmap := core.NewVolume(img.Dim, img.Aff)
+	for i, v := range scores.Data {
+		if v < -3 || v > 3 {
+			tmap.Data[i] = 1.3 * v
+		}
+	}
+	cerebellum, _ := core.BuiltinMask("cerebellar-gm")
+	pics.warped = ui.NewBitmap(core.Picture(img, nil, core.PictureOptions{Outline: true}))
+	pics.mean = ui.NewBitmap(core.Picture(img, nil, core.PictureOptions{}))
+	pics.scores = ui.NewBitmap(core.Picture(img, scores, core.PictureOptions{}))
+	pics.tmap = ui.NewBitmap(core.Picture(nil, tmap, core.PictureOptions{From: 1e-6, Full: 8}))
+	pics.cluster = ui.NewBitmap(core.Picture(nil, cerebellum, core.PictureOptions{Solid: true}))
+	return pics
+})

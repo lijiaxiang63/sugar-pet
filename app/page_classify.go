@@ -14,6 +14,10 @@ import (
 
 type classifyRow struct {
 	image, reading, detail, report string
+	source, zmap                   string // the image, and the map made of it
+	wscore                         bool
+	scores                         []patternScore
+	leading                        string // the pattern the reading names, if any
 }
 
 type classifyPage struct {
@@ -22,17 +26,27 @@ type classifyPage struct {
 	loadedFrom string
 	info       *refInfo
 	covTable   string
-	method     string
-	language   int // of the report: 0 as the app, 1 English, 2 Chinese
 	output     string
 
 	st     status
 	rows   []classifyRow
 	notes  []string
 	outDir string
+	shown  int // the row the picture is of
+	pic    picture
 }
 
-func (p *classifyPage) init() { p.method = "hn" }
+func (p *classifyPage) init() {}
+
+// load reads what the reference in use says about itself.
+func (p *classifyPage) load() {
+	if p.reference != p.loadedFrom {
+		p.loadedFrom, p.info = p.reference, nil
+		if p.reference != "" {
+			p.info = readRefInfo(p.reference)
+		}
+	}
+}
 
 // methods are the normalisations the reference can make maps with.
 func (p *classifyPage) methods() []string {
@@ -50,7 +64,7 @@ func (p *classifyPage) methods() []string {
 }
 
 // checks are the other normalisations the findings are checked with.
-func (p *classifyPage) checks() []string {
+func (p *classifyPage) checks(method string) []string {
 	var out []string
 	for _, m := range []string{"ps", "white-matter"} {
 		stored := m == "ps"
@@ -59,20 +73,20 @@ func (p *classifyPage) checks() []string {
 				stored = stored || s == m
 			}
 		}
-		if stored && m != p.method {
+		if stored && m != method {
 			out = append(out, m)
 		}
 	}
 	return out
 }
 
-func (p *classifyPage) lang() string {
-	if p.language == 2 || (p.language == 0 && chinese) {
+// reportLang is the language reports are written in.
+func (o *options) reportLang() string {
+	if o.ReportLanguage == 2 || (o.ReportLanguage == 0 && chinese) {
 		return "zh"
 	}
 	return "en"
 }
-
 func (p *classifyPage) problem() string {
 	switch {
 	case len(p.files.files) == 0:
@@ -125,19 +139,10 @@ func reading(res *core.Classification) (text, detail string) {
 func (a *app) classifyView(c *ui.Context) {
 	p := &a.classify
 	t := c.Theme()
-	if p.reference != p.loadedFrom {
-		p.loadedFrom, p.info = p.reference, nil
-		if p.reference != "" {
-			p.info = readRefInfo(p.reference)
-		}
-	}
-	methods := p.methods()
-	known := false
-	for _, m := range methods {
-		known = known || m == p.method
-	}
-	if !known {
-		p.method = "hn"
+	pal := paletteFor(c)
+	p.load()
+	if !contains(p.methods(), a.opt.ClassMethod) {
+		a.opt.ClassMethod = "hn"
 	}
 	hasModels := p.info != nil && len(p.info.Covariates) > 0
 	a.frame(c, T("Classify Parkinsonism", "帕金森综合征分类"),
@@ -171,75 +176,61 @@ func (a *app) classifyView(c *ui.Context) {
 				rows(c,
 					func() {
 						a.pathSetting(c, "cls-ref", T("Reference", "参考库"), desc, &p.reference, pathFolder, nil,
-							func() { a.setReference(p.reference); a.saveSettings() })
+							func() { a.setReference(p.reference) })
 					},
 					covRow,
 				)
 			})
-			section(c, T("Settings", "设置"), "", func() {
-				labels := make([]string, len(methods))
-				for i, m := range methods {
-					labels[i] = methodName(m)
-				}
-				checks := p.checks()
-				names := make([]string, len(checks))
-				for i, m := range checks {
-					names[i] = methodName(m)
-				}
-				checked := T("A finding that the other normalisations do not show is marked in the report.", "其他归一化方式下未出现的发现会在报告中标出。")
-				shown := strings.Join(names, T(", ", "、"))
-				if len(checks) == 0 {
-					shown = T("None", "无")
-				}
-				hasWhite := p.method == "white-matter"
-				for _, m := range checks {
-					hasWhite = hasWhite || m == "white-matter"
-				}
-				if !hasWhite {
-					checked += T(" Tick White matter when building the reference to add a check that does not rest on gray matter.", "建立参考库时勾选“深部白质”，可增加一种不依赖灰质的核对方式。")
-				}
-				rows(c,
-					func() {
-						setting(c, T("Intensity normalisation", "强度归一化"), T("The classification rests on this one. HN needs no region that the disease spares, which is unknown for a new patient.",
-							"分类以此为准。HN 不需要预先指定未受累的区域，适合诊断未明的患者。"),
-							func() { selectOf(c.Key("cls-method"), &p.method, methods, labels).Width(200) })
-					},
-					func() {
-						setting(c, T("Checked with", "交叉核对"), checked, func() { ui.Text(c, shown).FontSize(12.5).TextColor(t.TextMuted) })
-					},
-					func() {
-						setting(c, T("Language of the report", "报告语言"), "", func() {
-							segmented(c.Key("cls-lang"), &p.language, T("As the app", "与界面一致"), "English", "中文")
-						})
-					},
-					func() {
-						a.pathSetting(c, "cls-out", T("Output folder", "输出文件夹"), T("For each patient a report (HTML, prints to PDF), the map, and the numbers; for all, classification.tsv.",
-							"每位患者输出一份报告（HTML，可打印为 PDF）、一幅图和一份数据文件；另有汇总表 classification.tsv。"),
-							&p.output, pathFolder, nil, nil)
-					},
-				)
+			section(c, T("Output", "输出"), "", func() {
+				rows(c, func() {
+					a.pathSetting(c, "cls-out", T("Output folder", "输出文件夹"), T("For each patient a report (HTML, prints to PDF), the map, and the numbers; for all, classification.tsv.",
+						"每位患者输出一份报告（HTML，可打印为 PDF）、一幅图和一份数据文件；另有汇总表 classification.tsv。"),
+						&p.output, pathFolder, nil, nil)
+				})
+				a.optionsLine(c, "classify", "classify", groupClassify)
 			})
 			caution(c, T("Decision support, not a diagnosis. The patterns are matched by fixed rules from the literature that were not validated on your patients. Read the result with the clinical findings, MRI and dopamine-transporter imaging.",
 				"本功能仅为辅助决策，不构成诊断。模式匹配依据文献中的固定规则，未经本单位患者数据验证。结果须结合临床表现、MRI 和多巴胺转运体显像综合判断。"))
 			if len(p.rows) > 0 || len(p.notes) > 0 {
 				a.results(c, T("Results", "结果"), "", func() {
 					if len(p.rows) > 0 {
+						p.shown = min(max(p.shown, 0), len(p.rows)-1)
 						card(c).Padding(2, 0).Children(func() {
 							for i, r := range p.rows {
 								if i > 0 {
 									divider(c)
 								}
-								ui.Row(c.Key("cls-row-"+strconv.Itoa(i))).Padding(11, 14).Gap(14).AlignItems(ui.Center).Children(func() {
+								row := ui.ButtonBase(c.Key("cls-row-"+strconv.Itoa(i))).Padding(11, 14).Gap(14).AlignItems(ui.Center).Label(r.image)
+								if i == p.shown && len(p.rows) > 1 {
+									row.Background(pal.accentSoft)
+								} else if row.Hovered() && len(p.rows) > 1 {
+									row.Background(pal.rowHover)
+								}
+								if row.Clicked() {
+									p.shown = i
+								}
+								row.Children(func() {
 									ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 										ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
 										ui.Text(c, r.image+" · "+r.detail).FontSize(12).TextColor(t.TextMuted)
 									})
+									if len(r.scores) > 0 {
+										scoreBars(c, r.scores, r.leading)
+									}
 									if smallButton(c.Key("open"), T("Open Report", "打开报告")).Clicked() {
 										openPath(r.report)
 									}
 								})
 							}
 						})
+						if r := p.rows[p.shown]; r.zmap != "" {
+							unit := "z"
+							if r.wscore {
+								unit = "W"
+							}
+							a.show(&p.pic, r.zmap, mapPicture(r.source, r.zmap))
+							a.figure(c, &p.pic, r.image, legend{kind: legendScores, unit: unit, from: "2", full: "5"})
+						}
 						ui.Row(c).Children(func() { revealButton(c, "cls-reveal", revealLabel(), p.outDir) })
 					}
 					notesCard(c, p.notes)
@@ -253,11 +244,11 @@ func (a *app) classifyView(c *ui.Context) {
 func (a *app) runClassify() {
 	p := &a.classify
 	files := append([]string(nil), p.files.files...)
-	reference, out, table, method, lang := p.reference, p.output, p.covTable, p.method, p.lang()
+	reference, out, table, method, lang := p.reference, p.output, p.covTable, a.opt.ClassMethod, a.opt.reportLang()
 	if p.info == nil || len(p.info.Covariates) == 0 {
 		table = ""
 	}
-	p.rows, p.notes = nil, nil
+	p.rows, p.notes, p.shown = nil, nil, 0
 	a.start("classify", T("Classifying", "正在分类"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		ref, err := core.LoadReference(reference)
 		if err != nil {
@@ -308,8 +299,16 @@ func (a *app) runClassify() {
 				notes = append(notes, name+": "+w)
 			}
 			text, detail := reading(res)
-			rows = append(rows, classifyRow{image: name, reading: text, detail: detail, report: saved.Report})
 			found := res.Conclusion
+			row := classifyRow{image: name, reading: text, detail: detail, report: saved.Report,
+				source: path, zmap: saved.Map, wscore: res.Score == "w"}
+			for _, pattern := range res.Patterns {
+				row.scores = append(row.scores, patternScore{pattern.ID, core.Percent(pattern.Score)})
+			}
+			if found.Category != "none" {
+				row.leading = found.Pattern
+			}
+			rows = append(rows, row)
 			cells := []string{path, found.Category, found.Pattern, found.Alternative, found.Confidence, found.Side}
 			for _, pattern := range res.Patterns {
 				cells = append(cells, strconv.Itoa(core.Percent(pattern.Score)))

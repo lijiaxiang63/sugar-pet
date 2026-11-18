@@ -66,10 +66,28 @@ and is only for images that are not in MNI space yet. *Intensity*
 normalisation, the subject of this package, divides each image by its
 factor and needs nothing else.
 
+The options that most runs leave alone (smoothing, the iterative methods,
+the correction of a group comparison, SPM and MATLAB, the language) are in
+the app's settings: the gear at the bottom of the sidebar, or ⌘, / Ctrl+,.
+
 Installers for macOS, Windows and Linux are on the
-[releases page](https://github.com/lijiaxiang63/sugar-pet/releases); pushing a tag
-`v<version>` builds and publishes them
-([`release.yml`](.github/workflows/release.yml)). Or build it with Go 1.27+:
+[releases page](https://github.com/lijiaxiang63/sugar-pet/releases). From the
+version after 0.6.0 on, the app updates itself from there: it checks soon
+after it opens and once a day, and **Check for Updates…** in the settings
+checks at once (copies installed from the `.deb` or `.rpm` package are
+updated by the package manager).
+
+To release a version: set it in `app/mygo.json`, `app/core/reference.go`
+and `pyproject.toml`, name its section in
+[`app/CHANGELOG.md`](app/CHANGELOG.md) (the update window shows it), and
+push the tag `v<version>`. [`release.yml`](.github/workflows/release.yml)
+builds every platform, signs the updates and publishes the release. The
+updates are signed with the key whose public half is `updates.publicKey` in
+`app/mygo.json`; its secret half is the repository secret
+`MYGO_UPDATER_PRIVATE_KEY`, and is not in the repository. Keep a copy of it:
+installed apps accept no update signed with another key.
+
+Or build the app with Go 1.27+:
 
 ```bash
 cd app

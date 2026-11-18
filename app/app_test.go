@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -117,6 +118,25 @@ func TestWorkflow(t *testing.T) {
 			t.Fatalf("%s: no message of success shown", page)
 		}
 	}
+	// drawn waits for the picture of a page's results, which is made in the
+	// background from the files the run wrote.
+	drawn := func(pic *picture) {
+		t.Helper()
+		tt.Frame()
+		timeout := time.After(time.Minute)
+		for pic.loading {
+			select {
+			case fn := <-queue:
+				fn()
+				tt.Frame()
+			case <-timeout:
+				t.Fatal("the picture was not drawn")
+			}
+		}
+		if pic.bitmap == nil {
+			t.Fatalf("no picture of %s: %s", pic.key, pic.err)
+		}
+	}
 	exists := func(path string) {
 		t.Helper()
 		if _, err := os.Stat(path); err != nil {
@@ -127,7 +147,7 @@ func TestWorkflow(t *testing.T) {
 	// The reference, with the cerebellum's statistics and W-scores.
 	ref := filepath.Join(dir, "reference")
 	a.ref.files.files, a.ref.output = hc, ref
-	a.ref.statsFor["cerebellum"] = true
+	a.opt.RefStatsFor["cerebellum"] = true
 	a.ref.cov.path = table
 	a.ref.cov.load()
 	press("reference", "建立参考库", &a.ref.st)
@@ -139,6 +159,7 @@ func TestWorkflow(t *testing.T) {
 	if !tt.HasText("age、sex") {
 		t.Fatalf("the reference's covariates are not shown: %q", tt.Texts())
 	}
+	drawn(&a.ref.pic)
 
 	// Normalisation by two methods.
 	out := filepath.Join(dir, "normalised")
@@ -163,6 +184,7 @@ func TestWorkflow(t *testing.T) {
 	if len(maps) != 6 {
 		t.Fatalf("%d files in %s, want 6", len(maps), zdir)
 	}
+	drawn(&a.zmap.pic)
 
 	// A report for each of two patients, in the language of the app.
 	reports := filepath.Join(dir, "reports")
@@ -189,9 +211,13 @@ func TestWorkflow(t *testing.T) {
 	if !tt.HasText("打开报告") {
 		t.Fatalf("no button opens the report: %q", tt.Texts())
 	}
+	drawn(&a.classify.pic)
+	if got := a.classify.rows[0].scores; len(got) != len(core.Patterns) {
+		t.Fatalf("pattern scores %v", got)
+	}
 	// The cerebellum's statistics are in the reference, so the map can rest on it.
-	if got := a.classify.methods(); got[len(got)-1] != "cerebellum" || len(a.classify.checks()) != 1 {
-		t.Fatalf("methods %v, checks %v", got, a.classify.checks())
+	if got := a.classify.methods(); got[len(got)-1] != "cerebellum" || len(a.classify.checks("hn")) != 1 {
+		t.Fatalf("methods %v, checks %v", got, a.classify.checks("hn"))
 	}
 
 	// The patients against the controls: the cortex takes up less.
@@ -212,6 +238,18 @@ func TestWorkflow(t *testing.T) {
 	}
 	exists(res.TMap)
 	exists(res.File("cluster_report"))
+	drawn(&a.cmp.pic)
+	if a.cmp.pic.key != res.File("thresholded") {
+		t.Fatalf("the picture is of %q, want the thresholded map", a.cmp.pic.key)
+	}
+	// A second run writes files of the same names: the picture is not the
+	// one of the first run.
+	first := a.cmp.pic.bitmap
+	press("compare", "开始比较", &a.cmp.st)
+	drawn(&a.cmp.pic)
+	if a.cmp.pic.bitmap == first || a.cmp.pic.key != a.cmp.result.File("thresholded") {
+		t.Fatal("the picture of the first run is shown for the second")
+	}
 
 	// The reference cluster: the cerebellum, which the disease spares.
 	mask := filepath.Join(dir, "cluster.nii.gz")
@@ -221,6 +259,9 @@ func TestWorkflow(t *testing.T) {
 		t.Fatalf("the reference cluster has %g mL", a.cluster.volume)
 	}
 	exists(mask)
+	drawn(&a.cluster.pic)
+	tt.Scroll(640, 400, 0, 900)
+	tt.Frame()
 	if err := tt.Click("用该区域做强度归一化"); err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +331,7 @@ func TestSpatial(t *testing.T) {
 	tt.Frame()
 	p := &a.spatial
 	out := filepath.Join(dir, "mni")
-	p.files.files, p.output, p.matlab, p.jobs = pt, out, matlab, 2
+	p.files.files, p.output, p.matlab, a.opt.Jobs = pt, out, matlab, 2
 	p.setSPM(dir)
 	if p.problem() == "" {
 		t.Fatal("a folder that is not SPM was taken for SPM")
@@ -350,6 +391,13 @@ func TestSpatial(t *testing.T) {
 			t.Fatalf("the brain's centre is at %g mm on axis %d, want about %g", got, r, want)
 		}
 	}
+	// The picture of the first image that was warped, then, further down the
+	// results, the button that hands them on.
+	if p.shown != 0 || p.pic.key != p.written[0] {
+		t.Fatalf("the picture is of row %d, %q", p.shown, p.pic.key)
+	}
+	tt.Scroll(640, 400, 0, 900)
+	tt.Frame()
 	if err := tt.Click("Use for Intensity Normalisation"); err != nil {
 		t.Fatal(err)
 	}
@@ -408,27 +456,166 @@ func TestCompareSmoothing(t *testing.T) {
 	p := &a.cmp
 	for _, p.method = range []string{"cerebellum", "hn"} {
 		a.setReference("")
-		if got := p.smoothing(); got != 8 {
+		if got := p.smoothing(&a.opt); got != 8 {
 			t.Errorf("%s without a reference: %g mm, want 8", p.method, got)
 		}
 		write(6)
 		a.setReference(ref)
-		if got := p.smoothing(); got != 6 {
+		if got := p.smoothing(&a.opt); got != 6 {
 			t.Errorf("%s with a reference smoothed by 6 mm: %g mm", p.method, got)
 		}
 		write(0)
 		a.setReference(ref) // as after building it anew
-		if got := p.smoothing(); got != 0 {
+		if got := p.smoothing(&a.opt); got != 0 {
 			t.Errorf("%s with an unsmoothed reference: %g mm", p.method, got)
 		}
-		p.fwhmAuto, p.fwhm = false, 10
-		if got := p.smoothing(); got != 10 {
+		a.opt.CmpFWHMAuto, a.opt.CmpFWHM = false, 10
+		if got := p.smoothing(&a.opt); got != 10 {
 			t.Errorf("%s with 10 mm asked for: %g mm", p.method, got)
 		}
-		p.fwhmAuto = true
+		a.opt.CmpFWHMAuto = true
 	}
 	a.setReference(filepath.Join(ref, "missing"))
-	if got := p.smoothing(); got != 8 {
+	if got := p.smoothing(&a.opt); got != 8 {
 		t.Errorf("with a reference that cannot be read: %g mm, want 8", got)
+	}
+}
+
+// TestSettings draws every section of the settings window, in both
+// languages and both appearances, and changes options in it as a user does.
+func TestSettings(t *testing.T) {
+	defer func() { chinese = false }()
+	for _, chinese = range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			for _, s := range settingsSections {
+				a := newApp()
+				a.demo()
+				a.settingsPage = s.id
+				tt := ui.NewTesterWith(a.settingsView, settingsWidth, settingsHeight, ui.TesterOptions{Dark: dark})
+				tt.Frame()
+				if title := s.title.String(); !tt.HasText(title) {
+					t.Errorf("section %s does not show %q", s.id, title)
+				}
+			}
+		}
+	}
+	chinese = false
+
+	a := newApp()
+	a.openSettings("compare") // without a window it only chooses the section
+	if a.settingsPage != "compare" {
+		t.Fatalf("section %q, want compare", a.settingsPage)
+	}
+	tt := ui.NewTesterWith(a.settingsView, settingsWidth, settingsHeight, ui.TesterOptions{})
+	tt.Frame()
+	if err := tt.Click("FDR"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.opt.Correction != 1 || !tt.HasText("q value") {
+		t.Fatalf("correction %d after choosing FDR; shown %q", a.opt.Correction, tt.Texts())
+	}
+	if got := a.opt.changed(groupCompare); len(got) != 1 {
+		t.Fatalf("changed %v, want the correction alone", got)
+	}
+	if err := tt.Click("Restore Defaults"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.opt.Correction != 0 || len(a.opt.changed(groupCompare)) != 0 {
+		t.Fatalf("the defaults were not restored: %+v", a.opt)
+	}
+
+	// The language, from the first section.
+	a.settingsPage = "general"
+	tt.Frame()
+	if err := tt.Click("中文"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !chinese || !tt.HasText("软件更新") {
+		t.Fatalf("the app does not speak Chinese: %q", tt.Texts())
+	}
+	chinese = false
+}
+
+// TestOptionsKept checks that the options survive a launch, that a file of
+// an older version leaves the rest as the app first has it, and that
+// values no run could use are not taken.
+func TestOptionsKept(t *testing.T) {
+	a := newApp()
+	a.opt.Target, a.opt.Statistic, a.opt.Correction, a.opt.Q = 50, 1, 1, 0.01
+	a.opt.RefStatsFor["white-matter"] = true
+	text := a.settingsText()
+
+	opt := defaultOptions()
+	s := settings{Options: &opt}
+	if err := json.Unmarshal([]byte(text), &s); err != nil {
+		t.Fatal(err)
+	}
+	opt.sound()
+	if opt.Target != 50 || opt.Statistic != 1 || opt.Correction != 1 || opt.Q != 0.01 || !opt.RefStatsFor["white-matter"] {
+		t.Fatalf("read back %+v", opt)
+	}
+	if got := opt.changed(groupNormalize, groupCompare, groupReference); len(got) != 5 {
+		t.Fatalf("changed %v, want five options", got)
+	}
+	opt.restore(groupNormalize, groupCompare, groupReference)
+	if got := opt.changed(groupNormalize, groupCompare, groupReference, groupIterative, groupSpatial, groupClassify, groupCluster); len(got) != 0 {
+		t.Fatalf("still changed after restoring: %v", got)
+	}
+
+	// A file written before the options were kept, and one with nonsense.
+	opt = defaultOptions()
+	s = settings{Options: &opt}
+	if err := json.Unmarshal([]byte(`{"language": "zh", "options": {"target": -3, "reference_mask": "nowhere", "voxel_p": 0, "classify_method": "x"}}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	opt.sound()
+	d := defaultOptions()
+	if opt.Target != d.Target || opt.RefMask != d.RefMask || opt.VoxelP != d.VoxelP || opt.ClassMethod != d.ClassMethod || opt.FWHM != d.FWHM || !opt.Images {
+		t.Fatalf("unsound options were taken: %+v", opt)
+	}
+
+	// Every page says which options are in effect.
+	for _, p := range pages[:len(pages)-1] {
+		if d.summary(p.id) == "" {
+			t.Errorf("page %s has no summary of its options", p.id)
+		}
+	}
+}
+
+// TestPicture draws an image with a map over it.
+func TestPicture(t *testing.T) {
+	img := core.TemplateImage()
+	scores := core.NewVolume(img.Dim, img.Aff)
+	centre := img.Dim[0]/2 + img.Dim[0]*(img.Dim[1]/2+img.Dim[1]*40)
+	scores.Data[centre], scores.Data[centre+3] = -6, 6
+	pic := core.Picture(img, scores, core.PictureOptions{})
+	bounds := pic.Bounds()
+	if bounds.Dx() < 5*img.Dim[0]*2 || bounds.Dy() < 2*img.Dim[1]*2 {
+		t.Fatalf("picture of %v", bounds)
+	}
+	cool, warm, gray := 0, 0, 0
+	for i := 0; i < len(pic.Pix); i += 4 {
+		r, g, b := pic.Pix[i], pic.Pix[i+1], pic.Pix[i+2]
+		switch {
+		case r == 0 && b == 255:
+			cool++
+		case r == 255 && b == 0:
+			warm++
+		case r == g && g == b && r > 60:
+			gray++
+		}
+	}
+	if cool == 0 || warm == 0 || gray < 1000 {
+		t.Fatalf("%d cool, %d warm and %d gray pixels", cool, warm, gray)
+	}
+	mask, err := core.BuiltinMask("cerebellum")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := core.Picture(nil, mask, core.PictureOptions{Solid: true, Outline: true}).Bounds(); got != bounds {
+		t.Fatalf("a mask on the template is %v, the image %v", got, bounds)
 	}
 }

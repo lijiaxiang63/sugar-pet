@@ -149,28 +149,6 @@ func setting(c *ui.Context, title, desc string, control func()) {
 	})
 }
 
-// options is a group of settings most runs leave alone, shown and hidden
-// by its title.
-func options(c *ui.Context, title string, open *bool, body func()) {
-	pal := paletteFor(c)
-	p := ui.CollapsibleBase(c, open)
-	trig := p.Trigger.Height(28).Padding(0, 10, 0, 6).Gap(6).Radius(7).AlignItems(ui.Center).AlignSelf(ui.Start).Label(title)
-	fg := pal.muted
-	if trig.Hovered() || *open {
-		fg = pal.text
-	}
-	if trig.Hovered() {
-		trig.Background(pal.rowHover)
-	}
-	trig.TextColor(fg).Children(func() {
-		ui.Icon(c, iconChevron).Size(12, 12).Rotate(90 * p.Progress())
-		ui.Text(c, title).FontSize(13).FontWeight(600).SingleLine()
-	})
-	p.Panel(func() {
-		ui.Column(c).Gap(14).Padding(10, 0, 0, 0).Children(body)
-	})
-}
-
 // selectOf is a drop-down of values shown by their labels.
 func selectOf(c *ui.Context, value *string, values, labels []string) ui.Element {
 	shown := labels[0]
@@ -390,7 +368,7 @@ func (a *app) pathControl(c *ui.Context, key string, value *string, kind pathKin
 		}
 		if kind == pathSave {
 			go func() {
-				path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.win, Title: title, DefaultPath: "reference-cluster.nii.gz"})
+				path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.dialogs, Title: title, DefaultPath: "reference-cluster.nii.gz"})
 				if err == nil && path != "" {
 					a.update(func() { set(path) })
 				}

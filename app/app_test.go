@@ -772,6 +772,9 @@ func TestStudy(t *testing.T) {
 		c.norm.region.kind, c.norm.region.file = 1, filepath.Join(one, "reference_cluster.nii.gz")
 		c.cmp.region.kind, c.cmp.region.file = 1, filepath.Join(dir, "elsewhere", "mask.nii.gz")
 		c.spatial.output = filepath.Join(one, "patients")
+		// The files of the settings too.
+		c.opt.Template, c.opt.RefMaskFile = filepath.Join(one, "template.nii"), filepath.Join(one, "mask.nii.gz")
+		c.opt.AnalysisFile = filepath.Join(dir, "elsewhere", "mask.nii.gz")
 	}
 	// The results of the runs that wrote into the study, and what the pages
 	// offer to do with them.
@@ -780,7 +783,8 @@ func TestStudy(t *testing.T) {
 		c.spatial.rows, c.spatial.written = []spatialRow{{image: "sub-pt01_pet.nii.gz"}}, []string{mine}
 		c.spatial.outDir, c.spatial.st.ok = out("patients"), "warped"
 		c.norm.rows, c.norm.outDir, c.norm.st.ok = []normRow{{image: "sub-pt01_pet.nii.gz"}}, out("normalised"), "normalised"
-		c.ref.st.ok = "built"
+		c.ref.built, c.ref.st.ok = out("hc_reference"), "built"
+		c.masks.outDir, c.masks.st.ok = out("masks"), "exported"
 		c.zmap.rows, c.zmap.outDir, c.zmap.st.ok = []zmapRow{{image: "sub-pt01_pet.nii.gz"}}, out("zmaps"), "mapped"
 		c.classify.rows, c.classify.outDir, c.classify.st.ok = []classifyRow{{image: "sub-pt01_pet.nii.gz"}}, out("reports"), "classified"
 		c.cmp.result, c.cmp.how, c.cmp.st.ok = &core.GroupComparison{TMap: filepath.Join(out("compare"), "a_vs_b_T.nii.gz")}, "corrected", "compared"
@@ -807,13 +811,23 @@ func TestStudy(t *testing.T) {
 	if len(c.spatial.rows)+len(c.spatial.written)+len(c.norm.rows)+len(c.zmap.rows)+len(c.classify.rows) != 0 || c.cmp.result != nil || c.cmp.how != "" || c.cluster.saved != "" {
 		t.Error("results of the study left behind are still on the pages")
 	}
+	if c.masks.outDir != "" || c.masks.st.ok != "" {
+		t.Errorf("the masks exported into the study left behind are still shown: %q", c.masks.outDir)
+	}
 	// Results written elsewhere are no part of the study, and stay.
 	results(filepath.Join(dir, "elsewhere"))
 	c.spatial.output = ""
 	c.useStudy(three)
-	if got := done(); len(got) != len(pages0)-1 || c.ref.st.ok != "" || len(c.zmap.rows) != 1 || c.cmp.result == nil {
-		// The Reference page keeps no record of where it wrote: it goes by its output.
+	if got := done(); len(got) != len(pages0) || len(c.zmap.rows) != 1 || c.cmp.result == nil || c.masks.outDir == "" {
 		t.Errorf("results written elsewhere were taken off the pages (done: %q)", got)
+	}
+	// A reference built into the study is of the study, wherever the next
+	// one is to be saved.
+	c.useStudy(one)
+	c.ref.built, c.ref.st.ok, c.ref.output = refOne, "built", filepath.Join(dir, "elsewhere", "hc_reference")
+	c.useStudy(three)
+	if c.ref.st.ok != "" {
+		t.Error("the reference built into the study left behind is still marked as done")
 	}
 	results(two)
 	fill()
@@ -831,6 +845,10 @@ func TestStudy(t *testing.T) {
 	if c.norm.region.file != "" || c.cmp.region.file == "" {
 		t.Errorf("the masks after leaving the study: %q (its own), %q (from elsewhere)", c.norm.region.file, c.cmp.region.file)
 	}
+	if c.opt.Template != "" || c.opt.RefMaskFile != "" || c.opt.AnalysisFile == "" {
+		t.Errorf("the files of the settings after leaving the study: template %q, masks %q (its own), %q (from elsewhere)",
+			c.opt.Template, c.opt.RefMaskFile, c.opt.AnalysisFile)
+	}
 	if c.ref.output != filepath.Join(two, "hc_reference") || c.norm.reference != refTwo {
 		t.Errorf("after going over to study two: output %q, reference %q", c.ref.output, c.norm.reference)
 	}
@@ -841,6 +859,9 @@ func TestStudy(t *testing.T) {
 			t.Fatal(err)
 		}
 		c.ref.files.files = []string{filepath.Join(two, "controls", "sub-hc01_pet.nii.gz")}
+		if !c.study.chosenInUse(alias) || c.study.chosenInUse(three) {
+			t.Error("the page does not know the study in use under another spelling, or takes another for it")
+		}
 		c.useStudy(alias)
 		if len(c.ref.files.files) != 1 {
 			t.Error("the same study under another spelling was taken for another study")
@@ -864,5 +885,42 @@ func TestStudy(t *testing.T) {
 		if c.norm.reference != refTwo || len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs {
 			t.Errorf("links that lead into the study left behind were kept: reference %q, images %q", c.norm.reference, c.ref.files.files)
 		}
+		// So do links that spell the study in other letter case, where that
+		// is the same folder.
+		if shout := filepath.Join(dir, "ONE", "hc_reference"); sameDir(shout, refOne) {
+			os.Remove(current)
+			os.Symlink(shout, current)
+			c.useStudy(one)
+			c.setReference(current)
+			c.useStudy(two)
+			if c.norm.reference != refTwo {
+				t.Errorf("a link into the study left behind, spelt in other case, was kept: %q", c.norm.reference)
+			}
+		}
+		// A study in use is the folder it was then: a link that leads to
+		// another study by now does not make the two the same.
+		moving := filepath.Join(dir, "moving")
+		os.Symlink(one, moving)
+		c.useStudy(moving)
+		c.ref.files.files = []string{mine, theirs}
+		os.Remove(moving)
+		os.Symlink(three, moving)
+		c.useStudy(moving)
+		if len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs {
+			t.Errorf("the images of the study a link led to before were kept: %q", c.ref.files.files)
+		}
+	}
+	// The study's own reference that is gone is not kept when the study is
+	// laid out again; one that is still there is.
+	c.useStudy(two)
+	c.setReference(refTwo)
+	c.useStudy(two)
+	if c.norm.reference != refTwo {
+		t.Errorf("laying the study out again let go of its reference: %q", c.norm.reference)
+	}
+	os.Remove(filepath.Join(refTwo, "reference.json"))
+	c.useStudy(two)
+	if c.norm.reference != "" {
+		t.Errorf("the reference that is gone is still in use: %q", c.norm.reference)
 	}
 }

@@ -246,3 +246,37 @@ def test_init_links(tmp_path, capsys):
         os.mkfifo(piped / "participants.tsv")
         assert main(["init", str(piped)]) == 2
         assert "is not a file" in capsys.readouterr().err and not (piped / "raw").exists()
+
+
+def test_init_table_half_written(tmp_path, monkeypatch, capsys):
+    # a table that could not be written to the end is not left behind, also when it is closing that fails
+    class Full:
+        def __init__(self, path):
+            self.table = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+
+        def __enter__(self):
+            return self
+
+        def write(self, text):
+            return len(text)  # kept in memory, as a buffered file does
+
+        def __exit__(self, *exc):
+            os.close(self.table)
+            raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr("sugar_pet.study.open", lambda path, mode: Full(path), raising=False)
+    assert main(["init", str(tmp_path / "study")]) == 2
+    assert "No space left" in capsys.readouterr().err
+    assert not (tmp_path / "study" / "participants.tsv").exists()
+
+    # one that is in the way and cannot be opened was not made here: it is left alone
+    def refused(path, mode):
+        raise PermissionError(13, "Permission denied")
+
+    kept = tmp_path / "kept"
+    kept.mkdir()
+    monkeypatch.setattr("sugar_pet.study.open", refused, raising=False)
+    monkeypatch.setattr("sugar_pet.study._present", lambda target, is_folder: False)
+    (kept / "participants.tsv").write_text("participant_id\tage\tsex\nsub-01\t60\tF\n")
+    assert main(["init", str(kept)]) == 2
+    assert "sub-01" in (kept / "participants.tsv").read_text()

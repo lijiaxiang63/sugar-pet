@@ -71,7 +71,12 @@ func InitStudy(path string) ([]bool, error) {
 	// The entries are named as the system reads the path.  filepath.Join
 	// would shorten "link/../study" to "study", which is another folder
 	// when link leads elsewhere.
-	in := func(name string) string { return path + string(filepath.Separator) + name }
+	in := func(name string) string {
+		if os.IsPathSeparator(path[len(path)-1]) {
+			return path + name // "\" + "\raw" would name a share on Windows
+		}
+		return path + string(filepath.Separator) + name
+	}
 	// Everything is looked at before anything is made.
 	created := make([]bool, len(StudyLayout))
 	for i, e := range StudyLayout {

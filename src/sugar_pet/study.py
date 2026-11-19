@@ -76,15 +76,17 @@ def _new_table(target: Path) -> None:
     """Create the table with its header.  One that is there is never written over."""
     # "x" fails if the table is there, also if it appeared just now.  Whatever
     # stops the opening, nothing was made here, so nothing is removed.
-    with open(target, "x") as table:
-        try:
+    made = False
+    try:
+        with open(target, "x") as table:
+            made = True
             table.write(PARTICIPANTS_HEADER)
-            table.flush()
-        except OSError:
-            # No table is better than one without its header, which would be kept from then on.
-            table.close()
+    except OSError:
+        # No table is better than one without its header, which would be kept from then on.
+        # Closing writes too, and may be what fails.
+        if made:
             target.unlink(missing_ok=True)
-            raise
+        raise
 
 
 def init_study(path: str | Path) -> list[tuple[StudyEntry, bool]]:

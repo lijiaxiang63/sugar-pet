@@ -22,6 +22,13 @@ type studyPage struct {
 	created []bool
 	// inUse is the study folder the pages write into, kept between launches.
 	inUse string
+	// inUseReal is where inUse led when the pages went over to it.  A link
+	// may lead elsewhere later; what the pages hold is of this folder.
+	inUseReal string
+	// Whether the folder chosen is the one in use under another spelling:
+	// asked on every frame, answered by the file system once per choice.
+	sameKey string
+	same    bool
 	// statusOf is the study folder that st speaks of.
 	statusOf string
 }
@@ -35,6 +42,30 @@ func (p *studyPage) target() string {
 		return ""
 	}
 	return filepath.Join(p.parent, name)
+}
+
+// active is the folder the pages write into, as it was when they went over
+// to it.
+func (p *studyPage) active() string {
+	if p.inUseReal != "" {
+		return p.inUseReal
+	}
+	return p.inUse
+}
+
+// chosenInUse reports whether the folder chosen is the one in use, however
+// it is spelt.
+func (p *studyPage) chosenInUse(target string) bool {
+	if target == p.inUse {
+		return true
+	}
+	if target == "" || p.inUse == "" {
+		return false
+	}
+	if key := target + "\x00" + p.active(); key != p.sameKey {
+		p.sameKey, p.same = key, sameDir(target, p.active())
+	}
+	return p.same
 }
 
 func (p *studyPage) problem() string {
@@ -120,12 +151,12 @@ func (a *app) studyView(c *ui.Context) {
 					func() { setting(c, T("Name", "名称"), where, func() { ui.TextInput(c, &p.name).Width(210) }) },
 				)
 				switch {
-				case p.inUse == "" || target == p.inUse:
+				case p.inUse == "" || p.chosenInUse(target):
 				case target == "":
 					caution(c, Tf("The pages write into %s.", "各页面目前写入 %s。", shortDir(p.inUse)))
 				default:
-					caution(c, Tf("The pages still write into %s. Creating the folders here makes them write into this folder, and takes the images, tables, reference and results of %[1]s off them.",
-						"各页面目前仍写入 %s。在这里创建文件夹之后，各页面改为写入这个文件夹，并移除其中属于 %[1]s 的图像、表格、参考库和运行结果。", shortDir(p.inUse)))
+					caution(c, Tf("The pages still write into %s. Creating the folders here makes them write into this folder, and takes the images, tables, masks, reference and results of %[1]s off them.",
+						"各页面目前仍写入 %s。在这里创建文件夹之后，各页面改为写入这个文件夹，并移除其中属于 %[1]s 的图像、表格、掩膜、参考库和运行结果。", shortDir(p.inUse)))
 				}
 			})
 			group := func(title, caption string, yours bool) {
@@ -206,21 +237,27 @@ func insideDir(path, dir string) bool {
 		return true
 	}
 	// A link elsewhere may lead into the folder.
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		if realDir, err := filepath.EvalSymlinks(dir); err == nil && below(real, realDir) {
-			return true
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		real = path
+	} else if realDir, err := filepath.EvalSymlinks(dir); err == nil && below(real, realDir) {
+		return true
+	}
+	// The folder may be spelt otherwise: in other letter case, where that
+	// is the same folder.  It is then known by what it is, not by its name.
+	above := func(p string) bool {
+		for {
+			if sameDir(p, dir) {
+				return true
+			}
+			parent := filepath.Dir(p)
+			if parent == p {
+				return false
+			}
+			p = parent
 		}
 	}
-	for p := path; ; {
-		if sameDir(p, dir) {
-			return true
-		}
-		parent := filepath.Dir(p)
-		if parent == p {
-			return false
-		}
-		p = parent
-	}
+	return above(path) || real != path && above(real)
 }
 
 // studyOutputs makes a study folder the one the pages write into: each
@@ -231,7 +268,10 @@ func (a *app) studyOutputs(study string) {
 	a.ref.output, a.norm.output, a.zmap.output = in("hc_reference"), in("normalised"), in("zmaps")
 	a.classify.output, a.cmp.output = in("reports"), in("compare")
 	a.cluster.output = in("reference_cluster.nii.gz")
-	a.study.inUse = study
+	a.study.inUse, a.study.inUseReal = study, study
+	if real, err := filepath.EvalSymlinks(study); err == nil {
+		a.study.inUseReal = real
+	}
 }
 
 // useStudy goes over to a study folder, as its page does when it has laid
@@ -241,12 +281,21 @@ func (a *app) studyOutputs(study string) {
 // the study holds is used if none is in use; one chosen from elsewhere is
 // kept.
 func (a *app) useStudy(study string) {
-	if left := a.study.inUse; left != "" && !sameDir(left, study) {
+	// The study left is the folder the pages went over to, also if the link
+	// they were given leads to this one by now.
+	if left := a.study.active(); left != "" && !sameDir(left, study) {
 		a.leaveStudy(left)
 	}
 	a.studyOutputs(study)
-	if own := filepath.Join(study, "hc_reference"); a.norm.reference == "" && core.IsReferenceFolder(own) {
-		a.setReference(own)
+	own := filepath.Join(study, "hc_reference")
+	switch held := core.IsReferenceFolder(own); {
+	case a.norm.reference == "":
+		if held {
+			a.setReference(own)
+		}
+	case !held && sameDir(a.norm.reference, own):
+		// The study's own reference is gone: its folder was made anew, empty.
+		a.setReference("")
 	}
 }
 
@@ -285,8 +334,10 @@ func (a *app) leaveStudy(left string) {
 		list.files = kept
 	}
 	// The mask of a custom region too: the reference cluster of a study is
-	// made from its patients.
-	for _, path := range []*string{&a.zmap.covTable, &a.classify.covTable, &a.cmp.covExtra, &a.norm.region.file, &a.cmp.region.file} {
+	// made from its patients.  And the files chosen in the settings: a
+	// template or a mask of one study would be used on the next unseen.
+	for _, path := range []*string{&a.zmap.covTable, &a.classify.covTable, &a.cmp.covExtra, &a.norm.region.file, &a.cmp.region.file,
+		&a.opt.Template, &a.opt.RefMaskFile, &a.opt.AnalysisFile} {
 		if in(*path) {
 			*path = ""
 		}
@@ -323,8 +374,8 @@ func (a *app) forgetResults(left string) {
 	if p := &a.norm; wrote(p.outDir, p.output) {
 		p.rows, p.notes, p.outDir, p.st = nil, nil, "", status{}
 	}
-	if p := &a.ref; wrote("", p.output) {
-		p.st = status{}
+	if p := &a.ref; wrote(p.built, p.output) {
+		p.built, p.st = "", status{}
 	}
 	if p := &a.zmap; wrote(p.outDir, p.output) {
 		p.rows, p.notes, p.outDir, p.shown, p.st = nil, nil, "", 0, status{}
@@ -341,6 +392,9 @@ func (a *app) forgetResults(left string) {
 	if p := &a.cluster; wrote(p.saved, p.output) {
 		p.saved, p.volume, p.st = "", 0, status{}
 		p.pic.forget()
+	}
+	if p := &a.masks; insideDir(p.outDir, left) {
+		p.outDir, p.st = "", status{}
 	}
 }
 

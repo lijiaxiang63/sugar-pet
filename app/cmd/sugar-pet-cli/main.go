@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -263,6 +264,13 @@ func main() {
 // Path.resolve gives.  filepath.Abs would join a relative path to the
 // working folder as the shell names it, which may itself be a link.
 func realPath(path string) string {
+	if runtime.GOOS == "windows" {
+		// Windows reads "\study" and "D:study" by the drive in use and its
+		// folder, and ".." by the name alone: as filepath.Abs does.
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+	}
 	if real, err := filepath.EvalSymlinks(path); err == nil {
 		path = real
 	}
@@ -282,6 +290,14 @@ func realPath(path string) string {
 // initStudy creates the recommended folders of a study and says what each
 // is for.
 func initStudy(rest []string) {
+	// After "--" a word is the folder, also if it begins with "-".
+	var after []string
+	for i, word := range rest {
+		if word == "--" {
+			rest, after = rest[:i:i], rest[i+1:]
+			break
+		}
+	}
 	for _, word := range rest {
 		if word == "-h" || word == "--help" {
 			fmt.Println("usage: sugar-pet-cli init [folder]")
@@ -296,6 +312,7 @@ func initStudy(rest []string) {
 			fail(2, "init has no option '%s': it takes only the folder to create", word)
 		}
 	}
+	rest = append(rest, after...)
 	if len(rest) > 1 {
 		fail(2, "init takes one folder, not %d", len(rest))
 	}

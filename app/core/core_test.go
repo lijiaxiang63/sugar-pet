@@ -300,6 +300,14 @@ func TestInitStudy(t *testing.T) {
 		t.Errorf("participants.tsv was changed to %q", text)
 	}
 
+	// A folder named with its separator is the same folder.
+	slashed := filepath.Join(t.TempDir(), "study")
+	if _, err := InitStudy(slashed + string(filepath.Separator)); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(slashed, "raw")); err != nil || !info.IsDir() {
+		t.Error("nothing was made in a folder named with its separator")
+	}
 	// A file in the way is reported, and nothing is made.
 	other := t.TempDir()
 	os.WriteFile(filepath.Join(other, "patients"), nil, 0o644)

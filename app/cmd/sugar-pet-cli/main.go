@@ -259,6 +259,26 @@ func main() {
 	}
 }
 
+// realPath is a path as the system reads it, without links: what Python's
+// Path.resolve gives.  filepath.Abs would join a relative path to the
+// working folder as the shell names it, which may itself be a link.
+func realPath(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	if filepath.IsAbs(path) {
+		return path
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	if real, err := filepath.EvalSymlinks(wd); err == nil {
+		wd = real
+	}
+	return filepath.Join(wd, path)
+}
+
 // initStudy creates the recommended folders of a study and says what each
 // is for.
 func initStudy(rest []string) {
@@ -285,13 +305,7 @@ func initStudy(rest []string) {
 	}
 	created, err := core.InitStudy(root)
 	check(err)
-	if real, err := filepath.EvalSymlinks(root); err == nil {
-		root = real
-	}
-	if abs, err := filepath.Abs(root); err == nil {
-		root = abs
-	}
-	fmt.Printf("Study folder: %s\n", root)
+	fmt.Printf("Study folder: %s\n", realPath(root))
 	made := 0
 	for _, group := range []struct {
 		title string

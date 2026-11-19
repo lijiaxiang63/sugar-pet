@@ -119,7 +119,11 @@ func (a *app) studyView(c *ui.Context) {
 					},
 					func() { setting(c, T("Name", "名称"), where, func() { ui.TextInput(c, &p.name).Width(210) }) },
 				)
-				if p.inUse != "" && target != "" && target != p.inUse {
+				switch {
+				case p.inUse == "" || target == p.inUse:
+				case target == "":
+					caution(c, Tf("The pages write into %s.", "各页面目前写入 %s。", shortDir(p.inUse)))
+				default:
 					caution(c, Tf("The pages still write into %s. Creating the folders here makes them write into this folder, and takes the images, tables and reference of %[1]s off them.",
 						"各页面目前仍写入 %s。在这里创建文件夹之后，各页面改为写入这个文件夹，并移除其中属于 %[1]s 的图像、表格和参考库。", shortDir(p.inUse)))
 				}
@@ -194,8 +198,18 @@ func insideDir(path, dir string) bool {
 	if path == "" || dir == "" {
 		return false
 	}
-	if rel, err := filepath.Rel(dir, path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	below := func(path, dir string) bool {
+		rel, err := filepath.Rel(dir, path)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	if below(path, dir) {
 		return true
+	}
+	// A link elsewhere may lead into the folder.
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		if realDir, err := filepath.EvalSymlinks(dir); err == nil && below(real, realDir) {
+			return true
+		}
 	}
 	for p := path; ; {
 		if sameDir(p, dir) {
@@ -250,6 +264,12 @@ func (a *app) leaveStudy(left string) {
 			yes = insideDir(dir, left)
 			known[dir] = yes
 		}
+		if !yes {
+			// A file that is itself a link may lead into the study.
+			if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+				yes = insideDir(path, left)
+			}
+		}
 		return yes
 	}
 	sp := &a.spatial
@@ -262,7 +282,9 @@ func (a *app) leaveStudy(left string) {
 		}
 		list.files = kept
 	}
-	for _, path := range []*string{&a.zmap.covTable, &a.classify.covTable, &a.cmp.covExtra} {
+	// The mask of a custom region too: the reference cluster of a study is
+	// made from its patients.
+	for _, path := range []*string{&a.zmap.covTable, &a.classify.covTable, &a.cmp.covExtra, &a.norm.region.file, &a.cmp.region.file} {
 		if in(*path) {
 			*path = ""
 		}

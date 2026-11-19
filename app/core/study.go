@@ -62,6 +62,9 @@ func InitStudy(path string) ([]bool, error) {
 	if path == "" {
 		path = "."
 	}
+	if len(path) == 2 && path[1] == ':' && filepath.VolumeName(path) == path {
+		path += "." // "C:" is the current folder of the drive, "C:\raw" is not in it
+	}
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
 		return nil, errorf("'%s' is a file, not a folder", path)
 	}

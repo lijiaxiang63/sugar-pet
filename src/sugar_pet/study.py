@@ -74,15 +74,17 @@ def _present(target: Path, is_folder: bool) -> bool:
 
 def _new_table(target: Path) -> None:
     """Create the table with its header.  One that is there is never written over."""
-    try:
-        with open(target, "x") as table:
+    # "x" fails if the table is there, also if it appeared just now.  Whatever
+    # stops the opening, nothing was made here, so nothing is removed.
+    with open(target, "x") as table:
+        try:
             table.write(PARTICIPANTS_HEADER)
-    except FileExistsError:  # it is there, or appeared just now: only opening it raises this
-        raise
-    except OSError:
-        # No table is better than one without its header, which would be kept from then on.
-        target.unlink(missing_ok=True)
-        raise
+            table.flush()
+        except OSError:
+            # No table is better than one without its header, which would be kept from then on.
+            table.close()
+            target.unlink(missing_ok=True)
+            raise
 
 
 def init_study(path: str | Path) -> list[tuple[StudyEntry, bool]]:

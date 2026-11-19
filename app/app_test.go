@@ -702,6 +702,12 @@ func TestStudy(t *testing.T) {
 	if a.zmap.output != filepath.Join(study, "zmaps") || !strings.Contains(strings.Join(tt.Texts(), "\n"), "The pages still write into "+shortDir(study)+".") {
 		t.Errorf("not said where the pages still write, shown: %q", tt.Texts())
 	}
+	// With no folder chosen, it is still said where the pages write.
+	a.study.name = ""
+	tt.Frame()
+	if !tt.HasText("The pages write into " + shortDir(study) + ".") {
+		t.Errorf("with no folder chosen, not said where the pages write, shown: %q", tt.Texts())
+	}
 	// A run that fails takes back what an earlier run of the folder showed.
 	a.study.name = "study"
 	tt.Frame()
@@ -762,6 +768,8 @@ func TestStudy(t *testing.T) {
 			list.files = []string{mine, theirs}
 		}
 		c.zmap.covTable, c.classify.covTable, c.cmp.covExtra, c.ref.cov.path, c.cmp.cov.path = covTable, covTable, covTable, covTable, covTable
+		c.norm.region.kind, c.norm.region.file = 1, filepath.Join(one, "reference_cluster.nii.gz")
+		c.cmp.region.kind, c.cmp.region.file = 1, filepath.Join(dir, "elsewhere", "mask.nii.gz")
 		c.spatial.output = filepath.Join(one, "patients")
 	}
 	fill()
@@ -778,6 +786,9 @@ func TestStudy(t *testing.T) {
 	}
 	if c.zmap.covTable != "" || c.classify.covTable != "" || c.cmp.covExtra != "" || c.ref.cov.path != "" || c.cmp.cov.path != "" || c.spatial.output != "" {
 		t.Error("a table or an output of the study left behind is still chosen")
+	}
+	if c.norm.region.file != "" || c.cmp.region.file == "" {
+		t.Errorf("the masks after leaving the study: %q (its own), %q (from elsewhere)", c.norm.region.file, c.cmp.region.file)
 	}
 	if c.ref.output != filepath.Join(two, "hc_reference") || c.norm.reference != refTwo {
 		t.Errorf("after going over to study two: output %q, reference %q", c.ref.output, c.norm.reference)
@@ -797,6 +808,20 @@ func TestStudy(t *testing.T) {
 		c.useStudy(three)
 		if c.norm.reference != "" || len(c.ref.files.files) != 0 {
 			t.Errorf("the study left under another spelling kept its reference %q or its images", c.norm.reference)
+		}
+		// Links elsewhere that lead into a study belong to it.
+		refs := filepath.Join(dir, "refs")
+		os.MkdirAll(refs, 0o755)
+		current, image := filepath.Join(refs, "current"), filepath.Join(refs, "sub-hc01_pet.nii.gz")
+		os.WriteFile(filepath.Join(one, "sub-hc01_pet.nii.gz"), nil, 0o644)
+		os.Symlink(refOne, current)
+		os.Symlink(filepath.Join(one, "sub-hc01_pet.nii.gz"), image)
+		c.useStudy(one)
+		c.setReference(current)
+		c.ref.files.files = []string{image, theirs}
+		c.useStudy(two)
+		if c.norm.reference != refTwo || len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs {
+			t.Errorf("links that lead into the study left behind were kept: reference %q, images %q", c.norm.reference, c.ref.files.files)
 		}
 	}
 }

@@ -143,6 +143,7 @@ func (a *app) demo() {
 	a.ref.cov.path = "/Users/ada/study/participants.tsv"
 	a.ref.cov.table = &core.Table{Path: a.ref.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 28)}
 	a.ref.cov.adjust = map[string]bool{"age": true, "sex": true}
+	a.ref.cov.stamp = stampOf(a.ref.cov.path) // the table is made up: nothing is to be read
 	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
 	a.zmap.covTable = "/Users/ada/study/participants.tsv"
 	a.zmap.output = "/Users/ada/study/zmaps"

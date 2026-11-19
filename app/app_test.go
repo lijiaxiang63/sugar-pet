@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -281,6 +282,192 @@ func TestWorkflow(t *testing.T) {
 	exported, _ := filepath.Glob(filepath.Join(dir, "masks", "*.nii.gz"))
 	if len(exported) != len(core.Masks) {
 		t.Fatalf("%d masks exported, want %d", len(exported), len(core.Masks))
+	}
+}
+
+// TestCovariateTable fills in a table of covariates after it was chosen, as
+// a participants.tsv made with only its header is: the page shows the file as
+// it is now and keeps the ticks of the columns that are still there, and a
+// run reads the file anew.
+func TestCovariateTable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("works on whole images")
+	}
+	chinese = true
+	defer func() { chinese = false }()
+	dir := t.TempDir()
+	hc, pt, _ := makeImages(t, filepath.Join(dir, "data"), 6, 3)
+	var people []string
+	for _, image := range append(append([]string(nil), hc...), pt...) {
+		people = append(people, strings.TrimSuffix(filepath.Base(image), "_pet.nii.gz"))
+	}
+	// but lists everyone except one person.
+	but := func(skip string) []string {
+		return slices.DeleteFunc(slices.Clone(people), func(id string) bool { return id == skip })
+	}
+	table := filepath.Join(dir, "covariates.tsv")
+	write := func(columns []string, ids []string) {
+		t.Helper()
+		text := "participant_id\t" + strings.Join(columns, "\t") + "\n"
+		for i, id := range ids {
+			text += id
+			for _, col := range columns {
+				text += "\t" + map[string]string{
+					"age":  fmt.Sprint(50 + i*7%23),
+					"sex":  []string{"F", "M"}[i%2],
+					"site": []string{"A", "B"}[i/2%2],
+					"bmi":  fmt.Sprint(20.5 + float64(i*5%11)),
+				}[col]
+			}
+			text += "\n"
+		}
+		if err := os.WriteFile(table, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	a := newApp()
+	queue := make(chan func(), 256)
+	a.post = func(fn func()) { queue <- fn }
+	tt := ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
+	click := func(label string) {
+		t.Helper()
+		tt.Frame()
+		if err := tt.Click(label); err != nil {
+			t.Fatalf("%v (shown: %q)", err, tt.Texts())
+		}
+		tt.Frame()
+	}
+	// later is the user coming back to the page after a while.
+	later := func() {
+		tt.Advance(2 * covCheckEvery)
+		tt.Frame()
+	}
+	// run presses the button of the page and waits for the work to end.
+	run := func(button string, st *status) {
+		t.Helper()
+		click(button)
+		timeout := time.After(5 * time.Minute)
+		for a.job != nil {
+			select {
+			case fn := <-queue:
+				fn()
+				tt.Frame()
+			case <-timeout:
+				t.Fatal("the task did not finish")
+			}
+		}
+		tt.Frame()
+		if st.err != "" || st.ok == "" {
+			t.Fatalf("the run failed: %q", st.err)
+		}
+	}
+	// refused presses the button and expects the run not to start.
+	refused := func(button string, st *status, why string) {
+		t.Helper()
+		click(button)
+		if a.job != nil || !strings.Contains(st.err, why) || !tt.HasText(why) {
+			t.Fatalf("the run was not refused with %q: job %v, %q", why, a.job != nil, st.err)
+		}
+	}
+	ticks := func(cv *covChoice, want map[string]bool) {
+		t.Helper()
+		if fmt.Sprint(cv.adjust) != fmt.Sprint(want) {
+			t.Fatalf("ticks %v, want %v", cv.adjust, want)
+		}
+	}
+
+	// The table as first chosen: other people, and a column for the site.
+	cv := &a.ref.cov
+	write([]string{"age", "sex", "site"}, []string{"sub-xx00", "sub-xx01", "sub-xx02", "sub-xx03"})
+	a.page, a.ref.files.files, a.ref.output = "reference", hc, filepath.Join(dir, "reference")
+	cv.path = table
+	cv.load()
+	tt.Frame()
+	tt.Scroll(640, 400, 0, 900) // down to the table
+	click("sex")
+	click("site")
+	ticks(cv, map[string]bool{"age": true, "sex": false, "site": true})
+	if !tt.HasText("共 4 行") {
+		t.Fatalf("the rows are not counted: %q", tt.Texts())
+	}
+
+	// Filled in with another program: the page shows the new rows and the
+	// new column; age and sex keep their ticks, that of the site is gone.
+	write([]string{"age", "sex", "bmi"}, but("sub-hc05"))
+	tt.Frame()
+	if len(cv.table.Rows) != 4 {
+		t.Fatal("the file is read on every frame")
+	}
+	later()
+	ticks(cv, map[string]bool{"age": true, "sex": false, "bmi": false})
+	if _, shown := tt.Find("site"); shown || !tt.HasText("bmi") || !tt.HasText(fmt.Sprintf("共 %d 行", len(people)-1)) {
+		t.Fatalf("the page does not show the table as it is now: %q", tt.Texts())
+	}
+	click("bmi")
+
+	// The last control is added just before the run, and the columns put
+	// in another order, which the page has not seen: the run reads the
+	// file itself.
+	write([]string{"bmi", "sex", "age"}, people)
+	tt.Frame()
+	if len(cv.table.Rows) != len(people)-1 {
+		t.Fatal("the page has read the file already")
+	}
+	run("建立参考库", &a.ref.st)
+	if got := readRefInfo(a.ref.output).covariateNames(); fmt.Sprint(got) != "[bmi age]" {
+		t.Fatalf("the reference adjusts for %v", got)
+	}
+	ticks(cv, map[string]bool{"age": true, "sex": false, "bmi": true})
+
+	// A ticked column leaves the file before the page shows it: the run
+	// does not go on with fewer columns than were ticked.
+	write([]string{"age", "sex"}, people)
+	refused("建立参考库", &a.ref.st, "列已发生变化")
+	ticks(cv, map[string]bool{"age": true, "sex": false})
+
+	// The file is gone: the run does not use the rows it read before, and
+	// the ticks wait for the file to be back.
+	if err := os.Remove(table); err != nil {
+		t.Fatal(err)
+	}
+	refused("建立参考库", &a.ref.st, "无法读取协变量表")
+	later()
+	if cv.table != nil || !tt.HasText("no such file") {
+		t.Fatalf("the page does not say that the file is gone: %q", tt.Texts())
+	}
+	write([]string{"sex", "age", "bmi"}, people)
+	later()
+	ticks(cv, map[string]bool{"age": true, "sex": false, "bmi": false})
+
+	// The Compare Groups page keeps its table the same way.
+	cv = &a.cmp.cov
+	write([]string{"age", "sex"}, but("sub-pt02"))
+	a.page, a.cmp.g1.files, a.cmp.g2.files, a.cmp.output, a.cmp.method = "compare", pt, hc, filepath.Join(dir, "compare"), "cerebellum"
+	cv.path = table
+	cv.load()
+	tt.Frame()
+	tt.Scroll(640, 400, 0, 900)
+	click("sex")
+	write([]string{"age", "sex", "bmi"}, people)
+	tt.Frame()
+	if len(cv.table.Rows) != len(people)-1 {
+		t.Fatal("the page has read the file already")
+	}
+	run("开始比较", &a.cmp.st)
+	if res := a.cmp.result; res == nil || res.DOF != float64(len(people)-3) {
+		t.Fatalf("the comparison is not adjusted for age alone: %+v", res)
+	}
+	ticks(cv, map[string]bool{"age": true, "sex": false, "bmi": false})
+
+	// The made-up table of the screenshots has no file, and stays.
+	a = newApp()
+	a.demo()
+	a.page = "reference"
+	tt = ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
+	later()
+	if a.ref.cov.table == nil || !tt.HasText("共 28 行") {
+		t.Fatalf("the table of the screenshots is gone: %q", tt.Texts())
 	}
 }
 

@@ -105,9 +105,11 @@ it is called, and click **Create Folders**:
 The page lists every folder with what it is for, and marks each as *Created*
 or *Already there*. It also makes the study folder the one the app writes
 into: the output folder of every page is set to its folder of the study, so
-you do not have to choose them one by one. The app remembers the study folder
-for the next launch. Only Spatial Normalisation is left for you to set, since
-it writes patients and controls into different folders.
+you do not have to choose them one by one. If the study folder you chose is
+a link, the pages are given the folder it leads to. The app remembers the
+study folder for the next launch; one on a drive that is not plugged in then
+is used again once it is. Only Spatial Normalisation is left for you to set,
+since it writes patients and controls into different folders.
 
 A reference the study already holds in `hc_reference/` becomes the reference
 in use, if none is. When you create the folders of another study, the pages

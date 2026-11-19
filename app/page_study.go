@@ -20,11 +20,14 @@ type studyPage struct {
 	// then (the others were there already).
 	made    string
 	created []bool
-	// inUse is the study folder the pages write into, kept between launches.
+	// inUse is the study folder the pages write into, kept between launches:
+	// the folder itself, not a link to it, which may lead elsewhere later.
 	inUse string
-	// inUseReal is where inUse led when the pages went over to it.  A link
-	// may lead elsewhere later; what the pages hold is of this folder.
-	inUseReal string
+	// inUseIs tells that folder from another that has its name later.
+	inUseIs os.FileInfo
+	// last is the study folder of the last launch, if it cannot be reached
+	// now.  The settings may still hold files of it.
+	last string
 	// Whether the folder chosen is the one in use under another spelling:
 	// asked on every frame, answered by the file system once per choice.
 	sameKey string
@@ -44,26 +47,34 @@ func (p *studyPage) target() string {
 	return filepath.Join(p.parent, name)
 }
 
-// active is the folder the pages write into, as it was when they went over
-// to it.
-func (p *studyPage) active() string {
-	if p.inUseReal != "" {
-		return p.inUseReal
+// holds reports whether a folder is the study in use, however it is spelt:
+// the folder the pages went over to, not another that has its name by now.
+func (p *studyPage) holds(study string) bool {
+	if study == "" || p.inUse == "" {
+		return false
 	}
-	return p.inUse
+	if p.inUseIs == nil {
+		return sameDir(study, p.inUse)
+	}
+	info, err := os.Stat(study)
+	return err == nil && os.SameFile(p.inUseIs, info)
 }
 
-// chosenInUse reports whether the folder chosen is the one in use, however
-// it is spelt.
-func (p *studyPage) chosenInUse(target string) bool {
-	if target == p.inUse {
-		return true
+// kept is the study folder to use again at the next launch.
+func (p *studyPage) kept() string {
+	if p.inUse != "" {
+		return p.inUse
 	}
+	return p.last
+}
+
+// chosenInUse reports whether the folder chosen is the study in use.
+func (p *studyPage) chosenInUse(target string) bool {
 	if target == "" || p.inUse == "" {
 		return false
 	}
-	if key := target + "\x00" + p.active(); key != p.sameKey {
-		p.sameKey, p.same = key, sameDir(target, p.active())
+	if key := target + "\x00" + p.inUse; key != p.sameKey {
+		p.sameKey, p.same = key, p.holds(target)
 	}
 	return p.same
 }
@@ -263,14 +274,21 @@ func insideDir(path, dir string) bool {
 // studyOutputs makes a study folder the one the pages write into: each
 // page's output is its folder of the study.  Spatial Normalisation is left
 // alone, as it writes patients and controls into different folders.
+//
+// The pages are given the folder itself.  Given a link, they would write
+// the results of this study into another once the link leads there.
 func (a *app) studyOutputs(study string) {
+	if real, err := filepath.EvalSymlinks(study); err == nil {
+		study = real
+	}
 	in := func(name string) string { return filepath.Join(study, name) }
 	a.ref.output, a.norm.output, a.zmap.output = in("hc_reference"), in("normalised"), in("zmaps")
 	a.classify.output, a.cmp.output = in("reports"), in("compare")
 	a.cluster.output = in("reference_cluster.nii.gz")
-	a.study.inUse, a.study.inUseReal = study, study
-	if real, err := filepath.EvalSymlinks(study); err == nil {
-		a.study.inUseReal = real
+	a.study.inUse, a.study.inUseIs, a.study.last, a.study.sameKey = study, nil, "", ""
+	if info, err := os.Stat(study); err == nil {
+		os.SameFile(info, info) // Windows reads what the folder is only now, by its name
+		a.study.inUseIs = info
 	}
 }
 
@@ -281,13 +299,18 @@ func (a *app) studyOutputs(study string) {
 // the study holds is used if none is in use; one chosen from elsewhere is
 // kept.
 func (a *app) useStudy(study string) {
-	// The study left is the folder the pages went over to, also if the link
-	// they were given leads to this one by now.
-	if left := a.study.active(); left != "" && !sameDir(left, study) {
-		a.leaveStudy(left)
+	// The study left is the folder the pages went over to, also if this one
+	// has its name by now, or is led to by the same link.
+	switch p := &a.study; {
+	case p.inUse != "":
+		if !p.holds(study) {
+			a.leaveStudy(p.inUse)
+		}
+	case p.last != "" && !sameDir(p.last, study):
+		a.leaveStudy(p.last)
 	}
 	a.studyOutputs(study)
-	own := filepath.Join(study, "hc_reference")
+	own := filepath.Join(a.study.inUse, "hc_reference")
 	switch held := core.IsReferenceFolder(own); {
 	case a.norm.reference == "":
 		if held {
@@ -396,13 +419,21 @@ func (a *app) forgetResults(left string) {
 	if p := &a.masks; insideDir(p.outDir, left) {
 		p.outDir, p.st = "", status{}
 	}
+	// How a run failed is of no use once its study is left, and a page does
+	// not know where a run that failed was to write.
+	for _, st := range []*status{&a.spatial.st, &a.norm.st, &a.ref.st, &a.zmap.st, &a.classify.st, &a.cmp.st, &a.cluster.st, &a.masks.st} {
+		st.err = ""
+	}
 }
 
 // restoreStudy writes into the study folder of the last launch again, if it
 // is still there.  The reference is not touched: the one the app kept is
 // the one that was in use, be it none, or one that cannot be reached now.
+// A study that cannot be reached, as on a drive not plugged in, is kept in
+// mind: it is used again once it can be, and left when another is used.
 func (a *app) restoreStudy(study string) {
 	if info, err := os.Stat(study); study == "" || err != nil || !info.IsDir() {
+		a.study.last = study
 		return
 	}
 	a.study.parent, a.study.name = filepath.Dir(study), filepath.Base(study)

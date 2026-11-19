@@ -626,7 +626,11 @@ func TestPicture(t *testing.T) {
 // TestStudy lays out a study folder with the button of the page, twice:
 // what is there the second time is kept.
 func TestStudy(t *testing.T) {
-	dir := t.TempDir()
+	// The folder itself: the pages are given no links.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	a := newApp()
 	a.page = "study"
 	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
@@ -673,10 +677,22 @@ func TestStudy(t *testing.T) {
 	if b.zmap.output != filepath.Join(study, "zmaps") || b.study.parent != dir || b.study.name != "study" || b.norm.reference != "" {
 		t.Errorf("after a new launch: %q, %q, %q, %q", b.zmap.output, b.study.parent, b.study.name, b.norm.reference)
 	}
+	// A study that cannot be reached is not used, but kept in mind: it is
+	// used again once it can be, and what the settings hold of it goes when
+	// another study is used.
+	gone := filepath.Join(dir, "gone")
 	b = newApp()
-	b.restoreStudy(filepath.Join(dir, "gone"))
+	b.restoreStudy(gone)
 	if b.zmap.output != "" || b.study.inUse != "" {
 		t.Error("a study folder that is gone is used")
+	}
+	if err := json.Unmarshal([]byte(b.settingsText()), &kept); err != nil || kept.Study != gone {
+		t.Errorf("a study that cannot be reached is forgotten: kept %q (%v)", kept.Study, err)
+	}
+	b.opt.RefMaskFile, b.opt.AnalysisFile = filepath.Join(gone, "mask.nii.gz"), filepath.Join(dir, "elsewhere", "mask.nii.gz")
+	b.useStudy(study)
+	if b.opt.RefMaskFile != "" || b.opt.AnalysisFile == "" || b.study.last != "" {
+		t.Errorf("after leaving a study that cannot be reached: masks %q (its own), %q (from elsewhere)", b.opt.RefMaskFile, b.opt.AnalysisFile)
 	}
 	os.Remove(filepath.Join(study, "hc_reference", "reference.json"))
 	table := filepath.Join(study, "participants.tsv")
@@ -897,18 +913,47 @@ func TestStudy(t *testing.T) {
 				t.Errorf("a link into the study left behind, spelt in other case, was kept: %q", c.norm.reference)
 			}
 		}
-		// A study in use is the folder it was then: a link that leads to
-		// another study by now does not make the two the same.
+		// A study in use is the folder it was then: the pages write into
+		// it, not into the study a link to it leads to by now, and that
+		// study is another.
 		moving := filepath.Join(dir, "moving")
 		os.Symlink(one, moving)
 		c.useStudy(moving)
 		c.ref.files.files = []string{mine, theirs}
 		os.Remove(moving)
 		os.Symlink(three, moving)
+		if c.zmap.output != filepath.Join(one, "zmaps") || c.study.chosenInUse(moving) {
+			t.Errorf("the pages write through a link, which leads to another study by now: %q", c.zmap.output)
+		}
 		c.useStudy(moving)
-		if len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs {
+		if len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs || c.zmap.output != filepath.Join(three, "zmaps") {
 			t.Errorf("the images of the study a link led to before were kept: %q", c.ref.files.files)
 		}
+	}
+	// A folder made anew where the study was is another study.
+	c.useStudy(one)
+	fill()
+	results(one)
+	if err := os.Rename(one, filepath.Join(dir, "one-before")); err != nil {
+		t.Fatal(err)
+	}
+	if c.study.chosenInUse(one) {
+		t.Error("a study that was moved away is taken for the one in use")
+	}
+	os.MkdirAll(one, 0o755)
+	c.useStudy(one)
+	if got := done(); len(got) != 0 || len(c.ref.files.files) != 1 || c.zmap.covTable != "" {
+		t.Errorf("a study made anew where another was kept that one's images or results (done: %q, images %q)", got, c.ref.files.files)
+	}
+	os.Remove(one)
+	os.Rename(filepath.Join(dir, "one-before"), one)
+	// How a run failed is not said of the next study, wherever it was to write.
+	c.useStudy(one)
+	results(filepath.Join(dir, "elsewhere"))
+	c.norm.st, c.cmp.st = status{err: "no reference"}, status{err: "too few images"}
+	c.useStudy(three)
+	if c.norm.st.err != "" || c.cmp.st.err != "" || len(c.norm.rows) != 1 || c.zmap.st.ok == "" {
+		t.Errorf("after leaving a study: errors %q, %q; results written elsewhere: %d", c.norm.st.err, c.cmp.st.err, len(c.norm.rows))
 	}
 	// The study's own reference that is gone is not kept when the study is
 	// laid out again; one that is still there is.

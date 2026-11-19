@@ -146,7 +146,7 @@ func (a *app) loadSettings() {
 
 // settingsText is what the app remembers between launches, as it is now.
 func (a *app) settingsText() string {
-	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, Study: a.study.inUse, SPM: a.spatial.spm, Matlab: a.spatial.matlab,
+	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, Study: a.study.kept(), SPM: a.spatial.spm, Matlab: a.spatial.matlab,
 		AllMethods: a.allMethods, Options: &a.opt}
 	if chinese {
 		s.Language = "zh"

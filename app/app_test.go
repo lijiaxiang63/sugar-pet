@@ -1477,6 +1477,21 @@ func TestStudyLinks(t *testing.T) {
 			t.Errorf("after a new launch the target is %q (%s)", b.study.target(), b.study.problem())
 		}
 	}
+	// A header that is a link to that of another scan has its own image.
+	hdr, shared := filepath.Join(dir, "sub-01.hdr"), filepath.Join(dir, "sub-02.hdr")
+	os.WriteFile(hdr, nil, 0o644)
+	if os.Symlink(hdr, shared) == nil {
+		var pairs fileList
+		pairs.add([]string{hdr, shared})
+		if len(pairs.files) != 2 {
+			t.Errorf("two scans that share a header are listed as %q", pairs.files)
+		}
+	}
+	// The picker may end the folder with a separator: it is still the study.
+	a.study.choose(link + string(filepath.Separator))
+	if a.study.target() != link {
+		t.Errorf("chose %q with a separator at its end, the target is %q", link, a.study.target())
+	}
 	// A name with a space at its end is no name to type, but may be picked.
 	spaced := filepath.Join(dir, "cohort ")
 	if err := os.Mkdir(spaced, 0o755); err == nil {

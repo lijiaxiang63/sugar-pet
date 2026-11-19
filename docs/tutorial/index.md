@@ -31,11 +31,11 @@ resembles, and a group-level map showing where patients differ from controls.
   <a href="./masks"><span class="n">Resource</span><span class="t">Masks and atlas</span><span class="d">Browse or export the built-in regions and atlas labels.</span></a>
 </div>
 
-::: tip Why the order differs from the sidebar
-The sidebar places **Intensity Normalisation** before **Reference** because
-the simplest methods (such as a cerebellar reference region) do not require
-controls. This tutorial uses the recommended method, HN, which relies on a
-reference, so we build the reference first.
+::: tip Do you need a reference?
+The tutorial follows the sidebar: **Reference** comes before **Intensity
+Normalisation**, because the recommended method, HN, relies on a reference.
+The simplest methods (such as a cerebellar reference region) do not require
+controls: with those you can skip building one.
 :::
 
 ## You don't need every step

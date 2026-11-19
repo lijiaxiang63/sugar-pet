@@ -61,6 +61,7 @@ func (p *studyPage) target() string {
 // location and its name, as if they had been filled in.  Nothing is written
 // and the pages are left alone until the folders are created.
 func (p *studyPage) choose(study string) {
+	study = filepath.Clean(study) // "/data/study/" is the study, not a folder to hold one
 	p.parent, p.name, p.chosen = filepath.Dir(study), filepath.Base(study), study
 }
 

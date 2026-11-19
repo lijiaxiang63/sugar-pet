@@ -19,6 +19,9 @@ type classifyRow struct {
 	scores                         []patternScore
 	leading                        string // the pattern the reading names, if any
 	category, confidence           string
+	// badge is the pill beside the reading, in the language of the reading:
+	// both are worded when the run ends.
+	badge string
 }
 
 // classifyBadge is the confidence of a reading that names a pattern, as a
@@ -251,8 +254,9 @@ func (a *app) classifyView(c *ui.Context) {
 									ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 										ui.Row(c).Gap(7).AlignItems(ui.Center).Wrap().GapY(3).Children(func() {
 											ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
-											if badge, col := classifyBadge(r.category, r.confidence, pal); badge != "" {
-												pill(c, badge, col)
+											if r.badge != "" {
+												_, col := classifyBadge(r.category, r.confidence, pal)
+												pill(c, r.badge, col)
 											}
 										})
 										ui.Text(c, r.image+" · "+r.detail).FontSize(12).TextColor(t.TextMuted)
@@ -345,6 +349,7 @@ func (a *app) runClassify() {
 			found := res.Conclusion
 			row := classifyRow{image: name, reading: text, detail: detail, report: saved.Report,
 				source: path, zmap: saved.Map, wscore: res.Score == "w", category: found.Category, confidence: found.Confidence}
+			row.badge, _ = classifyBadge(row.category, row.confidence, &lightPalette)
 			for _, pattern := range res.Patterns {
 				row.scores = append(row.scores, patternScore{pattern.ID, core.Percent(pattern.Score)})
 			}

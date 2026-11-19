@@ -186,6 +186,8 @@ type fileList struct {
 	files []string
 	state ui.ListState
 	query string // optional filter for large lists
+	// real is where each image added leads, asked of the file system once.
+	real map[string]string
 }
 
 type seenKey struct {
@@ -314,11 +316,25 @@ func (f *fileList) add(paths []string) {
 	// An image is told by where it leads: one reached through a link, as
 	// the folders of a study may be, and by its own path is one image, and
 	// would count twice in the statistics.
+	// Where an image leads is asked once and kept: the images listed are
+	// not looked up again each time one is added.  A header and its image
+	// are two files, of which a link may share one: such a pair is told by
+	// its path alone.
 	real := func(p string) string {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
+		if r, ok := f.real[p]; ok {
 			return r
 		}
-		return p
+		r := p
+		if lower := strings.ToLower(p); !strings.HasSuffix(lower, ".hdr") && !strings.HasSuffix(lower, ".img") {
+			if led, err := filepath.EvalSymlinks(p); err == nil {
+				r = led
+			}
+		}
+		if f.real == nil {
+			f.real = map[string]string{}
+		}
+		f.real[p] = r
+		return r
 	}
 	have := map[string]bool{}
 	for _, p := range f.files {

@@ -180,6 +180,7 @@ func (a *app) demo() {
 		row := classifyRow{image: image, reading: r[0], detail: r[1], report: filepath.Join(cl.output, core.ReportStem(image)+"_report.html"),
 			source: cl.files.files[i], zmap: filepath.Join(cl.output, core.OutputName(image, "hn", "wmap")), wscore: true, leading: leading[i],
 			category: cats[i][0], confidence: cats[i][1]}
+		row.badge, _ = classifyBadge(row.category, row.confidence, &lightPalette)
 		for n, id := range core.Patterns {
 			row.scores = append(row.scores, patternScore{id, scores[i][n]})
 		}

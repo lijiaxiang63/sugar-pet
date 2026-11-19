@@ -38,10 +38,18 @@ three ways:
 * Click **Add Files…** to pick individual images;
 * Click **Add Folder…** to import all images in a directory.
 
+Once a [study folder](./prepare-data) is in use, a fourth button, such as
+**Load patients/**, adds the images of the study's own folder in one click.
+
 The counter next to the heading shows the total number of queued images. Click
-**×** on a row to remove a single image, or **Clear** to empty the list. The
-parent folder is shown next to each filename so you can tell identically named
-files apart.
+**×** on a row to remove a single image, or **Clear** to empty the list. When
+all images come from one folder, that folder is named once, in the heading;
+otherwise the parent folder is shown next to each filename so you can tell
+identically named files apart.
+
+A list of more than 8 images has a **filter** box above it. Filtering changes
+only which rows are shown: the run, the counter and **Clear** still act on the
+whole list.
 
 ## Folders and files
 

@@ -5,39 +5,117 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"sugarpet/core"
 )
 
-// covChoice is a table of covariates and the columns to adjust for.
+// covChoice is a table of covariates and the columns to adjust for.  The
+// table is a copy of the file, which may change under it (a participants.tsv
+// is filled in with another program): sync brings the copy up to date while
+// the page is shown, and fresh reads the file anew for a run.
 type covChoice struct {
 	path   string
 	table  *core.Table
 	err    string
 	adjust map[string]bool
+
+	columns []string  // of the table last read: those whose ticks are the user's
+	stamp   fileStamp // the file as it was when it was read
+	checked time.Time // when the file was last looked at
 }
+
+// fileStamp tells one state of a file from another without reading it.
+type fileStamp struct {
+	found    bool
+	size     int64
+	modified int64 // ns
+}
+
+func stampOf(path string) fileStamp {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}
+	}
+	return fileStamp{found: true, size: info.Size(), modified: info.ModTime().UnixNano()}
+}
+
+// covCheckEvery is how often, at most, a page looks at the file of its table.
+const covCheckEvery = time.Second
 
 // load reads the table after its path changed.
 func (cv *covChoice) load() {
-	cv.table, cv.err, cv.adjust = nil, "", map[string]bool{}
+	cv.adjust, cv.columns = map[string]bool{}, nil
+	cv.read()
+}
+
+// read reads the table from the file as it is now.  A column the last table
+// had keeps its tick, a new one is ticked if it is age or sex, and the tick of
+// a column that is gone is dropped.  A file that cannot be read leaves the
+// ticks alone, for when it can be read again.
+func (cv *covChoice) read() {
+	cv.table, cv.err, cv.stamp = nil, "", fileStamp{}
 	if cv.path == "" {
 		return
 	}
+	// The stamp is taken first: a change during the reading shows later.
+	cv.stamp = stampOf(cv.path)
 	table, err := core.LoadTable(cv.path)
 	if err != nil {
 		cv.err = err.Error()
 		return
 	}
-	cv.table = table
+	adjust := map[string]bool{}
 	for _, col := range table.Columns() {
-		if col == "age" || col == "sex" {
-			cv.adjust[col] = true
+		if slices.Contains(cv.columns, col) {
+			adjust[col] = cv.adjust[col]
+		} else {
+			adjust[col] = col == "age" || col == "sex"
 		}
 	}
+	cv.table, cv.adjust, cv.columns = table, adjust, table.Columns()
+}
+
+// sync reads the table again if its file has changed since it was read.  It
+// is for the view, which runs on every frame: now is the time of the frame,
+// and the file is looked at, not read, once in covCheckEvery.  A file that
+// could not be read is read at each look: what was in the way (the permission
+// to read it, say) may be gone without a change of its size or time.
+func (cv *covChoice) sync(now time.Time) {
+	if cv.path == "" {
+		return
+	}
+	if since := now.Sub(cv.checked); since >= 0 && since < covCheckEvery {
+		return
+	}
+	cv.checked = now
+	if cv.err != "" || stampOf(cv.path) != cv.stamp {
+		cv.read()
+	}
+}
+
+// fresh reads the table anew for a run, whatever the stamp of its file says,
+// and returns what keeps the run from starting: the file cannot be read, or
+// the columns to adjust for are not those the page showed.
+func (cv *covChoice) fresh() string {
+	if cv.path == "" {
+		return ""
+	}
+	shown := cv.names()
+	cv.read()
+	now := cv.names()
+	slices.Sort(shown) // the columns may be in another order
+	slices.Sort(now)
+	if cv.err == "" && !slices.Equal(shown, now) {
+		return T("The columns of the covariate table have changed. Check the columns to adjust for, then start again.",
+			"协变量表的列已发生变化。请检查要校正的列，然后重新开始。")
+	}
+	return cv.problem()
 }
 
 // names are the chosen columns, in the order of the table.
@@ -68,6 +146,7 @@ func (cv *covChoice) problem() string {
 // covRows are the settings of a covariate table.
 func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []func() {
 	t := c.Theme()
+	cv.sync(c.Now())
 	out := []func(){func() {
 		a.pathSetting(c, key, T("Covariate table", "协变量表"), desc, &cv.path, pathFile, tableFilter, cv.load)
 	}}
@@ -253,6 +332,10 @@ func (a *app) runReference() {
 	opt := core.BuildOptions{FWHM: o.RefFWHM, Mask: core.MaskSpec{Name: o.RefMask}, StatsFor: o.statsFor()}
 	if o.RefMask == "file" {
 		opt.Mask = core.MaskSpec{Name: o.RefMaskFile}
+	}
+	if msg := p.cov.fresh(); msg != "" {
+		p.st.err = msg
+		return
 	}
 	if p.cov.table != nil {
 		names := p.cov.names()

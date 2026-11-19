@@ -241,6 +241,10 @@ func (a *app) runCompare() {
 		}
 		opt.Mask = spec
 	}
+	if msg := p.cov.fresh(); msg != "" {
+		p.st.err = msg
+		return
+	}
 	if p.cov.table != nil {
 		names := p.cov.names()
 		tables := []*core.Table{p.cov.table}

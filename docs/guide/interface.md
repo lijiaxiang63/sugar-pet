@@ -6,7 +6,7 @@ know where things live here, the tutorial will simply tell you what to select.
 <Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 112], [2, 222, 830], [3, 140, 874], [4, 163], [5, 492], [6, 257, 862], [7, 'run']]" />
 
 1. **Navigation sidebar.** Lists the pages in the order of a typical workflow,
-   from spatial normalisation to group comparison. Click any item to switch
+   from the study folder to the group comparison. Click any item to switch
    pages. A tick marks the pages whose last run succeeded, and a spinner the
    one that is running.
 2. **Reference in use.** Displays the active healthy-control reference folder.
@@ -64,7 +64,8 @@ line under the cards of each page says which options are in effect.
    options of this page.
 
 The Z-score Maps page shows this line only while iPS or iHN is ticked (they
-are the only methods with options there), and Masks & Atlas has none.
+are the only methods with options there), and Study Folder and Masks & Atlas
+have none.
 
 ## The Settings window
 

@@ -20,6 +20,7 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 
 | 桌面应用页面 | 对应命令 |
 | --- | --- |
+| 研究文件夹 | `sugar-pet init` |
 | 空间标准化 | `sugar-pet spatial-norm` |
 | 强度归一化 | `sugar-pet normalize` |
 | 参考库 | `sugar-pet build-reference` |
@@ -33,9 +34,13 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 
 ## 用脚本复现教程流程
 
-在 `study/` 目录下，下面几行命令就能跑完[教程](../tutorial/)里的全部步骤：
+下面几行命令就能跑完[教程](../tutorial/)里的全部步骤：
 
 ```bash
+# 开始之前：创建研究文件夹，再把数据放进去
+sugar-pet init study/
+cd study/
+
 # 第 1 步（可选）：空间标准化
 sugar-pet spatial-norm raw/*_pet.nii.gz -o patients/ --spm-path /path/to/spm12 --jobs 4
 

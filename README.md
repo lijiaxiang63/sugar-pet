@@ -201,6 +201,14 @@ For a study that compares patients with healthy controls. It was written with
 atypical parkinsonism in mind (MSA, PSP, CBS), where the classic reference
 regions, cerebellum and pons, are often affected themselves.
 
+`sugar-pet init study/` creates the folders the guide recommends for a study
+and an empty `participants.tsv`, and says what each is for. The commands
+below read `patients/`, `controls/`, `participants.tsv` and `hc_reference/`
+from it: put your data in it and run them from inside it (`cd study/`).
+Where they write is up to you (`-o`); `init` makes `compare/` and `zmaps/`
+for the group comparison and the maps. The app does the same on its Study
+Folder page.
+
 **1. Treat patients and controls the same way.** Same scanner and
 reconstruction if at all possible, the same spatial normalisation, and a look
 at every warped image.

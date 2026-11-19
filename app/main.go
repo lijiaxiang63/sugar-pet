@@ -60,6 +60,7 @@ type app struct {
 	// updates is whether the update plugin is used (useUpdater).
 	updates bool
 
+	study    studyPage
 	spatial  spatialPage
 	norm     normPage
 	ref      refPage
@@ -78,6 +79,7 @@ type settings struct {
 	Language   string   `json:"language"`
 	Page       string   `json:"page"`
 	Reference  string   `json:"reference"`
+	Study      string   `json:"study,omitempty"`
 	Output     string   `json:"output"`
 	SPM        string   `json:"spm,omitempty"`
 	Matlab     string   `json:"matlab,omitempty"`
@@ -87,6 +89,7 @@ type settings struct {
 
 func newApp() *app {
 	a := &app{page: "normalize", opt: defaultOptions()}
+	a.study.init()
 	a.norm.init()
 	a.ref.init()
 	a.zmap.init()
@@ -132,6 +135,7 @@ func (a *app) loadSettings() {
 			a.setReference(s.Reference)
 		}
 	}
+	a.restoreStudy(s.Study)
 	a.allMethods = s.AllMethods
 	a.spatial.setSPM(s.SPM)
 	if _, err := core.ResolveMatlab(s.Matlab); err == nil {
@@ -142,7 +146,7 @@ func (a *app) loadSettings() {
 
 // settingsText is what the app remembers between launches, as it is now.
 func (a *app) settingsText() string {
-	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, SPM: a.spatial.spm, Matlab: a.spatial.matlab,
+	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, Study: a.study.kept(), SPM: a.spatial.spm, Matlab: a.spatial.matlab,
 		AllMethods: a.allMethods, Options: &a.opt}
 	if chinese {
 		s.Language = "zh"
@@ -170,7 +174,13 @@ func (a *app) saveSettings() bool {
 func (a *app) setReference(path string) {
 	a.norm.reference, a.zmap.reference, a.cmp.reference, a.cluster.reference = path, path, path, path
 	a.classify.reference = path
+	// What the pages read of the reference before is read anew, or let go
+	// of with it.
 	a.zmap.loadedFrom, a.classify.loadedFrom = "", ""
+	a.zmap.info, a.classify.info = nil, nil
+	// Also if the path is the same: another reference may have its name.
+	a.ref.current = ""
+	a.ref.pic.forget()
 	a.cmp.fwhmKnown = false
 }
 
@@ -181,6 +191,7 @@ type pageInfo struct {
 }
 
 var pages = []pageInfo{
+	{"study", "Study Folder", "研究文件夹", iconFolder},
 	{"spatial", "Spatial Normalisation", "空间标准化", iconWarp},
 	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
 	{"reference", "Reference", "参考库", iconLayers},
@@ -211,6 +222,8 @@ func (a *app) view(c *ui.Context) {
 			pane := ui.Column(c).Grow(1).MinHeight(0).Radius(12).Background(pal.card).Clip()
 			raised(pane, pal).Children(func() {
 				switch a.page {
+				case "study":
+					a.studyView(c)
 				case "spatial":
 					a.spatialView(c)
 				case "normalize":
@@ -241,6 +254,8 @@ func (a *app) view(c *ui.Context) {
 // sidebar marks.
 func (a *app) done(page string) bool {
 	switch page {
+	case "study":
+		return a.study.st.ok != ""
 	case "spatial":
 		return a.spatial.st.ok != ""
 	case "normalize":

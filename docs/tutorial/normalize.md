@@ -35,6 +35,14 @@ to run this step beforehand.
    **Fewer methods** to fold them again. They always stay in view while one
    of them is ticked.
 
+::: tip One method is enough
+Each method is a complete normalisation on its own. HN does not need a
+reference region or the whole brain on top of it: ticking **Histogram (HN)**
+alone is the usual choice. Ada ticks **Cerebellum** as well only to compare
+the two. The results are independent: the cerebellum image is the original
+scan divided by its cerebellar mean, not the HN image divided a second time.
+:::
+
 Not sure which to choose? See [Choosing a method](../reference/methods).
 
 ### A region of your own

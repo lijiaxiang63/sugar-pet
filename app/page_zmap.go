@@ -144,7 +144,7 @@ func (a *app) zmapView(c *ui.Context) {
 					covRow,
 				)
 			})
-			section(c, T("Methods", "方法"), T("Grayed methods need a reference built with them ticked.", "灰色的方法需要在建立参考库时勾选。"), func() {
+			section(c, T("Methods", "方法"), T("One method is enough; several give one map each. Grayed methods need a reference built with them ticked.", "选一种即可，多选时各出一幅图。灰色的方法需要在建立参考库时勾选。"), func() {
 				a.methodPicker(c, p.methods, p.allowed)
 			})
 			section(c, T("Output", "输出"), "", func() {

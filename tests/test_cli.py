@@ -1,3 +1,5 @@
+import os
+
 import nibabel as nib
 import numpy as np
 import pytest
@@ -186,3 +188,95 @@ def test_compare_two_groups(tmp_path, controls, lesion, capsys):
     assert "no row" in capsys.readouterr().err
     assert main([*args, "-m", "magic"]) == 2
     assert main(["compare", "--group1", patients[0], "--group2", *healthy, "-m", "ps", "-o", str(out)]) == 2
+
+
+def test_init(tmp_path, capsys):
+    study = tmp_path / "study"
+    assert main(["init", str(study)]) == 0
+    out = capsys.readouterr().out
+    folders = ["raw", "patients", "controls", "hc_reference", "normalised", "zmaps", "reports", "compare"]
+    assert all((study / name).is_dir() for name in folders)
+    assert (study / "participants.tsv").read_text() == "participant_id\tage\tsex\n"
+    assert "9 created, 0 already there" in out and "patients/" in out
+
+    # run again: what is there is kept, what is missing is made
+    (study / "participants.tsv").write_text("participant_id\tage\tsex\nsub-01\t60\tF\n")
+    (study / "zmaps").rmdir()
+    assert main(["init", str(study)]) == 0
+    assert "1 created, 8 already there" in capsys.readouterr().out
+    assert (study / "zmaps").is_dir() and "sub-01" in (study / "participants.tsv").read_text()
+
+    # a file in the way is reported, and nothing is made
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "patients").write_text("")
+    assert main(["init", str(other)]) == 2
+    assert "is not a folder" in capsys.readouterr().err and not (other / "raw").exists()
+
+    # a file where a parent folder should be is an error, not a traceback
+    (tmp_path / "afile").write_text("")
+    assert main(["init", str(tmp_path / "afile" / "study")]) == 2
+    assert "cannot create the study folder" in capsys.readouterr().err
+
+
+def test_init_links(tmp_path, capsys):
+    # a link that leads nowhere is not written through, and nothing is made
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    try:
+        (linked / "participants.tsv").symlink_to(tmp_path / "outside.tsv")
+    except (OSError, NotImplementedError):
+        pytest.skip("links cannot be made here")  # Windows without the privilege
+    assert main(["init", str(linked)]) == 2
+    assert "leads nowhere" in capsys.readouterr().err
+    assert not (tmp_path / "outside.tsv").exists() and not (linked / "raw").exists()
+
+    # a link to a real folder is the folder
+    (tmp_path / "elsewhere").mkdir()
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "patients").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    assert main(["init", str(real)]) == 0
+    assert "8 created, 1 already there" in capsys.readouterr().out
+
+    # a pipe is not a table
+    if hasattr(os, "mkfifo"):
+        piped = tmp_path / "piped"
+        piped.mkdir()
+        os.mkfifo(piped / "participants.tsv")
+        assert main(["init", str(piped)]) == 2
+        assert "is not a file" in capsys.readouterr().err and not (piped / "raw").exists()
+
+
+def test_init_table_half_written(tmp_path, monkeypatch, capsys):
+    # a table that could not be written to the end is not left behind, also when it is closing that fails
+    class Full:
+        def __init__(self, path):
+            self.table = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+
+        def __enter__(self):
+            return self
+
+        def write(self, text):
+            return len(text)  # kept in memory, as a buffered file does
+
+        def __exit__(self, *exc):
+            os.close(self.table)
+            raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr("sugar_pet.study.open", lambda path, mode: Full(path), raising=False)
+    assert main(["init", str(tmp_path / "study")]) == 2
+    assert "No space left" in capsys.readouterr().err
+    assert not (tmp_path / "study" / "participants.tsv").exists()
+
+    # one that is in the way and cannot be opened was not made here: it is left alone
+    def refused(path, mode):
+        raise PermissionError(13, "Permission denied")
+
+    kept = tmp_path / "kept"
+    kept.mkdir()
+    monkeypatch.setattr("sugar_pet.study.open", refused, raising=False)
+    monkeypatch.setattr("sugar_pet.study._present", lambda target, is_folder: False)
+    (kept / "participants.tsv").write_text("participant_id\tage\tsex\nsub-01\t60\tF\n")
+    assert main(["init", str(kept)]) == 2
+    assert "sub-01" in (kept / "participants.tsv").read_text()

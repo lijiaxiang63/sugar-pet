@@ -135,6 +135,7 @@ type refPage struct {
 	output string
 
 	st      status
+	built   string // where the last build wrote, or was to write
 	current string // the reference the summary below is of
 	info    *refInfo
 	pic     picture
@@ -246,6 +247,7 @@ func (a *app) referenceView(c *ui.Context) {
 
 func (a *app) runReference() {
 	p := &a.ref
+	p.built = p.output
 	files := append([]string(nil), p.files.files...)
 	o := a.opt
 	opt := core.BuildOptions{FWHM: o.RefFWHM, Mask: core.MaskSpec{Name: o.RefMask}, StatsFor: o.statsFor()}

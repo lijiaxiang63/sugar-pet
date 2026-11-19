@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -152,7 +153,7 @@ func progress(done, total int) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <methods|normalize|build-reference|zmap|classify|compare|reference-cluster|masks|labels|spatial-norm> ...")
+		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <init|methods|normalize|build-reference|zmap|classify|compare|reference-cluster|masks|labels|spatial-norm> ...")
 		os.Exit(2)
 	}
 	ctx := context.Background()
@@ -160,6 +161,8 @@ func main() {
 	switch command {
 	case "--version":
 		fmt.Println("sugar-pet", core.Version)
+	case "init":
+		initStudy(rest)
 	case "methods":
 		fmt.Println("Normalisation methods (-m):")
 		for _, m := range core.Methods {
@@ -255,6 +258,94 @@ func main() {
 	default:
 		fail(2, "unknown command '%s'", command)
 	}
+}
+
+// realPath is a path as the system reads it, without links: what Python's
+// Path.resolve gives.  filepath.Abs would join a relative path to the
+// working folder as the shell names it, which may itself be a link.
+func realPath(path string) string {
+	if runtime.GOOS == "windows" {
+		// Windows reads "\study" and "D:study" by the drive in use and its
+		// folder, and ".." by the name alone: as filepath.Abs does.
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	if filepath.IsAbs(path) {
+		return path
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	if real, err := filepath.EvalSymlinks(wd); err == nil {
+		wd = real
+	}
+	return filepath.Join(wd, path)
+}
+
+// initStudy creates the recommended folders of a study and says what each
+// is for.
+func initStudy(rest []string) {
+	// After "--" a word is the folder, also if it begins with "-".
+	var after []string
+	for i, word := range rest {
+		if word == "--" {
+			rest, after = rest[:i:i], rest[i+1:]
+			break
+		}
+	}
+	for _, word := range rest {
+		if word == "-h" || word == "--help" {
+			fmt.Println("usage: sugar-pet-cli init [folder]")
+			fmt.Println("\nCreate the recommended folders of a study and an empty participants.tsv.")
+			fmt.Println("The folder to create or complete defaults to 'study'.")
+			return
+		}
+	}
+	// Nothing is made unless the command is understood.
+	for _, word := range rest {
+		if strings.HasPrefix(word, "-") {
+			fail(2, "init has no option '%s': it takes only the folder to create", word)
+		}
+	}
+	rest = append(rest, after...)
+	if len(rest) > 1 {
+		fail(2, "init takes one folder, not %d", len(rest))
+	}
+	root := "study"
+	if len(rest) == 1 {
+		root = rest[0]
+	}
+	created, err := core.InitStudy(root)
+	check(err)
+	fmt.Printf("Study folder: %s\n", realPath(root))
+	made := 0
+	for _, group := range []struct {
+		title string
+		yours bool
+	}{{"For you to fill:", true}, {"Written by the analyses:", false}} {
+		fmt.Printf("\n%s\n", group.title)
+		for i, e := range core.StudyLayout {
+			if e.Yours != group.yours {
+				continue
+			}
+			name, state := e.Name, "already there"
+			if e.Dir {
+				name += "/"
+			}
+			if created[i] {
+				state = "created"
+				made++
+			}
+			fmt.Printf("  %-18s%s\n    %s\n", name, state, e.Text)
+		}
+	}
+	fmt.Printf("\n%d created, %d already there. Nothing that existed was changed.\n", made, len(created)-made)
+	fmt.Println("Next: put your images in patients/ and controls/, and fill in participants.tsv.")
 }
 
 func normalize(rest []string) int {

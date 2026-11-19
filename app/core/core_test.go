@@ -263,3 +263,110 @@ func TestSpatialCancel(t *testing.T) {
 	}
 	t.Fatalf("process %d outlived the cancelled run", pid)
 }
+
+// TestInitStudy checks that a study folder is laid out as the guide
+// recommends, and that what is there already is kept.
+func TestInitStudy(t *testing.T) {
+	study := filepath.Join(t.TempDir(), "study")
+	created, err := InitStudy(study)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range StudyLayout {
+		info, err := os.Stat(filepath.Join(study, e.Name))
+		if err != nil || info.IsDir() != e.Dir || !created[i] {
+			t.Errorf("%s: not created as it should be", e.Name)
+		}
+	}
+	table := filepath.Join(study, "participants.tsv")
+	if text, _ := os.ReadFile(table); string(text) != ParticipantsHeader {
+		t.Errorf("participants.tsv holds %q", text)
+	}
+
+	// Again: the table that was filled is kept, the folder that went is made.
+	filled := ParticipantsHeader + "sub-01\t60\tF\n"
+	os.WriteFile(table, []byte(filled), 0o644)
+	os.Remove(filepath.Join(study, "zmaps"))
+	created, err = InitStudy(study)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range StudyLayout {
+		if created[i] != (e.Name == "zmaps") {
+			t.Errorf("%s: created is %v", e.Name, created[i])
+		}
+	}
+	if text, _ := os.ReadFile(table); string(text) != filled {
+		t.Errorf("participants.tsv was changed to %q", text)
+	}
+
+	// A folder named with its separator is the same folder.
+	slashed := filepath.Join(t.TempDir(), "study")
+	if _, err := InitStudy(slashed + string(filepath.Separator)); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(slashed, "raw")); err != nil || !info.IsDir() {
+		t.Error("nothing was made in a folder named with its separator")
+	}
+	// A file in the way is reported, and nothing is made.
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, "patients"), nil, 0o644)
+	if _, err := InitStudy(other); err == nil {
+		t.Error("a file named patients was accepted as the folder")
+	}
+	if _, err := os.Stat(filepath.Join(other, "raw")); err == nil {
+		t.Error("folders were made although the study could not be laid out")
+	}
+
+	// A link that leads nowhere is not written through, and nothing is made;
+	// a link to a real folder is the folder.
+	if runtime.GOOS == "windows" {
+		return // making links needs a privilege there
+	}
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside.tsv")
+	linked := filepath.Join(base, "linked")
+	os.Mkdir(linked, 0o755)
+	if err := os.Symlink(outside, filepath.Join(linked, "participants.tsv")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InitStudy(linked); err == nil || !strings.Contains(err.Error(), "leads nowhere") {
+		t.Errorf("a link that leads nowhere gave %v", err)
+	}
+	if _, err := os.Stat(outside); err == nil {
+		t.Error("the table was written through the link")
+	}
+	if _, err := os.Stat(filepath.Join(linked, "raw")); err == nil {
+		t.Error("folders were made beside a link that leads nowhere")
+	}
+	elsewhere, real := filepath.Join(base, "elsewhere"), filepath.Join(base, "real")
+	os.Mkdir(elsewhere, 0o755)
+	os.Mkdir(real, 0o755)
+	os.Symlink(elsewhere, filepath.Join(real, "patients"))
+	created, err = InitStudy(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range StudyLayout {
+		if created[i] == (e.Name == "patients") {
+			t.Errorf("%s beside a linked folder: created is %v", e.Name, created[i])
+		}
+	}
+
+	// A path through a link and back is the folder the system reads it as,
+	// not the one its spelling shortens to.
+	site, here := filepath.Join(base, "data", "site"), filepath.Join(base, "here")
+	os.MkdirAll(site, 0o755)
+	os.MkdirAll(filepath.Join(here, "study"), 0o755)
+	os.Symlink(site, filepath.Join(here, "link"))
+	through := here + string(filepath.Separator) + "link" + string(filepath.Separator) + ".." + string(filepath.Separator) + "study"
+	if _, err := InitStudy(through); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "data", "study", "patients")); err != nil {
+		t.Error("the study was not laid out where the path leads")
+	}
+	if _, err := os.Stat(filepath.Join(here, "study", "patients")); err == nil {
+		t.Error("the study was laid out in the folder the path's spelling shortens to")
+	}
+}

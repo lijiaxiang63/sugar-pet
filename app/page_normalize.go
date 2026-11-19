@@ -257,7 +257,7 @@ func (a *app) normalizeView(c *ui.Context) {
 				a.filesCard(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
 					T(".nii and .nii.gz files, or whole folders", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹"))
 			})
-			section(c, T("Methods", "方法"), T("Choose several to compare them: each image is written once per method.", "可多选以便比较：每种方法各输出一幅图像。"), func() {
+			section(c, T("Methods", "方法"), T("One method is enough. Several are for comparison only: each writes its own image from the original.", "选一种即可。多选仅用于对比：每种方法都从原图各自输出一幅图像，互不叠加。"), func() {
 				a.methodPicker(c, p.methods, nil)
 			})
 			if p.methods["region"] {

@@ -87,12 +87,73 @@ study/
 ├── controls/           sub-hc01_space-MNI_pet.nii.gz, ...
 ├── participants.tsv    age and sex of all subjects
 │
-├── hc_reference/       created in Step 2
-├── normalised/         created in Step 3
-├── zmaps/              created in Step 4
-├── reports/            created in Step 5
-└── compare/            created in Step 6
+├── hc_reference/       written in Step 2
+├── normalised/         written in Step 3
+├── zmaps/              written in Step 4
+├── reports/            written in Step 5
+└── compare/            written in Step 6
 ```
+
+### Create it in one go {#create-it}
+
+You do not have to make these folders by hand. Open the **Study Folder**
+page, the first in the sidebar, choose where the study folder goes and what
+it is called, and click **Create Folders**:
+
+<Shot name="study" alt="The Study Folder page, after the folders were created" />
+
+The page lists every folder with what it is for, and marks each as *Created*
+or *Already there*. It also makes the study folder the one the app writes
+into: the output folder of every page is set to its folder of the study, so
+you do not have to choose them one by one. If the study folder you chose is
+a link, the pages are given the folder it leads to. The app remembers the
+study folder for the next launch; one on a drive that is not plugged in then
+is used again once it is. Only Spatial Normalisation is left for you to set,
+since it writes patients and controls into different folders.
+
+A reference the study already holds in `hc_reference/` becomes the reference
+in use, if none is. When you create the folders of another study, the pages
+go over to it: the images, tables, masks and reference of the study you leave
+are taken off them, and so are the results of its runs, so that the images of
+one study are never written into another or compared with its controls. A mask
+or a PET template of that study chosen in the settings goes too: check the
+settings of the pages that used one. The files of those results stay where
+they are, in the folder of the study you left. Images, masks and a reference
+you chose from elsewhere are kept.
+
+From the command line, the folders are created with:
+
+```bash
+sugar-pet init study/
+```
+
+Both create the folders above and a `participants.tsv` that holds only the
+header line `participant_id`, `age`, `sex`, for you to fill in. Nothing that
+already exists is changed, so it is safe to run on a study folder you have
+started: only what is missing is added.
+
+### What each folder is for {#what-each-folder-is-for}
+
+You fill the first four before running the analyses:
+
+| Folder or file | What goes in it |
+| --- | --- |
+| `raw/` | Images still in native scanner space. Only needed if yours are not in MNI space yet: [Step 1](../tutorial/spatial) warps them into `patients/` and `controls/`. |
+| `patients/` | Patient images in MNI space, one scan per subject. |
+| `controls/` | Healthy-control images in MNI space, from the same scanner and preprocessing as the patients. |
+| `participants.tsv` | Age and sex of every subject, patients and controls, one row each (see [above](#the-table-of-ages-and-sexes)). |
+
+The analyses write into the others. The app sets each as the output folder
+of its page when it creates the study folder; on the command line, pass it
+to `-o`:
+
+| Folder | Written by | What it holds |
+| --- | --- | --- |
+| `hc_reference/` | [Reference](../tutorial/build-reference) (Step 2) | The reference built from the controls. Most other steps read it. |
+| `normalised/` | [Intensity Normalisation](../tutorial/normalize) (Step 3) | Intensity-normalised images and `factors.tsv`. |
+| `zmaps/` | [Z-score Maps](../tutorial/zmap) (Step 4) | Z-score or W-score maps of the patients. |
+| `reports/` | [Classify Parkinsonism](../tutorial/classify) (Step 5) | Classification reports of the patients. |
+| `compare/` | [Compare Groups](../tutorial/compare) (Step 6) | T-maps and cluster tables of patients against controls. |
 
 ## Next
 

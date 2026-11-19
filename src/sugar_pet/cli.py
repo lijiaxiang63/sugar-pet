@@ -15,6 +15,7 @@ from .covariates import read_table
 from .masks import MASKS, atlas_labels, builtin_mask, labels_mask
 from .normalize import METHODS, NEEDS_REFERENCE, normalize
 from .reference import STATS_METHODS, Reference
+from .study import init_study
 
 
 def _strip_ext(name: str) -> str:
@@ -52,6 +53,26 @@ def _unknown_methods(methods: list[str]) -> str | None:
 def _progress(done: int, total: int) -> None:
     if sys.stderr.isatty():
         print(f"\r  {done}/{total}", end="" if done < total else "\n", file=sys.stderr, flush=True)
+
+
+def cmd_init(args) -> int:
+    root = Path(args.folder)
+    try:
+        entries = init_study(root)
+    except OSError as err:  # a file where a parent folder should be, no permission, ...
+        raise ValueError(f"cannot create the study folder: {err}") from err
+    print(f"Study folder: {root.resolve()}")
+    for title, yours in (("For you to fill:", True), ("Written by the analyses:", False)):
+        print(f"\n{title}")
+        for entry, created in entries:
+            if entry.yours == yours:
+                name = entry.name + ("/" if entry.is_folder else "")
+                print(f"  {name:18s}{'created' if created else 'already there'}")
+                print(f"    {entry.text}")
+    made = sum(created for _, created in entries)
+    print(f"\n{made} created, {len(entries) - made} already there. Nothing that existed was changed.")
+    print("Next: put your images in patients/ and controls/, and fill in participants.tsv.")
+    return 0
 
 
 def cmd_methods(_args) -> int:
@@ -422,6 +443,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"sugar-pet {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("init", help="create the recommended folders of a study and an empty participants.tsv")
+    p.add_argument("folder", nargs="?", default="study", help="the study folder to create or complete [study]")
+    p.set_defaults(func=cmd_init)
 
     p = sub.add_parser("methods", help="list the normalisation methods and built-in masks")
     p.set_defaults(func=cmd_methods)

@@ -109,6 +109,13 @@ func (a *app) demo() {
 		a.cmp.g2.files = append(a.cmp.g2.files, control(i))
 		a.ref.files.files = append(a.ref.files.files, control(i))
 	}
+	a.study.parent, a.study.made, a.study.statusOf = "/Users/ada", "/Users/ada/study", "/Users/ada/study"
+	a.study.created = make([]bool, len(core.StudyLayout))
+	for i := range a.study.created {
+		a.study.created[i] = true
+	}
+	a.study.st.ok = Tf("Study folder ready: %d created, %d already there. The pages now write into it.",
+		"研究文件夹已就绪：新建 %d 项，%d 项原已存在。各页面的输出已指向这里。", len(core.StudyLayout), 0)
 	sp := &a.spatial
 	sp.spm, sp.matlab, sp.output = "/Users/ada/spm12", "/Applications/MATLAB_R2025b.app", "/Users/ada/study/patients"
 	sp.outDir = sp.output

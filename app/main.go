@@ -59,6 +59,8 @@ type app struct {
 	allMethods bool
 	// updates is whether the update plugin is used (useUpdater).
 	updates bool
+	// seen is what onDisk last learnt of the files it was asked about.
+	seen map[seenKey]seenFile
 
 	study    studyPage
 	spatial  spatialPage
@@ -193,13 +195,56 @@ type pageInfo struct {
 var pages = []pageInfo{
 	{"study", "Study Folder", "研究文件夹", iconFolder},
 	{"spatial", "Spatial Normalisation", "空间标准化", iconWarp},
-	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
 	{"reference", "Reference", "参考库", iconLayers},
+	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
 	{"zmap", "Z-score Maps", "Z 值图", iconCurve},
 	{"classify", "Classify Parkinsonism", "帕金森综合征分类", iconReport},
 	{"compare", "Compare Groups", "组间比较", iconCompare},
 	{"cluster", "Reference Cluster", "参考簇", iconTarget},
 	{"masks", "Masks & Atlas", "掩膜与图谱", iconGrid},
+}
+
+// navGroups are the groups of the sidebar and the pages of each, by id, so
+// that a page added to pages does not move the others between groups.
+var navGroups = []struct {
+	title label
+	pages []string
+}{
+	{label{"Prepare", "准备与建库"}, []string{"study", "spatial", "reference"}},
+	{label{"Individual", "个案分析"}, []string{"normalize", "zmap", "classify"}},
+	{label{"Group", "组水平统计"}, []string{"compare", "cluster"}},
+	{label{"Resources", "资源"}, []string{"masks"}},
+}
+
+// pageInfoOf returns the metadata of a page by id.
+func pageInfoOf(id string) pageInfo {
+	for _, p := range pages {
+		if p.id == id {
+			return p
+		}
+	}
+	return pages[0]
+}
+
+// pageCount returns the number of input images queued on a page.
+func (a *app) pageCount(id string) int {
+	switch id {
+	case "spatial":
+		return len(a.spatial.files.files)
+	case "reference":
+		return len(a.ref.files.files)
+	case "normalize":
+		return len(a.norm.files.files)
+	case "zmap":
+		return len(a.zmap.files.files)
+	case "classify":
+		return len(a.classify.files.files)
+	case "compare":
+		return len(a.cmp.g1.files) + len(a.cmp.g2.files)
+	case "cluster":
+		return len(a.cluster.files.files)
+	}
+	return 0
 }
 
 func (a *app) view(c *ui.Context) {
@@ -275,7 +320,7 @@ func (a *app) done(page string) bool {
 }
 
 // navItem is a page of the sidebar: the chosen one a face raised off the
-// wash, with its icon in the accent.
+// wash, with a bar of the accent at its left and its icon in the accent.
 func (a *app) navItem(c *ui.Context, page *string, p pageInfo) {
 	pal := paletteFor(c)
 	title := T(p.en, p.zh)
@@ -290,6 +335,12 @@ func (a *app) navItem(c *ui.Context, page *string, p pageInfo) {
 		bg = pal.rowHover
 	}
 	item.Background(item.AnimateColor("bg", bg, quick)).Children(func() {
+		// The bar lies in the padding, out of the row, and the title keeps
+		// its weight: the longest of them, Intensity Normalisation, just
+		// fits, chosen or not.
+		if chosen {
+			ui.Box(c).Absolute().Left(3).Top(9).Size(3, 14).Radius(1.5).Background(pal.accent).PassThrough()
+		}
 		ui.Icon(c, p.icon).Size(16, 16).TextColor(tint).Shrink(0)
 		ui.Text(c, title).FontSize(13).TextColor(fg).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 		switch {
@@ -297,6 +348,8 @@ func (a *app) navItem(c *ui.Context, page *string, p pageInfo) {
 			ui.Spinner(c).Size(12, 12)
 		case a.done(p.id):
 			ui.Icon(c, iconTick).Size(11, 11).TextColor(pal.success).Shrink(0)
+		case a.pageCount(p.id) > 0:
+			ui.Text(c, toString(a.pageCount(p.id))).FontSize(10.5).FontWeight(600).TextColor(pal.faint).SingleLine().Shrink(0)
 		}
 	})
 }
@@ -304,8 +357,8 @@ func (a *app) navItem(c *ui.Context, page *string, p pageInfo) {
 func (a *app) sidebar(c *ui.Context) {
 	pal := paletteFor(c)
 	bar := c.TitleBar()
-	ui.Box(c).Height(max(bar.Bottom+14, titleBarHeight)).Shrink(0).DragWindow()
-	ui.Row(c).Padding(0, 16, 14, 16).Gap(10).AlignItems(ui.Center).Shrink(0).DragWindow().Children(func() {
+	ui.Box(c).Height(max(bar.Bottom+12, titleBarHeight)).Shrink(0).DragWindow()
+	ui.Row(c).Padding(0, 16, 12, 16).Gap(10).AlignItems(ui.Center).Shrink(0).DragWindow().Children(func() {
 		ui.Image(c, appLogo).Size(32, 32)
 		ui.Column(c).Gap(1).MinWidth(0).Children(func() {
 			ui.Text(c, "SUGAR-PET").FontSize(14.5).FontWeight(700).LetterSpacing(0.2).SingleLine()
@@ -313,45 +366,66 @@ func (a *app) sidebar(c *ui.Context) {
 		})
 	})
 	page := a.page
-	group := func(title string, items []pageInfo) {
-		ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(pal.faint).LetterSpacing(0.3).Padding(10, 10, 5, 10).SingleLine()
-		for _, p := range items {
-			a.navItem(c, &page, p)
-		}
-	}
 	ui.Scroll(c.Key("nav")).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Padding(0, 10, 8, 10).Gap(2).Children(func() {
-			group(T("Workflow", "工作流程"), pages[:len(pages)-1])
-			group(T("Resources", "资源"), pages[len(pages)-1:])
+		ui.Column(c).Padding(0, 10, 8, 10).Gap(1.5).Children(func() {
+			for _, g := range navGroups {
+				ui.Text(c, g.title.String()).FontSize(10.5).FontWeight(650).TextColor(pal.faint).LetterSpacing(0.4).Padding(9, 10, 4, 12).SingleLine()
+				for _, id := range g.pages {
+					a.navItem(c, &page, pageInfoOf(id))
+				}
+			}
 		})
 	})
 	a.page = page
 
-	// The reference in use, and the settings.
-	ui.Column(c).Padding(8, 10, 10, 10).Gap(6).Shrink(0).Children(func() {
+	// The active study, reference in use, and settings.
+	ui.Column(c).Padding(6, 10, 10, 10).Gap(5).Shrink(0).Children(func() {
+		if study := a.study.inUse; study != "" {
+			sbox := ui.ButtonBase(c.Key("study-chip")).Padding(7, 10).Radius(10).Gap(9).AlignItems(ui.Center).
+				Label(T("Active study", "当前研究"))
+			sbg := pal.text.Alpha(0.04)
+			if sbox.Hovered() {
+				sbg = pal.text.Alpha(0.075)
+			}
+			sbox.Background(sbox.AnimateColor("bg", sbg, quick)).InsetShadow(0, 0, 0, 1, pal.border).Tooltip(study).Children(func() {
+				ui.Box(c).Size(24, 24).Radius(6).Center().Shrink(0).Background(pal.success.Alpha(0.14)).Children(func() {
+					ui.Icon(c, iconFolder).Size(13, 13).TextColor(pal.success)
+				})
+				ui.Column(c).Gap(0.5).Grow(1).MinWidth(0).Children(func() {
+					ui.Text(c, T("Study", "研究文件夹")).FontSize(10).TextColor(pal.muted).SingleLine()
+					ui.Text(c, filepath.Base(study)).FontSize(12).FontWeight(500).SingleLine().Ellipsis("…")
+				})
+			})
+			if sbox.Clicked() {
+				a.page = "study"
+			}
+		}
 		ref := a.norm.reference
-		box := ui.ButtonBase(c.Key("ref-chip")).Padding(8, 10).Radius(10).Gap(9).AlignItems(ui.Center).
+		box := ui.ButtonBase(c.Key("ref-chip")).Padding(7, 10).Radius(10).Gap(9).AlignItems(ui.Center).
 			Label(T("Reference in use", "当前参考库"))
 		bg := pal.text.Alpha(0.045)
 		if box.Hovered() {
 			bg = pal.text.Alpha(0.08)
 		}
-		box.Background(box.AnimateColor("bg", bg, quick)).Children(func() {
+		box.Background(box.AnimateColor("bg", bg, quick)).InsetShadow(0, 0, 0, 1, pal.border).Children(func() {
 			tint := pal.faint
 			if ref != "" {
 				tint = pal.accent
 			}
-			ui.Box(c).Size(26, 26).Radius(7).Center().Shrink(0).Background(tint.Alpha(0.14)).Children(func() {
-				ui.Icon(c, iconLayers).Size(14, 14).TextColor(tint)
+			ui.Box(c).Size(24, 24).Radius(6).Center().Shrink(0).Background(tint.Alpha(0.14)).Children(func() {
+				ui.Icon(c, iconLayers).Size(13, 13).TextColor(tint)
 			})
-			ui.Column(c).Gap(1).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, T("Reference", "参考库")).FontSize(10.5).TextColor(pal.muted).SingleLine()
+			ui.Column(c).Gap(0.5).Grow(1).MinWidth(0).Children(func() {
+				ui.Text(c, T("Reference", "参考库")).FontSize(10).TextColor(pal.muted).SingleLine()
 				if ref != "" {
-					ui.Text(c, filepath.Base(ref)).FontSize(12.5).FontWeight(500).SingleLine().Ellipsis("…")
+					ui.Text(c, filepath.Base(ref)).FontSize(12).FontWeight(500).SingleLine().Ellipsis("…")
 				} else {
-					ui.Text(c, T("Choose…", "点击选择…")).FontSize(12.5).FontWeight(500).TextColor(pal.muted).SingleLine()
+					ui.Text(c, T("Choose…", "点击选择…")).FontSize(12).FontWeight(500).TextColor(pal.muted).SingleLine()
 				}
 			})
+			if ref != "" {
+				ui.Box(c).Size(6, 6).Radius(3).Background(pal.success).Shrink(0)
+			}
 		})
 		if ref != "" {
 			box.Tooltip(ref)

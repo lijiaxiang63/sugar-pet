@@ -18,6 +18,26 @@ type classifyRow struct {
 	wscore                         bool
 	scores                         []patternScore
 	leading                        string // the pattern the reading names, if any
+	category, confidence           string
+}
+
+// classifyBadge is the confidence of a reading that names a pattern, as a
+// pill beside it, and its colour.  The other readings say in their own words
+// how far they go, and have none: a pill there would only repeat them, or,
+// where no atypical pattern is found, pass for a normal scan.
+func classifyBadge(category, confidence string, pal *palette) (string, ui.Color) {
+	if category != "pattern" && category != "pd" {
+		return "", pal.muted
+	}
+	switch confidence {
+	case "high":
+		return T("High confidence", "置信度高"), pal.success
+	case "moderate":
+		return T("Moderate confidence", "置信度中等"), pal.accent
+	case "low":
+		return T("Low confidence", "置信度低"), pal.warning
+	}
+	return "", pal.muted
 }
 
 type classifyPage struct {
@@ -92,7 +112,7 @@ func (p *classifyPage) problem() string {
 	case len(p.files.files) == 0:
 		return T("Add the images of the patients.", "请添加患者的图像。")
 	case p.reference == "":
-		return T("Choose a reference, or build one on the Reference page.", "请选择参考库，或先到“参考库”页面建立。")
+		return needReference()
 	case p.info != nil && p.info.err != "":
 		return p.info.err
 	case p.output == "":
@@ -123,8 +143,8 @@ func reading(res *core.Classification) (text, detail string) {
 	found := res.Conclusion
 	switch found.Category {
 	case "pattern", "pd":
-		return name(found.Pattern), Tf("Pattern match %d/100, confidence %s", "模式匹配度 %d/100，置信度%s",
-			match(found.Pattern), core.ReportText("confidence-"+found.Confidence, lang))
+		// The confidence is the pill beside the reading (classifyBadge).
+		return name(found.Pattern), Tf("Pattern match %d/100", "模式匹配度 %d/100", match(found.Pattern))
 	case "indeterminate":
 		return Tf("%s or %s", "%s 或 %s", name(found.Pattern), name(found.Alternative)),
 			Tf("Cannot be told apart: %d/100 and %d/100", "无法可靠区分：%d/100 与 %d/100", match(found.Pattern), match(found.Alternative))
@@ -150,7 +170,7 @@ func (a *app) classifyView(c *ui.Context) {
 		func() {
 			section(c, T("Patients", "患者"), T("Each image is compared with the healthy controls. The map of decreased and increased uptake is read region by region and matched against the patterns of MSA, PSP, CBD, DLB and PD.",
 				"每幅图像与健康对照比较，得到代谢减低和增高的分布图；再按脑区读取，并与 MSA、PSP、CBD、DLB 和 PD 的代谢模式逐一匹配。"), func() {
-				a.filesCard(c, "cls-files", &p.files, T("Patient images", "患者图像"), T("FDG-PET images in MNI space, one per patient", "MNI 空间的 FDG-PET 图像，每位患者一幅"))
+				a.filesCardFromStudy(c, "cls-files", &p.files, T("Patient images", "患者图像"), T("FDG-PET images in MNI space, one per patient", "MNI 空间的 FDG-PET 图像，每位患者一幅"), "patients")
 			})
 			section(c, T("Reference", "参考库"), "", func() {
 				desc := T("The healthy controls the patients are compared with: same scanner and reconstruction, 30 or more if possible.", "与患者比较的健康对照：应来自同一扫描仪和重建方式，尽量不少于 30 例。")
@@ -165,10 +185,21 @@ func (a *app) classifyView(c *ui.Context) {
 					covDesc = Tf("Recommended. With the %s of the patients, each is compared with what the controls predict for such a person.",
 						"建议提供。给出患者的 %s 后，每位患者将与对照对同样条件的人的预测值比较。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
 				}
-				var covRow func()
+				var covRow, studyCovRow func()
 				if hasModels {
 					covRow = func() {
 						a.pathSetting(c, "cls-cov", T("Covariate table", "协变量表"), covDesc, &p.covTable, pathFile, tableFilter, nil)
+					}
+					if p.covTable == "" {
+						if sp := a.studyParticipants(); sp != "" {
+							studyCovRow = func() {
+								setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
+									if button(c.Key("cls-cov-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() {
+										p.covTable = sp
+									}
+								})
+							}
+						}
 					}
 				} else if p.reference != "" {
 					covRow = func() { setting(c, T("Covariate table", "协变量表"), covDesc, nil) }
@@ -179,6 +210,7 @@ func (a *app) classifyView(c *ui.Context) {
 							func() { a.setReference(p.reference) })
 					},
 					covRow,
+					studyCovRow,
 				)
 			})
 			section(c, T("Output", "输出"), "", func() {
@@ -200,8 +232,9 @@ func (a *app) classifyView(c *ui.Context) {
 								if i > 0 {
 									divider(c)
 								}
-								row := ui.ButtonBase(c.Key("cls-row-"+strconv.Itoa(i))).Padding(11, 14).Gap(14).AlignItems(ui.Center).Label(r.image)
-								if i == p.shown && len(p.rows) > 1 {
+								selected := i == p.shown && len(p.rows) > 1
+								row := ui.ButtonBase(c.Key("cls-row-"+strconv.Itoa(i))).Padding(11, 14, 11, 10).Gap(12).AlignItems(ui.Center).Label(r.image)
+								if selected {
 									row.Background(pal.accentSoft)
 								} else if row.Hovered() && len(p.rows) > 1 {
 									row.Background(pal.rowHover)
@@ -210,8 +243,18 @@ func (a *app) classifyView(c *ui.Context) {
 									p.shown = i
 								}
 								row.Children(func() {
+									barColor := ui.Transparent
+									if selected {
+										barColor = pal.accent
+									}
+									ui.Box(c).Size(3, 30).Radius(1.5).Background(barColor).Shrink(0)
 									ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-										ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
+										ui.Row(c).Gap(7).AlignItems(ui.Center).Wrap().GapY(3).Children(func() {
+											ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
+											if badge, col := classifyBadge(r.category, r.confidence, pal); badge != "" {
+												pill(c, badge, col)
+											}
+										})
 										ui.Text(c, r.image+" · "+r.detail).FontSize(12).TextColor(t.TextMuted)
 									})
 									if len(r.scores) > 0 {
@@ -301,7 +344,7 @@ func (a *app) runClassify() {
 			text, detail := reading(res)
 			found := res.Conclusion
 			row := classifyRow{image: name, reading: text, detail: detail, report: saved.Report,
-				source: path, zmap: saved.Map, wscore: res.Score == "w"}
+				source: path, zmap: saved.Map, wscore: res.Score == "w", category: found.Category, confidence: found.Confidence}
 			for _, pattern := range res.Patterns {
 				row.scores = append(row.scores, patternScore{pattern.ID, core.Percent(pattern.Score)})
 			}

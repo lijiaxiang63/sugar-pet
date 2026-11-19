@@ -169,15 +169,17 @@ func (a *app) demo() {
 	cl.covTable, cl.output, cl.outDir = a.zmap.covTable, "/Users/ada/study/reports", "/Users/ada/study/reports"
 	scores := [][]int{{84, 31, 22, 18, 12, 9}, {24, 12, 62, 55, 20, 14}, {11, 8, 14, 10, 16, 58}}
 	leading := []string{"msa-p", "psp", ""}
+	cats := [][2]string{{"pattern", "high"}, {"indeterminate", ""}, {"none", ""}}
 	for i, r := range [][2]string{
-		{core.ReportText("name-msa-p", uiLang()), Tf("Pattern match %d/100, confidence %s", "模式匹配度 %d/100，置信度%s", 84, core.ReportText("confidence-high", uiLang()))},
+		{core.ReportText("name-msa-p", uiLang()), Tf("Pattern match %d/100", "模式匹配度 %d/100", 84)},
 		{Tf("%s or %s", "%s 或 %s", core.ReportText("name-psp", uiLang()), core.ReportText("name-cbd", uiLang())),
 			Tf("Cannot be told apart: %d/100 and %d/100", "无法可靠区分：%d/100 与 %d/100", 62, 55)},
 		{T("No pattern of atypical parkinsonism", "未见非典型帕金森综合征的模式"), T("Favours Parkinson's disease in a patient with parkinsonism", "对帕金森综合征患者而言更倾向于帕金森病")},
 	} {
 		image := filepath.Base(cl.files.files[i])
 		row := classifyRow{image: image, reading: r[0], detail: r[1], report: filepath.Join(cl.output, core.ReportStem(image)+"_report.html"),
-			source: cl.files.files[i], zmap: filepath.Join(cl.output, core.OutputName(image, "hn", "wmap")), wscore: true, leading: leading[i]}
+			source: cl.files.files[i], zmap: filepath.Join(cl.output, core.OutputName(image, "hn", "wmap")), wscore: true, leading: leading[i],
+			category: cats[i][0], confidence: cats[i][1]}
 		for n, id := range core.Patterns {
 			row.scores = append(row.scores, patternScore{id, scores[i][n]})
 		}

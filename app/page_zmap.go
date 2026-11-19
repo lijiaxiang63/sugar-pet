@@ -96,7 +96,7 @@ func (p *zmapPage) problem() string {
 	case len(p.files.files) == 0:
 		return T("Add the images to compare with the controls.", "请添加要与对照比较的图像。")
 	case p.reference == "":
-		return T("Choose a reference, or build one on the Reference page.", "请选择参考库，或先到“参考库”页面建立。")
+		return needReference()
 	case p.info != nil && p.info.err != "":
 		return p.info.err
 	case len(p.chosen()) == 0:
@@ -116,7 +116,7 @@ func (a *app) zmapView(c *ui.Context) {
 		func() {
 			section(c, T("Images", "图像"), T("Each image is intensity-normalised, smoothed like the controls, and compared with them voxel by voxel. Negative values mean lower uptake.",
 				"每幅图像先做强度归一化，按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。"), func() {
-				a.filesCard(c, "z-files", &p.files, T("Images", "图像"), T("FDG-PET images in MNI space", "MNI 空间的 FDG-PET 图像"))
+				a.filesCardFromStudy(c, "z-files", &p.files, T("Images", "图像"), T("FDG-PET images in MNI space", "MNI 空间的 FDG-PET 图像"), "patients")
 			})
 			section(c, T("Reference", "参考库"), "", func() {
 				desc := T("The healthy controls the images are compared with.", "用于比较的健康对照。")
@@ -128,10 +128,21 @@ func (a *app) zmapView(c *ui.Context) {
 					covDesc = Tf("Optional. With the %s of these images, the maps are W-scores: compared with what the controls predict for such a person.",
 						"可选。提供这些图像的 %s 后输出 W 值图：与对照对同样条件的人的预测值比较。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
 				}
-				var covRow func()
+				var covRow, studyCovRow func()
 				if hasModels {
 					covRow = func() {
 						a.pathSetting(c, "z-cov", T("Covariate table", "协变量表"), covDesc, &p.covTable, pathFile, tableFilter, nil)
+					}
+					if p.covTable == "" {
+						if sp := a.studyParticipants(); sp != "" {
+							studyCovRow = func() {
+								setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
+									if button(c.Key("z-cov-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() {
+										p.covTable = sp
+									}
+								})
+							}
+						}
 					}
 				} else if p.reference != "" {
 					covRow = func() { setting(c, T("Covariate table", "协变量表"), covDesc, nil) }
@@ -142,6 +153,7 @@ func (a *app) zmapView(c *ui.Context) {
 							func() { a.setReference(p.reference) })
 					},
 					covRow,
+					studyCovRow,
 				)
 			})
 			section(c, T("Methods", "方法"), T("One method is enough; several give one map each. Grayed methods need a reference built with them ticked.", "选一种即可，多选时各出一幅图。灰色的方法需要在建立参考库时勾选。"), func() {

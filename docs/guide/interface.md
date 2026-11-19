@@ -6,12 +6,14 @@ know where things live here, the tutorial will simply tell you what to select.
 <Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 112], [2, 222, 830], [3, 140, 874], [4, 163], [5, 492], [6, 257, 862], [7, 'run']]" />
 
 1. **Navigation sidebar.** Lists the pages in the order of a typical workflow,
-   from the study folder to the group comparison. Click any item to switch
-   pages. A tick marks the pages whose last run succeeded, and a spinner the
-   one that is running.
+   in groups: preparing the study and its reference, the analyses of single
+   patients, and those of groups. Click any item to switch pages. A tick marks
+   the pages whose last run succeeded, a spinner the one that is running, and
+   a number says how many images wait on a page that has not run yet.
 2. **Reference in use.** Displays the active healthy-control reference folder.
    Click it to switch to a different reference. This selection is shared across
-   all pages.
+   all pages. Once a study folder is in use, a card above it names that folder
+   and opens the Study Folder page.
 3. **Settings.** Opens the [Settings window](#the-settings-window), which holds
    the language, the updates, and the options of every analysis. The number
    next to it is the version of the app; it turns into an **Update** badge

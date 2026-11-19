@@ -156,7 +156,7 @@ func tile(c *ui.Context, key string, cols float32, build func()) {
 func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(id string) (ok bool, why string)) {
 	pal := paletteFor(c)
 	cols := tileColumns(c)
-	card(c).Padding(3, 0, 8, 0).Children(func() {
+	card(c).Padding(4, 0, 8, 0).Children(func() {
 		hidden := 0
 		for n, group := range methodGroups {
 			if n >= 2 && !a.allMethods {
@@ -169,8 +169,8 @@ func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(i
 					continue
 				}
 			}
-			ui.Column(c).Padding(9, 11, 0, 11).Gap(4).Children(func() {
-				ui.Text(c, group.title.String()).FontSize(11.5).FontWeight(600).TextColor(pal.muted).Padding(0, 3)
+			ui.Column(c).Padding(9, 11, 0, 11).Gap(5).Children(func() {
+				ui.Text(c, group.title.String()).FontSize(11.5).FontWeight(650).TextColor(pal.muted).Padding(0, 3)
 				ui.Row(c).Wrap().Children(func() {
 					for _, id := range group.methods {
 						ok, why := true, ""
@@ -181,9 +181,9 @@ func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(i
 						tile(c, id, cols, func() {
 							var extra func()
 							if id == "hn" {
-								extra = func() { tag(c, T("Recommended", "推荐")) }
+								extra = func() { pill(c, T("Recommended", "推荐"), pal.accent) }
 							}
-							box := checkTile(c, &on, methodName(id), extra).Disabled(!ok)
+							box := checkTileWithDesc(c, &on, methodName(id), methodHint(id), extra).Disabled(!ok)
 							if ok {
 								box.Tooltip(methodAbout(id))
 							} else {
@@ -221,6 +221,21 @@ func (p *normPage) chosen() []string {
 	return out
 }
 
+// referenceProblem is what is missing while a method chosen needs a
+// reference and none is chosen, or "".
+func (p *normPage) referenceProblem() string {
+	if p.reference != "" {
+		return ""
+	}
+	for _, m := range p.chosen() {
+		if core.NeedsReference(m) {
+			return Tf("%s needs a reference: choose one, or build it from healthy controls on the Reference page.",
+				"%s 需要参考库：请选择参考库，或先到“参考库”页面用健康对照建立。", methodName(m))
+		}
+	}
+	return ""
+}
+
 func (p *normPage) problem() string {
 	methods := p.chosen()
 	switch {
@@ -229,13 +244,8 @@ func (p *normPage) problem() string {
 	case len(methods) == 0:
 		return T("Choose at least one method.", "请至少选择一种方法。")
 	}
-	if p.reference == "" {
-		for _, m := range methods {
-			if core.NeedsReference(m) {
-				return Tf("%s needs a reference: choose one, or build it from healthy controls on the Reference page.",
-					"%s 需要参考库：请选择参考库，或先到“参考库”页面用健康对照建立。", methodName(m))
-			}
-		}
+	if msg := p.referenceProblem(); msg != "" {
+		return msg
 	}
 	if p.methods["region"] {
 		if msg := p.region.problem(); msg != "" {
@@ -254,8 +264,8 @@ func (a *app) normalizeView(c *ui.Context) {
 		T("Divide each image by its normalisation factor", "每幅图像除以各自的归一化因子"),
 		func() {
 			section(c, T("Images", "图像"), T("FDG-PET images that are already in MNI space. If yours are not, warp them on the Spatial Normalisation page first.", "已在 MNI 空间的 FDG-PET 图像。尚未配准的，请先到“空间标准化”页面处理。"), func() {
-				a.filesCard(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
-					T(".nii and .nii.gz files, or whole folders", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹"))
+				a.filesCardFromStudy(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
+					T(".nii and .nii.gz files, or whole folders", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹"), "patients")
 			})
 			section(c, T("Methods", "方法"), T("One method is enough. Several are for comparison only: each writes its own image from the original.", "选一种即可。多选仅用于对比：每种方法都从原图各自输出一幅图像，互不叠加。"), func() {
 				a.methodPicker(c, p.methods, nil)
@@ -296,10 +306,13 @@ func (a *app) normalizeView(c *ui.Context) {
 								ui.Text(c, text).FontSize(12.5).SingleLine()
 							}).Height(float32(min(len(p.rows), 8)*32 + 34))
 						})
-						ui.Row(c).Gap(8).Children(func() {
+						ui.Row(c).Gap(8).Wrap().GapY(6).Children(func() {
 							revealButton(c, "norm-reveal", revealLabel(), p.outDir)
 							if b := smallButton(c, T("Open factors.tsv", "打开 factors.tsv")); b.Clicked() {
 								openPath(filepath.Join(p.outDir, "factors.tsv"))
+							}
+							if button(c.Key("norm-to-zmap"), T("Go to Z-score Maps", "前往 Z 值图"), iconArrowRight, buttonSoft, 26).Clicked() {
+								a.page = "zmap"
 							}
 						})
 					}

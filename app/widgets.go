@@ -42,16 +42,26 @@ func (a *app) scroll(page string) *ui.ScrollState {
 	return sc
 }
 
-// frame lays out a page on its card: its title at the top, its content in
-// a scrolling column under it, and a bar at the bottom for its main action.
+// frame lays out a page on its card: its title with an icon badge at the
+// top, its content in a scrolling column under it, and a bar at the bottom
+// for its main action.
 func (a *app) frame(c *ui.Context, title, subtitle string, body func(), footer func()) {
 	pal := paletteFor(c)
 	bar := c.TitleBar()
 	sc := a.scroll(a.page)
+	info := pageInfoOf(a.page)
 	ui.Column(c).Shrink(0).Padding(0, bar.Right, 0, 0).DragWindow().Children(func() {
-		pageColumn(c).Padding(22, pagePad, 14, pagePad).Gap(3).Children(func() {
-			ui.Text(c, title).FontSize(21).FontWeight(700).LetterSpacing(-0.3).SingleLine()
-			ui.Text(c, subtitle).FontSize(12.5).TextColor(pal.muted).SingleLine().Ellipsis("…")
+		pageColumn(c).Padding(20, pagePad, 14, pagePad).Children(func() {
+			ui.Row(c).Gap(13).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Size(38, 38).Radius(10).Center().Shrink(0).Background(pal.accentSoft).
+					InsetShadow(0, 0, 0, 1, pal.accentBorder).Children(func() {
+					ui.Icon(c, info.icon).Size(18, 18).TextColor(pal.accent)
+				})
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+					ui.Text(c, title).FontSize(20.5).FontWeight(700).LetterSpacing(-0.3).SingleLine()
+					ui.Text(c, subtitle).FontSize(12.5).TextColor(pal.muted).SingleLine().Ellipsis("…")
+				})
+			})
 		})
 	})
 	// A line under the title once the content is scrolled under it.
@@ -62,13 +72,13 @@ func (a *app) frame(c *ui.Context, title, subtitle string, body func(), footer f
 	}
 	edge.Background(edge.AnimateColor("on", shown, ui.Animation{Duration: 140 * time.Millisecond}))
 	ui.Scroll(c.Key("scroll-" + a.page)).Grow(1).TrackScroll(sc).Children(func() {
-		pageColumn(c).Padding(10, pagePad, 34, pagePad).Gap(26).Children(body)
+		pageColumn(c).Padding(10, pagePad, 34, pagePad).Gap(24).Children(body)
 	})
 	if footer != nil {
 		ui.Box(c).Height(1).Shrink(0).Background(pal.line)
-		ui.Column(c).Shrink(0).Children(func() {
+		ui.Column(c).Shrink(0).Background(pal.card).Children(func() {
 			pageColumn(c).Children(func() {
-				ui.Row(c).Height(60).Padding(0, pagePad).Gap(16).AlignItems(ui.Center).Children(footer)
+				ui.Row(c).Height(62).Padding(0, pagePad).Gap(12).AlignItems(ui.Center).Children(footer)
 			})
 		})
 	}
@@ -107,7 +117,8 @@ func (a *app) results(c *ui.Context, title, caption string, body func()) {
 // card is a soft panel on the page holding rows, as the groups of System
 // Settings.
 func card(c *ui.Context) ui.Element {
-	return ui.Column(c).Radius(12).Background(paletteFor(c).panel).Clip()
+	pal := paletteFor(c)
+	return ui.Column(c).Radius(12).Background(pal.panel).InsetShadow(0, 0, 0, 1, pal.border).Clip()
 }
 
 // divider is the line between two rows of a card.
@@ -174,6 +185,49 @@ func number(c *ui.Context, value *float64, lo, hi, step float64) ui.Element {
 type fileList struct {
 	files []string
 	state ui.ListState
+	query string // optional filter for large lists
+}
+
+type seenKey struct {
+	path string
+	dir  bool
+}
+
+type seenFile struct {
+	there bool
+	at    time.Time
+}
+
+// onDisk reports whether a file is there or, with dir, a folder.  The pages
+// ask on every frame; the file system, which may be a slow one, answers once
+// a second, as what is there may change.
+func (a *app) onDisk(path string, dir bool) bool {
+	key := seenKey{path, dir}
+	if s, ok := a.seen[key]; ok && time.Since(s.at) < time.Second {
+		return s.there
+	}
+	info, err := os.Stat(path)
+	there := err == nil && info.IsDir() == dir
+	if a.seen == nil {
+		a.seen = map[seenKey]seenFile{}
+	}
+	a.seen[key] = seenFile{there, time.Now()}
+	return there
+}
+
+// commonDir returns the shared parent folder if all files live in the same
+// directory, or "" otherwise.
+func commonDir(files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	dir := filepath.Dir(files[0])
+	for _, p := range files[1:] {
+		if filepath.Dir(p) != dir {
+			return ""
+		}
+	}
+	return dir
 }
 
 // expandPaths replaces folders by the NIfTI images in them.
@@ -239,8 +293,17 @@ func (f *fileList) remove(path string) {
 // filesCard shows a file list: drop files or folders on it, or add them
 // with its buttons.
 func (a *app) filesCard(c *ui.Context, key string, f *fileList, title, hint string) {
+	a.filesCardFromStudy(c, key, f, title, hint, "")
+}
+
+// filesCardFromStudy is filesCard with an optional one-click shortcut to load
+// images from a subfolder of the active study (e.g. "patients", "controls").
+func (a *app) filesCardFromStudy(c *ui.Context, key string, f *fileList, title, hint, studySubdir string) {
 	pal := paletteFor(c)
 	n := len(f.files)
+	if n <= 8 && f.query != "" {
+		f.query = ""
+	}
 	box := ui.Column(c.Key(key)).Radius(12).Clip().Background(pal.panel)
 	if files := box.DroppedFiles(); files != nil {
 		f.add(files)
@@ -253,11 +316,25 @@ func (a *app) filesCard(c *ui.Context, key string, f *fileList, title, hint stri
 	case n == 0 && over:
 		box.Border(1, pal.accent).BorderStyle(ui.BorderDashed)
 	case n == 0:
-		box.Border(1, pal.text.Alpha(0.2)).BorderStyle(ui.BorderDashed)
+		box.Border(1, pal.text.Alpha(0.18)).BorderStyle(ui.BorderDashed)
 	case over:
 		box.InsetShadow(0, 0, 0, 1.5, pal.accent)
+	default:
+		box.InsetShadow(0, 0, 0, 1, pal.border)
+	}
+	studyDir := ""
+	if studySubdir != "" && a.study.inUse != "" {
+		if cand := filepath.Join(a.study.inUse, studySubdir); a.onDisk(cand, true) {
+			studyDir = cand
+		}
 	}
 	addButtons := func(kind buttonKind, height float32) {
+		if studyDir != "" {
+			label := Tf("Load %s/", "加载研究 %s/", studySubdir)
+			if button(c.Key("from-study"), label, iconFolder, buttonSoft, height).Tooltip(studyDir).Clicked() {
+				f.add([]string{studyDir})
+			}
+		}
 		if button(c.Key("files"), T("Add Files…", "添加文件…"), iconPlus, kind, height).Clicked() {
 			a.pick(pickOptions{Title: title, Multiple: true, Filters: niftiFilter}, f.add)
 		}
@@ -265,16 +342,20 @@ func (a *app) filesCard(c *ui.Context, key string, f *fileList, title, hint stri
 			a.pick(pickOptions{Title: title, Directory: true, Multiple: true}, f.add)
 		}
 	}
+	shared := commonDir(f.files)
 	box.Children(func() {
 		ui.Row(c).Padding(11, 14, 0, 14).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, title).FontSize(13).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
 			if n > 0 {
 				pill(c, strconv.Itoa(n), pal.accent)
 			}
+			if shared != "" && n > 0 {
+				ui.Text(c, shortDir(shared)).FontSize(11).TextColor(pal.faint).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).TextAlign(ui.End).Tooltip(shared)
+			}
 		})
 		if n == 0 {
 			ui.Column(c).Padding(4, 16, 22, 16).Gap(3).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(38, 38).Radius(19).Center().Background(pal.accentSoft).Children(func() {
+				ui.Box(c).Size(38, 38).Radius(19).Center().Background(pal.accentSoft).InsetShadow(0, 0, 0, 1, pal.accentBorder).Children(func() {
 					ui.Icon(c, iconTray).Size(18, 18).TextColor(pal.accent)
 				})
 				ui.Text(c, T("Drop NIfTI images or folders here", "将 NIfTI 图像或文件夹拖到这里")).FontSize(13.5).FontWeight(600).
@@ -286,26 +367,45 @@ func (a *app) filesCard(c *ui.Context, key string, f *fileList, title, hint stri
 			})
 			return
 		}
-		ui.List(c, &f.state, n, func(i int) {
-			path := f.files[i]
+		shown := f.files
+		if n > 8 {
+			ui.Row(c).Padding(8, 12, 2, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.SearchField(c.Key("filter"), &f.query).Placeholder(T("Filter images…", "筛选图像…")).Grow(1).MinWidth(0)
+			})
+			if q := strings.ToLower(strings.TrimSpace(f.query)); q != "" {
+				shown = nil
+				for _, p := range f.files {
+					if strings.Contains(strings.ToLower(filepath.Base(p)), q) {
+						shown = append(shown, p)
+					}
+				}
+			}
+		}
+		ui.List(c, &f.state, len(shown), func(i int) {
+			path := shown[i]
 			row := ui.Row(c.Key(path)).Margin(0, 6).Padding(0, 4, 0, 8).Height(30).Radius(7).Gap(8).AlignItems(ui.Center)
 			if row.Hovered() {
 				row.Background(pal.rowHover)
 			}
 			row.Children(func() {
 				ui.Icon(c, iconDoc).Size(14, 14).TextColor(pal.faint).Shrink(0)
-				ui.Text(c, filepath.Base(path)).FontSize(12.5).SingleLine().MinWidth(80)
-				ui.Text(c, shortDir(filepath.Dir(path))).FontSize(11.5).TextColor(pal.faint).SingleLine().Grow(1).MinWidth(0).TextAlign(ui.End)
+				nameEl := ui.Text(c, filepath.Base(path)).FontSize(12.5).SingleLine().Ellipsis("…").MinWidth(0).Tooltip(path)
+				if shared != "" {
+					nameEl.Grow(1)
+				} else {
+					nameEl.MinWidth(80)
+					ui.Text(c, shortDir(filepath.Dir(path))).FontSize(11.5).TextColor(pal.faint).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).TextAlign(ui.End)
+				}
 				del := iconButton(c, iconClose, T("Remove", "移除")).Tooltip(T("Remove", "移除"))
 				del.OnClick(func() { f.remove(path) })
 			})
 		}).MaxHeight(205).Padding(6, 0, 4, 0)
 		divider(c)
-		ui.Row(c).Padding(6, 8).Gap(2).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Padding(6, 8).Gap(4).Wrap().GapY(4).AlignItems(ui.Center).Children(func() {
 			addButtons(buttonGhost, 26)
 			ui.Spacer(c)
 			if button(c.Key("clear"), T("Clear", "清空"), nil, buttonGhost, 26).Clicked() {
-				f.files = nil
+				f.files, f.query = nil, ""
 			}
 		})
 	})
@@ -403,6 +503,43 @@ func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string,
 	})
 }
 
+// remedy is where the problem a page reports is mended, when a button of
+// its run bar can lead there: "reference" for the Reference page, "spm" for
+// the settings of SPM and MATLAB, or "".  The problem is known by being the
+// very one the page gives for that lack, not by its wording.
+func (a *app) remedy(page, problem string) string {
+	if problem == "" {
+		return ""
+	}
+	lack := ""
+	switch page {
+	case "spatial":
+		if problem == a.spatial.setupProblem() {
+			return "spm"
+		}
+	case "normalize":
+		lack = a.norm.referenceProblem()
+	case "compare":
+		lack = a.cmp.referenceProblem()
+	case "zmap":
+		if a.zmap.reference == "" {
+			lack = needReference()
+		}
+	case "classify":
+		if a.classify.reference == "" {
+			lack = needReference()
+		}
+	case "cluster":
+		if a.cluster.reference == "" {
+			lack = needReference()
+		}
+	}
+	if problem == lack {
+		return "reference"
+	}
+	return ""
+}
+
 // runBar is the bar at the bottom of a page: what is missing or how the
 // last run went on the left, and the button that starts the work, or the
 // progress of the work and a button that stops it.
@@ -415,7 +552,8 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 				ui.Text(c, j.label).FontSize(12.5).FontWeight(500).SingleLine().Grow(1).MinWidth(0)
 				if j.total > 0 {
 					value = float64(j.done) / float64(j.total)
-					ui.Text(c, strconv.Itoa(j.done)+" / "+strconv.Itoa(j.total)).FontSize(12).TextColor(pal.muted).SingleLine()
+					pct := int(value*100 + 0.5)
+					ui.Text(c, strconv.Itoa(pct)+"% · "+strconv.Itoa(j.done)+" / "+strconv.Itoa(j.total)).FontSize(12).TextColor(pal.muted).SingleLine()
 				}
 			})
 			ui.Progress(c, value).Label(j.label).TextColor(pal.accent).Background(pal.well)
@@ -437,6 +575,16 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 		message(iconWarn, pal.danger, st.err)
 	case problem != "":
 		message(iconInfo, pal.muted, problem)
+		switch a.remedy(page, problem) {
+		case "reference":
+			if button(c.Key("fix-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 28).Clicked() {
+				a.page = "reference"
+			}
+		case "spm":
+			if button(c.Key("fix-spm"), T("Set Up SPM…", "设置 SPM…"), iconGear, buttonSoft, 28).Clicked() {
+				a.openSettings("spatial")
+			}
+		}
 	case st.ok != "":
 		message(iconCheck, pal.success, st.ok)
 	case a.job != nil:
@@ -496,11 +644,12 @@ func caution(c *ui.Context, text string) {
 // of a result.
 func stats(c *ui.Context, items ...[2]string) {
 	pal := paletteFor(c)
-	ui.Row(c).Gap(8).AlignItems(ui.Stretch).Children(func() {
+	ui.Row(c).Gap(10).AlignItems(ui.Stretch).Children(func() {
 		for _, it := range items {
-			ui.Column(c).Gap(3).Grow(1).Basis(0).MinWidth(0).Padding(12, 14).Radius(12).Background(pal.panel).Children(func() {
-				ui.Text(c, it[0]).FontSize(20).FontWeight(700).LetterSpacing(-0.3).SingleLine()
-				ui.Text(c, it[1]).FontSize(12).TextColor(pal.muted).SingleLine()
+			ui.Column(c).Gap(3).Grow(1).Basis(0).MinWidth(0).Padding(13, 15).Radius(12).Background(pal.panel).
+				InsetShadow(0, 0, 0, 1, pal.border).Children(func() {
+				ui.Text(c, it[1]).FontSize(11.5).FontWeight(500).TextColor(pal.muted).SingleLine().Ellipsis("…")
+				ui.Text(c, it[0]).FontSize(20).FontWeight(700).LetterSpacing(-0.3).SingleLine().Ellipsis("…")
 			})
 		}
 	})

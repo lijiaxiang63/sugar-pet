@@ -45,8 +45,8 @@ The sidebar lists the pages in the order of a typical analysis:
 | Page | Purpose | Needs a reference? |
 | --- | --- | :---: |
 | [Spatial Normalisation](../tutorial/spatial) | Warps native-space PET images into MNI space using SPM | no |
-| [Intensity Normalisation](../tutorial/normalize) | Divides each image by its factor and outputs `factors.tsv` | for HN, iPS, iHN |
 | [Reference](../tutorial/build-reference) | Summarises healthy controls into a single folder (the *reference*) | builds it |
+| [Intensity Normalisation](../tutorial/normalize) | Divides each image by its factor and outputs `factors.tsv` | for HN, iPS, iHN |
 | [Z-score Maps](../tutorial/zmap) | Maps how far each voxel deviates from healthy controls | yes |
 | [Classify Parkinsonism](../tutorial/classify) | Matches a patient's map against typical metabolic patterns and writes a report | yes |
 | [Compare Groups](../tutorial/compare) | Voxel-wise two-sample t-test between two groups with multiple-comparison correction | for HN, iPS, iHN |

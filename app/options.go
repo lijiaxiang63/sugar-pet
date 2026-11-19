@@ -329,7 +329,8 @@ func (a *app) optionsLine(c *ui.Context, page, section string, groups ...string)
 	pal := paletteFor(c)
 	changed := a.opt.changed(groups...)
 	text := a.opt.summary(page)
-	row := ui.Row(c.Key("options-"+page)).Padding(0, 4, 0, 12).MinHeight(40).Gap(10).Radius(12).AlignItems(ui.Center).Background(pal.panel)
+	row := ui.Row(c.Key("options-"+page)).Padding(0, 4, 0, 12).MinHeight(40).Gap(10).Radius(12).AlignItems(ui.Center).
+		Background(pal.panel).InsetShadow(0, 0, 0, 1, pal.border)
 	row.Children(func() {
 		ui.Icon(c, iconSliders).Size(15, 15).TextColor(pal.muted).Shrink(0)
 		ui.Text(c, text).FontSize(12.5).TextColor(pal.muted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(text)

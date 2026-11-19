@@ -52,7 +52,7 @@ The [user guide](https://lijiaxiang63.github.io/sugar-pet/) walks through the
 app step by step, with screenshots of every page.
 
 Its pages follow the workflow below: **Spatial Normalisation**,
-**Intensity Normalisation**, **Reference**, **Z-score Maps**,
+**Reference**, **Intensity Normalisation**, **Z-score Maps**,
 **Classify Parkinsonism**, **Compare Groups**, **Reference Cluster**, and the built-in
 **Masks & Atlas**. Files can be dropped onto the lists. The app reads and
 writes the same files as the command line (reference folders, `factors.tsv`,

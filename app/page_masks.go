@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,10 +14,11 @@ import (
 )
 
 type masksPage struct {
-	query  string
-	table  ui.ListState
-	st     status
-	outDir string
+	query    string
+	table    ui.ListState
+	selected map[int]bool // CerebrA label numbers picked to send to Intensity Normalisation
+	st       status
+	outDir   string
 }
 
 // maskVolumes are the volumes of the built-in masks in mL.
@@ -83,22 +85,67 @@ func (a *app) masksView(c *ui.Context) {
 						}
 					}
 				}
-				ui.SearchField(c, &p.query).Placeholder(T("Search regions", "搜索脑区")).Width(260)
+				if p.selected == nil {
+					p.selected = map[int]bool{}
+				}
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().GapY(6).Children(func() {
+					ui.SearchField(c, &p.query).Placeholder(T("Search regions", "搜索脑区")).Width(260)
+					ui.Text(c, T("Tick rows to build a custom region", "勾选脑区以快速组合自选区域")).FontSize(12).TextColor(t.TextMuted)
+				})
 				cols := []ui.TableColumn{
-					{Title: T("Number", "编号"), Width: 80, Align: ui.End},
+					{Title: "", Width: 36, Align: ui.Center},
+					{Title: T("Number", "编号"), Width: 76, Align: ui.End},
 					{Title: T("Region", "脑区")},
-					{Title: T("Hemisphere", "半球"), Width: 100},
+					{Title: T("Hemisphere", "半球"), Width: 96},
 				}
 				card(c).Children(func() {
 					ui.Table(c, &p.table, cols, len(shown), func(row, col int) {
 						l := shown[row]
+						if col == 0 {
+							on := p.selected[l.Index]
+							check(c.Key("lbl-"+strconv.Itoa(l.Index)), &on, "")
+							if on {
+								p.selected[l.Index] = true
+							} else {
+								delete(p.selected, l.Index)
+							}
+							return
+						}
 						hemi := T("Right", "右")
 						if l.Hemi == "L" {
 							hemi = T("Left", "左")
 						}
-						ui.Text(c, [...]string{strconv.Itoa(l.Index), l.Name, hemi}[col]).FontSize(12.5).SingleLine()
+						ui.Text(c, [...]string{"", strconv.Itoa(l.Index), l.Name, hemi}[col]).FontSize(12.5).SingleLine()
 					}).Height(330)
 				})
+				if len(p.selected) > 0 {
+					var nums []int
+					for id := range p.selected {
+						nums = append(nums, id)
+					}
+					sort.Ints(nums)
+					parts := make([]string, len(nums))
+					for i, id := range nums {
+						parts[i] = strconv.Itoa(id)
+					}
+					joined := strings.Join(parts, ",")
+					card(c).Padding(10, 14).Children(func() {
+						ui.Row(c).Gap(10).AlignItems(ui.Center).Wrap().GapY(6).Children(func() {
+							pill(c, Tf("%d selected", "已选 %d 个", len(nums)), paletteFor(c).accent)
+							ui.Text(c, joined).FontSize(12.5).Font("monospace").SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Selectable()
+							if button(c.Key("lbl-clear"), T("Clear", "清空"), nil, buttonGhost, 26).Clicked() {
+								p.selected = map[int]bool{}
+							}
+							if button(c.Key("lbl-use"), T("Use as Custom Region", "用于自选区域归一化"), iconArrowRight, buttonPrimary, 26).Clicked() {
+								// As the Reference Cluster page does with its region:
+								// the region becomes the one method chosen.
+								a.norm.methods = map[string]bool{"region": true}
+								a.norm.region.kind, a.norm.region.labels = 2, joined
+								a.page = "normalize"
+							}
+						})
+					})
+				}
 			})
 		}, nil)
 }

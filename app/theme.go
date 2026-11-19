@@ -20,20 +20,22 @@ type palette struct {
 	panel ui.Color // a group of rows on the card
 	well  ui.Color // the track of a segmented control, an empty drop zone
 
-	text  ui.Color
-	muted ui.Color // descriptions, captions
-	faint ui.Color // hints, counts
-	line  ui.Color // dividers
+	text   ui.Color
+	muted  ui.Color // descriptions, captions
+	faint  ui.Color // hints, counts
+	line   ui.Color // dividers
+	border ui.Color // subtle hairline borders on panels and cards
 
 	control      ui.Color // the face of buttons, fields, chips
 	controlHover ui.Color
 	rowHover     ui.Color
 	rowSelected  ui.Color // the chosen page of the sidebar
 
-	accent      ui.Color
-	accentHover ui.Color
-	accentSoft  ui.Color // behind what is chosen
-	onAccent    ui.Color
+	accent       ui.Color
+	accentHover  ui.Color
+	accentSoft   ui.Color // behind what is chosen
+	accentBorder ui.Color // soft accent ring
+	onAccent     ui.Color
 
 	success ui.Color
 	warning ui.Color
@@ -47,20 +49,22 @@ var lightPalette = palette{
 	panel: ui.RGBA(60, 50, 30, 0.045),
 	well:  ui.RGBA(60, 50, 30, 0.07),
 
-	text:  ui.Hex("#1f1e1d"),
-	muted: ui.Hex("#6f6d66"),
-	faint: ui.Hex("#a19e95"),
-	line:  ui.RGBA(40, 30, 10, 0.08),
+	text:   ui.Hex("#1f1e1d"),
+	muted:  ui.Hex("#6a6760"),
+	faint:  ui.Hex("#9d9990"),
+	line:   ui.RGBA(40, 30, 10, 0.08),
+	border: ui.RGBA(40, 30, 10, 0.07),
 
 	control:      ui.Hex("#ffffff"),
 	controlHover: ui.Hex("#faf8f4"),
 	rowHover:     ui.RGBA(60, 50, 30, 0.06),
 	rowSelected:  ui.Hex("#ffffff"),
 
-	accent:      ui.Hex("#c96442"),
-	accentHover: ui.Hex("#b95838"),
-	accentSoft:  ui.RGBA(201, 100, 66, 0.1),
-	onAccent:    ui.Hex("#ffffff"),
+	accent:       ui.Hex("#c96442"),
+	accentHover:  ui.Hex("#b95838"),
+	accentSoft:   ui.RGBA(201, 100, 66, 0.1),
+	accentBorder: ui.RGBA(201, 100, 66, 0.24),
+	onAccent:     ui.Hex("#ffffff"),
 
 	success: ui.Hex("#2f7d52"),
 	warning: ui.Hex("#b4690e"),
@@ -75,20 +79,22 @@ var darkPalette = palette{
 	panel: ui.RGBA(255, 250, 240, 0.045),
 	well:  ui.RGBA(255, 250, 240, 0.07),
 
-	text:  ui.Hex("#f1efe8"),
-	muted: ui.Hex("#b3b0a6"),
-	faint: ui.Hex("#87847b"),
-	line:  ui.RGBA(255, 250, 240, 0.08),
+	text:   ui.Hex("#f1efe8"),
+	muted:  ui.Hex("#b3b0a6"),
+	faint:  ui.Hex("#87847b"),
+	line:   ui.RGBA(255, 250, 240, 0.08),
+	border: ui.RGBA(255, 250, 240, 0.07),
 
 	control:      ui.Hex("#3b3a37"),
 	controlHover: ui.Hex("#454440"),
 	rowHover:     ui.RGBA(255, 250, 240, 0.06),
 	rowSelected:  ui.RGBA(255, 250, 240, 0.1),
 
-	accent:      ui.Hex("#d97757"),
-	accentHover: ui.Hex("#e08565"),
-	accentSoft:  ui.RGBA(217, 119, 87, 0.16),
-	onAccent:    ui.Hex("#ffffff"),
+	accent:       ui.Hex("#d97757"),
+	accentHover:  ui.Hex("#e08565"),
+	accentSoft:   ui.RGBA(217, 119, 87, 0.16),
+	accentBorder: ui.RGBA(217, 119, 87, 0.3),
+	onAccent:     ui.Hex("#ffffff"),
 
 	success: ui.Hex("#62bd88"),
 	warning: ui.Hex("#e2a650"),
@@ -153,6 +159,7 @@ const (
 	buttonPlain   buttonKind = iota // a face on the panel
 	buttonPrimary                   // the accent's: what the page is for
 	buttonGhost                     // text alone, tinted under the pointer
+	buttonSoft                      // accent-tinted soft action for shortcuts & workflow links
 )
 
 // button is the app's button, height DIPs high, with an icon before its
@@ -178,6 +185,15 @@ func button(c *ui.Context, label string, ic *ui.SVG, kind buttonKind, height flo
 			bg = pal.accentHover
 		}
 		b.Shadow(0, 1, 2, 0, pal.accent.Alpha(0.35)).InsetShadow(0, 1, 0, 0, ui.RGBA(255, 255, 255, 0.2))
+	case buttonSoft:
+		bg, fg = pal.accentSoft, pal.accent
+		if b.Hovered() {
+			bg = pal.accent.Alpha(0.18)
+		}
+		if b.Pressed() {
+			bg = pal.accent.Alpha(0.24)
+		}
+		b.InsetShadow(0, 0, 0, 1, pal.accentBorder)
 	case buttonGhost:
 		bg, fg = ui.Transparent, pal.muted
 		if b.Hovered() {
@@ -285,14 +301,24 @@ func segmentedIn(c *ui.Context, value *int, fill bool, labels ...string) bool {
 // checkTile is a check box as a tile, tinted in the accent while checked.
 // extra, when not nil, builds what follows its label.
 func checkTile(c *ui.Context, on *bool, label string, extra func()) ui.Element {
+	return checkTileWithDesc(c, on, label, "", extra)
+}
+
+// checkTileWithDesc is checkTile with an optional short caption under the label.
+func checkTileWithDesc(c *ui.Context, on *bool, label, desc string, extra func()) ui.Element {
 	pal := paletteFor(c)
-	b := ui.CheckboxBase(c, on).Height(32).Padding(0, 10, 0, 9).Gap(8).Radius(8).AlignItems(ui.Center).Label(label)
+	b := ui.CheckboxBase(c, on).Padding(7, 10, 7, 9).Gap(8).Radius(9).AlignItems(ui.Center).Label(label)
+	if desc == "" {
+		b.Height(34).Padding(0, 10, 0, 9)
+	} else {
+		b.MinHeight(48)
+	}
 	bg := pal.control
 	switch {
 	case *on:
 		// The accent's tint on a face, with a ring of the accent.
-		bg = pal.control.Mix(pal.accent, 0.1)
-		b.InsetShadow(0, 0, 0, 1, pal.accent.Alpha(0.5))
+		bg = pal.control.Mix(pal.accent, 0.09)
+		b.InsetShadow(0, 0, 0, 1.25, pal.accent.Alpha(0.55))
 	case b.Hovered():
 		bg = pal.controlHover
 		face(b, pal)
@@ -301,9 +327,21 @@ func checkTile(c *ui.Context, on *bool, label string, extra func()) ui.Element {
 	}
 	b.Background(b.AnimateColor("bg", bg, quick)).Children(func() {
 		checkMark(c, *on)
-		ui.Text(c, label).FontSize(13).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
-		if extra != nil {
-			extra()
+		if desc == "" {
+			ui.Text(c, label).FontSize(13).FontWeight(500).SingleLine().Ellipsis("…").MinWidth(0).Grow(1)
+			if extra != nil {
+				extra()
+			}
+		} else {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(1.5).Children(func() {
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, label).FontSize(12.5).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
+					if extra != nil {
+						extra()
+					}
+				})
+				ui.Text(c, desc).FontSize(11).TextColor(pal.muted).SingleLine().Ellipsis("…").MinWidth(0)
+			})
 		}
 	})
 	return b
@@ -343,20 +381,15 @@ func pill(c *ui.Context, text string, color ui.Color) ui.Element {
 // callout is a note that stands out from the page: a caution, the
 // warnings of a run. ic may be nil.
 func callout(c *ui.Context, ic *ui.SVG, color ui.Color, body func()) ui.Element {
-	box := ui.Row(c).Radius(12).Padding(11, 14).Gap(10).AlignItems(ui.Start).Background(color.Alpha(0.09))
+	box := ui.Row(c).Radius(12).Clip().Background(color.Alpha(0.085)).InsetShadow(0, 0, 0, 1, color.Alpha(0.18)).AlignItems(ui.Stretch)
 	box.Children(func() {
-		if ic != nil {
-			ui.Icon(c, ic).Size(15, 15).TextColor(color).Shrink(0).Margin(1, 0, 0, 0)
-		}
-		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(body)
+		ui.Box(c).Width(3).Shrink(0).Background(color.Alpha(0.75))
+		ui.Row(c).Grow(1).MinWidth(0).Padding(11, 14, 11, 12).Gap(10).AlignItems(ui.Start).Children(func() {
+			if ic != nil {
+				ui.Icon(c, ic).Size(15, 15).TextColor(color).Shrink(0).Margin(1, 0, 0, 0)
+			}
+			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(body)
+		})
 	})
 	return box
-}
-
-// tag pins a small label in the accent to the top right corner of the
-// element being built, as a mark on a tile.
-func tag(c *ui.Context, text string) {
-	pal := paletteFor(c)
-	ui.Text(c, text).Absolute().Top(-7).Right(8).PassThrough().FontSize(9.5).FontWeight(700).LetterSpacing(0.2).
-		TextColor(pal.onAccent).Padding(1.5, 6).Radius(999).Background(pal.accent).SingleLine()
 }

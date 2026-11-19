@@ -68,12 +68,21 @@ func (p *comparePage) smoothing(o *options) float64 {
 	return 8
 }
 
+// referenceProblem is what is missing while the method needs a reference
+// and none is chosen, or "".
+func (p *comparePage) referenceProblem() string {
+	if !core.NeedsReference(p.method) || p.reference != "" {
+		return ""
+	}
+	return Tf("%s needs a reference: choose one, or build it on the Reference page.", "%s 需要参考库：请选择参考库，或先到“参考库”页面建立。", methodName(p.method))
+}
+
 func (p *comparePage) problem(o *options) string {
 	switch {
 	case len(p.g1.files) < 2 || len(p.g2.files) < 2:
 		return T("Add at least 2 images to each group.", "每组请至少添加 2 幅图像。")
-	case core.NeedsReference(p.method) && p.reference == "":
-		return Tf("%s needs a reference: choose one, or build it on the Reference page.", "%s 需要参考库：请选择参考库，或先到“参考库”页面建立。", methodName(p.method))
+	case p.referenceProblem() != "":
+		return p.referenceProblem()
 	case p.method == "region" && p.region.problem() != "":
 		return p.region.problem()
 	case o.Analysis == "file" && o.AnalysisFile == "":
@@ -101,12 +110,21 @@ func (a *app) compareView(c *ui.Context) {
 				"T 图为第 1 组减第 2 组：以患者为第 1 组、对照为第 2 组时，负值表示低代谢。"), func() {
 				ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
 					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCard(c, "cmp-g1", &p.g1, T("Group 1", "第 1 组"), T("e.g. the patients", "例如患者"))
+						a.filesCardFromStudy(c, "cmp-g1", &p.g1, T("Group 1", "第 1 组"), T("e.g. the patients", "例如患者"), "patients")
 					})
 					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCard(c, "cmp-g2", &p.g2, T("Group 2", "第 2 组"), T("e.g. the controls", "例如对照"))
+						a.filesCardFromStudy(c, "cmp-g2", &p.g2, T("Group 2", "第 2 组"), T("e.g. the controls", "例如对照"), "controls")
 					})
 				})
+				if len(p.g1.files) > 0 || len(p.g2.files) > 0 {
+					ui.Row(c).Justify(ui.End).Children(func() {
+						if button(c.Key("cmp-swap"), T("Swap Groups", "互换两组"), iconSwap, buttonGhost, 26).
+							Tooltip(T("Swap Group 1 and Group 2 (reverses the sign of the T-map)", "交换第 1 组与第 2 组（将反转 T 图正负号）")).Clicked() {
+							p.g1.files, p.g2.files = p.g2.files, p.g1.files
+							p.g1.query, p.g2.query = p.g2.query, p.g1.query
+						}
+					})
+				}
 			})
 			section(c, T("Intensity normalisation", "强度归一化"), "", func() {
 				var ids, names []string

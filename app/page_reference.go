@@ -143,6 +143,24 @@ func (cv *covChoice) problem() string {
 	return ""
 }
 
+// needReference is what a page says while it has no reference, which the
+// run bar offers to mend (remedy).
+func needReference() string {
+	return T("Choose a reference, or build one on the Reference page.", "请选择参考库，或先到“参考库”页面建立。")
+}
+
+// studyParticipants returns the path to participants.tsv in the active study
+// if it exists, or "" otherwise.
+func (a *app) studyParticipants() string {
+	if a.study.inUse == "" {
+		return ""
+	}
+	if p := filepath.Join(a.study.inUse, "participants.tsv"); a.onDisk(p, false) {
+		return p
+	}
+	return ""
+}
+
 // covRows are the settings of a covariate table.
 func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []func() {
 	t := c.Theme()
@@ -150,6 +168,18 @@ func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []f
 	out := []func(){func() {
 		a.pathSetting(c, key, T("Covariate table", "协变量表"), desc, &cv.path, pathFile, tableFilter, cv.load)
 	}}
+	if cv.path == "" {
+		if sp := a.studyParticipants(); sp != "" {
+			out = append(out, func() {
+				setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
+					if button(c.Key(key+"-use-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() {
+						cv.path = sp
+						cv.load()
+					}
+				})
+			})
+		}
+	}
 	switch {
 	case cv.err != "":
 		out = append(out, func() {
@@ -295,6 +325,17 @@ func (a *app) referenceView(c *ui.Context) {
 					)
 					a.show(&p.pic, p.current, referencePicture(p.current))
 					a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
+					ui.Row(c).Gap(8).Wrap().GapY(6).Children(func() {
+						if button(c.Key("ref-to-norm"), T("Go to Intensity Normalisation", "前往强度归一化"), iconArrowRight, buttonSoft, 26).Clicked() {
+							a.page = "normalize"
+						}
+						if button(c.Key("ref-to-zmap"), T("Go to Z-score Maps", "前往 Z 值图"), iconArrowRight, buttonSoft, 26).Clicked() {
+							a.page = "zmap"
+						}
+						if button(c.Key("ref-to-cls"), T("Go to Classify Parkinsonism", "前往帕金森综合征分类"), iconArrowRight, buttonSoft, 26).Clicked() {
+							a.page = "classify"
+						}
+					})
 				})
 			})
 			ui.Column(c).Gap(18).Children(func() {
@@ -303,7 +344,7 @@ func (a *app) referenceView(c *ui.Context) {
 			})
 			section(c, T("Healthy controls", "健康对照"), T("MNI-space FDG-PET images, all on the same grid. Below about 10 controls the voxel statistics get unreliable.",
 				"MNI 空间的 FDG-PET 图像，须在同一网格上。少于约 10 例时，体素统计不够可靠。"), func() {
-				a.filesCard(c, "ref-files", &p.files, T("Control images", "对照图像"), T("at least 3 images · .nii and .nii.gz", "至少 3 幅 · 支持 .nii 与 .nii.gz"))
+				a.filesCardFromStudy(c, "ref-files", &p.files, T("Control images", "对照图像"), T("at least 3 images · .nii and .nii.gz", "至少 3 幅 · 支持 .nii 与 .nii.gz"), "controls")
 			})
 			section(c, T("Age and sex (W-scores)", "年龄和性别（W 值）"),
 				T("Optional. Rows are matched to images by an “image” or “participant_id” column (sub-01 matches sub-01_…_pet.nii.gz), as in a BIDS participants.tsv.",

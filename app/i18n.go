@@ -47,6 +47,25 @@ var methodLabels = map[string][2]label{
 	"ihn":           {{"Iterative HN (iHN)", "迭代直方图 iHN"}, {"HN, then repeated without the hypometabolic voxels", "先做 HN，去掉低代谢体素后重做"}},
 }
 
+// methodHints is the line under the name of a method on its tile: what the
+// name leaves out, in a few words, and the same in both languages.  The
+// tooltip of the tile is the whole description (methodLabels).
+var methodHints = map[string]label{
+	"hn":            {"Peak ratio to the controls", "与对照比值的直方图主峰"},
+	"ihn":           {"HN minus hypometabolic voxels", "去掉低代谢体素后重做 HN"},
+	"ips":           {"PS minus hypometabolic voxels", "去掉低代谢体素后重做 PS"},
+	"ps":            {"Mean of the gray-matter mask", "灰质掩膜内的均值"},
+	"spm-global":    {"Voxels above 1/8 of the mean", "高于全图均值 1/8 的体素"},
+	"whole-brain":   {"Gray and white matter", "灰质和白质"},
+	"cerebellum":    {"Gray and white matter", "含灰质和白质"},
+	"cerebellar-gm": {"Hemispheres and vermis", "含半球和蚓部"},
+	"pons":          {"Central part, eroded", "中央部分，经腐蚀"},
+	"white-matter":  {"Centrum semiovale, eroded", "半卵圆中心，经腐蚀"},
+	"occipital":     {"Lateral and medial surfaces", "外侧面和内侧面"},
+	"sensorimotor":  {"Pre-, post- and paracentral", "中央前回、中央后回、旁中央小叶"},
+	"region":        {"Any mask, or atlas labels", "任意掩膜或图谱标签"},
+}
+
 var maskLabels = map[string][2]label{
 	"gray-matter":    {{"Gray matter", "灰质"}, {"Gray matter (probability > 0.1); the paper's mask for PS and HN", "灰质（概率 > 0.1），文中 PS 和 HN 所用的掩膜"}},
 	"parenchyma":     {{"Brain parenchyma", "脑实质"}, {"Whole brain parenchyma (gray + white matter probability > 0.5)", "全脑实质（灰质 + 白质概率 > 0.5）"}},
@@ -63,5 +82,6 @@ var maskLabels = map[string][2]label{
 
 func methodName(id string) string  { return methodLabels[id][0].String() }
 func methodAbout(id string) string { return methodLabels[id][1].String() }
+func methodHint(id string) string  { return methodHints[id].String() }
 func maskName(id string) string    { return maskLabels[id][0].String() }
 func maskAbout(id string) string   { return maskLabels[id][1].String() }

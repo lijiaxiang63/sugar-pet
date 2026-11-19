@@ -34,8 +34,8 @@ FDG-PET 图像的体素值会受到注射剂量、血糖水平、体重等多种
 | 页面 | 主要用途 | 是否需要参考库 |
 | --- | --- | :---: |
 | [空间标准化](../tutorial/spatial) | 调用 SPM 将原始空间的 PET 图像配准到 MNI 空间 | 否 |
-| [强度归一化](../tutorial/normalize) | 计算归一化因子并输出归一化后的图像 | HN、iPS、iHN 需要 |
 | [参考库](../tutorial/build-reference) | 将健康对照组汇总为一个文件夹（即“参考库”） | 本页面用于创建参考库 |
+| [强度归一化](../tutorial/normalize) | 计算归一化因子并输出归一化后的图像 | HN、iPS、iHN 需要 |
 | [Z 值图](../tutorial/zmap) | 计算单个患者在各个体素上偏离健康对照的程度 | 是 |
 | [帕金森综合征分类](../tutorial/classify) | 评估患者图像与典型代谢模式的匹配度并生成报告 | 是 |
 | [组间比较](../tutorial/compare) | 对两组图像做逐体素双样本 t 检验，带多重比较校正 | HN、iPS、iHN 需要 |

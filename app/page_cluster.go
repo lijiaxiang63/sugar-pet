@@ -28,7 +28,7 @@ func (p *clusterPage) problem() string {
 	case len(p.files.files) < 2:
 		return T("Add at least 2 images of the patient group.", "请添加至少 2 幅患者组图像。")
 	case p.reference == "":
-		return T("Choose a reference, or build one on the Reference page.", "请选择参考库，或先到“参考库”页面建立。")
+		return needReference()
 	case p.output == "":
 		return T("Choose where to save the mask.", "请选择掩膜的保存位置。")
 	}
@@ -42,7 +42,7 @@ func (a *app) clusterView(c *ui.Context) {
 		func() {
 			section(c, T("Patient group", "患者组"), T("After scaling by the global mean, regions spared by the disease look hypermetabolic. A t-test against the controls picks them out (Yakushev et al., 2009).",
 				"按全局均值缩放后，未受疾病累及的区域会显得高代谢，与对照做 t 检验即可找出这些区域（Yakushev 等，2009）。"), func() {
-				a.filesCard(c, "cl-files", &p.files, T("Patient images", "患者图像"), T("at least 2 images, all on the same grid", "至少 2 幅，须在同一网格上"))
+				a.filesCardFromStudy(c, "cl-files", &p.files, T("Patient images", "患者图像"), T("at least 2 images, all on the same grid", "至少 2 幅，须在同一网格上"), "patients")
 			})
 			section(c, T("Reference and output", "参考库与输出"), "", func() {
 				rows(c,

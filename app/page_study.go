@@ -50,6 +50,13 @@ func (p *studyPage) target() string {
 	return filepath.Join(p.parent, name)
 }
 
+// choose makes a study folder that is there already the one chosen: its
+// location and its name, as if they had been filled in.  Nothing is written
+// and the pages are left alone until the folders are created.
+func (p *studyPage) choose(study string) {
+	p.parent, p.name = filepath.Dir(study), filepath.Base(study)
+}
+
 // holds reports whether a folder is the study in use, however it is spelt:
 // the folder the pages went over to, not another that has its name by now.
 func (p *studyPage) holds(study string) bool {
@@ -163,6 +170,21 @@ func (a *app) studyView(c *ui.Context) {
 							T("The folder that holds the study folder.", "研究文件夹建在这个文件夹里。"), &p.parent, pathFolder, nil, nil)
 					},
 					func() { setting(c, T("Name", "名称"), where, func() { ui.TextInput(c, &p.name).Width(210) }) },
+					func() {
+						// Choosing the folder writes nothing and leaves the pages as
+						// they are: it is Create Folders that goes over to it, after
+						// the caution below has said what that takes off the pages.
+						setting(c, T("Already have a study folder?", "已有研究文件夹？"),
+							T("Choose the folder itself to fill in its location and name. Create Folders then adds only what is missing.",
+								"直接选择该文件夹，自动填好存放位置和名称。之后点“创建文件夹”只补上缺少的部分。"),
+							func() {
+								if button(c.Key("choose-existing-study"), T("Choose Study Folder…", "选择研究文件夹…"), iconFolder, buttonSoft, 26).Clicked() {
+									a.pick(pickOptions{Title: T("Choose an existing study folder", "选择已有的研究文件夹"), Directory: true}, func(paths []string) {
+										p.choose(paths[0])
+									})
+								}
+							})
+					},
 				)
 				switch {
 				case p.inUse == "" || p.chosenInUse(target):
@@ -197,7 +219,15 @@ func (a *app) studyView(c *ui.Context) {
 			group(T("For you to fill", "由你放入"), T("Put your data here before running the analyses.", "运行分析之前，把你的数据放到这里。"), true)
 			group(T("Written by the analyses", "由各项分析写入"), T("Once the folders are created, each is the output folder of its page.", "创建之后，它们各自成为对应页面的输出文件夹。"), false)
 			if shown {
-				ui.Row(c).Children(func() { revealButton(c, "study-reveal", revealLabel(), p.made) })
+				ui.Row(c).Gap(8).Wrap().GapY(6).Children(func() {
+					revealButton(c, "study-reveal", revealLabel(), p.made)
+					if button(c.Key("study-to-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 26).Clicked() {
+						a.page = "reference"
+					}
+					if button(c.Key("study-to-norm"), T("Go to Intensity Normalisation", "前往强度归一化"), iconArrowRight, buttonSoft, 26).Clicked() {
+						a.page = "normalize"
+					}
+				})
 			}
 		},
 		func() { a.runBar(c, "study", p.problem(), T("Create Folders", "创建文件夹"), &p.st, a.runStudy) })
@@ -289,6 +319,7 @@ func (a *app) studyOutputs(study string) {
 	a.classify.output, a.cmp.output = in("reports"), in("compare")
 	a.cluster.output = in("reference_cluster.nii.gz")
 	a.study.inUse, a.study.inUseIs, a.study.last, a.study.sameKey = study, nil, "", ""
+	a.seen = nil // what the folders hold is asked anew: they may have been made just now
 	if info, err := os.Stat(study); err == nil {
 		os.SameFile(info, info) // Windows reads what the folder is only now, by its name
 		a.study.inUseIs = info

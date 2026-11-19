@@ -55,10 +55,10 @@ func (p *spatialPage) ready() bool {
 	return p.spm != "" && !p.spmBad && p.matlabPath() != ""
 }
 
-func (p *spatialPage) problem() string {
+// setupProblem is what the set-up of SPM and MATLAB lacks, which the
+// settings mend, or "".
+func (p *spatialPage) setupProblem() string {
 	switch {
-	case len(p.files.files) == 0:
-		return T("Add the images to bring into MNI space.", "请添加要配准到 MNI 空间的图像。")
 	case p.spm == "":
 		return T("Set up SPM first: choose the folder of SPM12 or SPM25.", "请先设置 SPM：选择 SPM12 或 SPM25 的文件夹。")
 	case p.spmBad:
@@ -66,6 +66,16 @@ func (p *spatialPage) problem() string {
 			"所选文件夹不是 SPM12 或 SPM25：其中没有 spm_jobman.m 或 toolbox/OldNorm。")
 	case p.matlabPath() == "":
 		return T("MATLAB was not found on this computer: choose it under SPM and MATLAB.", "未在本机找到 MATLAB：请在“SPM 与 MATLAB”中选择。")
+	}
+	return ""
+}
+
+func (p *spatialPage) problem() string {
+	switch {
+	case len(p.files.files) == 0:
+		return T("Add the images to bring into MNI space.", "请添加要配准到 MNI 空间的图像。")
+	case p.setupProblem() != "":
+		return p.setupProblem()
 	case p.output == "":
 		return T("Choose the output folder.", "请选择输出文件夹。")
 	}
@@ -92,8 +102,8 @@ func (a *app) spatialView(c *ui.Context) {
 		func() {
 			section(c, T("Images", "图像"), T("FDG-PET images as they come from the scanner; no MRI is needed. Skip this page if your images are in MNI space already.",
 				"扫描得到的原始空间 FDG-PET 图像，不需要 MRI。图像已在 MNI 空间的可跳过本页。"), func() {
-				a.filesCard(c, "sp-files", &p.files, T("Native-space images", "原始空间的图像"),
-					T(".nii and .nii.gz files, or whole folders · 4D images are averaged over time", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹 · 4D 图像按时间取平均"))
+				a.filesCardFromStudy(c, "sp-files", &p.files, T("Native-space images", "原始空间的图像"),
+					T(".nii and .nii.gz files, or whole folders · 4D images are averaged over time", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹 · 4D 图像按时间取平均"), "raw")
 			})
 			section(c, T("Set-up and output", "设置与输出"), "", func() {
 				rows(c,

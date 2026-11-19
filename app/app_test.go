@@ -1202,3 +1202,195 @@ func TestStudy(t *testing.T) {
 		t.Errorf("the reference that is gone is still in use: %q", c.norm.reference)
 	}
 }
+
+// TestStudyChosen checks that choosing a study folder that is there already
+// only fills in where it is: nothing is written into it, and the pages keep
+// the study they have until the folders are created.
+func TestStudyChosen(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, other := filepath.Join(dir, "old"), filepath.Join(dir, "other")
+	os.MkdirAll(filepath.Join(other, "patients"), 0o755)
+	a := newApp()
+	a.study.parent, a.study.name = dir, "old"
+	a.runStudy()
+	if a.study.inUse != old {
+		t.Fatalf("the study in use is %q", a.study.inUse)
+	}
+	a.zmap.files.files = []string{filepath.Join(old, "patients", "sub-01_pet.nii.gz")}
+	a.study.choose(other)
+	if a.study.target() != other {
+		t.Errorf("the folder chosen is %q", a.study.target())
+	}
+	if entries, _ := os.ReadDir(other); len(entries) != 1 {
+		t.Errorf("choosing the folder wrote into it: %d entries", len(entries))
+	}
+	if a.study.inUse != old || a.zmap.output != filepath.Join(old, "zmaps") || len(a.zmap.files.files) != 1 {
+		t.Errorf("choosing the folder went over to it: in use %q, output %q, %d images", a.study.inUse, a.zmap.output, len(a.zmap.files.files))
+	}
+	// The page says so, and what going over takes off the pages, before
+	// Create Folders does it.
+	a.page = "study"
+	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
+	tt.Frame()
+	if !tt.HasText("Choose Study Folder…") {
+		t.Errorf("no button to choose a study folder (shown: %q)", tt.Texts())
+	}
+	if err := tt.Click("Create Folders"); err != nil {
+		t.Fatal(err)
+	}
+	if a.study.inUse != other || len(a.zmap.files.files) != 0 {
+		t.Errorf("after creating: in use %q, %d images of the study left", a.study.inUse, len(a.zmap.files.files))
+	}
+}
+
+// TestRemedy checks that the run bar offers the way out of a problem for
+// that very problem only, in both languages.
+func TestRemedy(t *testing.T) {
+	defer func() { chinese = false }()
+	for _, chinese = range []bool{false, true} {
+		a := newApp()
+		// No images yet: that is what the page says, though it has no
+		// reference either.
+		if got := a.remedy("normalize", a.norm.problem()); got != "" {
+			t.Errorf("normalize without images: remedy %q for %q", got, a.norm.problem())
+		}
+		file := []string{"/study/patients/sub-01_pet.nii.gz"}
+		a.norm.files.files, a.zmap.files.files, a.classify.files.files = file, file, file
+		a.cluster.files.files = append(file, "/study/patients/sub-02_pet.nii.gz")
+		a.cmp.g1.files, a.cmp.g2.files, a.cmp.method = a.cluster.files.files, a.cluster.files.files, "hn"
+		problems := map[string]string{"normalize": a.norm.problem(), "zmap": a.zmap.problem(), "classify": a.classify.problem(),
+			"cluster": a.cluster.problem(), "compare": a.cmp.problem(&a.opt)}
+		for page, problem := range problems {
+			if got := a.remedy(page, problem); got != "reference" {
+				t.Errorf("%s without a reference: remedy %q for %q", page, got, problem)
+			}
+		}
+		// A method that needs none, and a page that has one.
+		a.norm.methods = map[string]bool{"cerebellum": true}
+		a.zmap.reference = "/study/hc_reference"
+		if got := a.remedy("normalize", a.norm.problem()); got != "" {
+			t.Errorf("normalize by the cerebellum: remedy %q for %q", got, a.norm.problem())
+		}
+		if got := a.remedy("zmap", a.zmap.problem()); got != "" {
+			t.Errorf("zmap with a reference: remedy %q for %q", got, a.zmap.problem())
+		}
+		// Spatial Normalisation: the settings mend SPM, not the output folder.
+		a.spatial.files.files = file
+		if a.spatial.spm == "" {
+			if got := a.remedy("spatial", a.spatial.problem()); got != "spm" {
+				t.Errorf("spatial without SPM: remedy %q for %q", got, a.spatial.problem())
+			}
+		}
+		if got := a.remedy("spatial", "Choose the output folder."); got != "" {
+			t.Errorf("spatial without an output folder: remedy %q", got)
+		}
+	}
+}
+
+// TestClassifyBadge checks that only a reading that names a pattern has a
+// pill, which says its confidence once.
+func TestClassifyBadge(t *testing.T) {
+	defer func() { chinese = false }()
+	pal := &lightPalette
+	for _, chinese = range []bool{false, true} {
+		for _, category := range []string{"none", "indeterminate", "possible", ""} {
+			if badge, _ := classifyBadge(category, "low", pal); badge != "" {
+				t.Errorf("a reading of category %q has the pill %q", category, badge)
+			}
+		}
+		for _, category := range []string{"pattern", "pd"} {
+			for _, confidence := range []string{"high", "moderate", "low"} {
+				if badge, _ := classifyBadge(category, confidence, pal); badge == "" {
+					t.Errorf("no pill for %s of %s confidence", category, confidence)
+				}
+			}
+		}
+		res := &core.Classification{Patterns: []core.Pattern{{ID: "msa-p", Score: 0.84}},
+			Conclusion: core.Conclusion{Category: "pattern", Pattern: "msa-p", Confidence: "high"}}
+		if _, detail := reading(res); strings.Contains(strings.ToLower(detail), "confidence") || strings.Contains(detail, "置信度") {
+			t.Errorf("the detail repeats the confidence of the pill: %q", detail)
+		}
+	}
+}
+
+// TestSidebar checks that every page is in one group of the sidebar, and
+// that every method has a line under its name in both languages that is
+// not the name again.
+func TestSidebar(t *testing.T) {
+	defer func() { chinese = false }()
+	count := map[string]int{}
+	for _, g := range navGroups {
+		for _, id := range g.pages {
+			count[id]++
+			if pageInfoOf(id).id != id {
+				t.Errorf("the sidebar lists %q, which is no page", id)
+			}
+		}
+	}
+	for _, p := range pages {
+		if count[p.id] != 1 {
+			t.Errorf("page %s is in %d groups of the sidebar", p.id, count[p.id])
+		}
+	}
+	for _, chinese = range []bool{false, true} {
+		for _, g := range methodGroups {
+			for _, id := range g.methods {
+				if hint := methodHint(id); hint == "" || strings.EqualFold(hint, methodName(id)) {
+					t.Errorf("method %s: hint %q under the name %q", id, hint, methodName(id))
+				}
+			}
+		}
+	}
+}
+
+// TestStudyShortcuts checks the shortcuts to what the study in use holds:
+// its folder of patients on a list of images, asked of the file system at
+// most once a second.
+func TestStudyShortcuts(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := commonDir([]string{"/a/x.nii", "/a/y.nii"}); got != "/a" {
+		t.Errorf("the folder of two files in /a is %q", got)
+	}
+	if got := commonDir([]string{"/a/x.nii", "/b/y.nii"}); got != "" || commonDir(nil) != "" {
+		t.Errorf("files apart, or none, share the folder %q", got)
+	}
+	a := newApp()
+	a.page = "zmap"
+	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
+	tt.Frame()
+	if tt.HasText("Load patients/") {
+		t.Fatal("a shortcut to a study while none is in use")
+	}
+	a.study.parent = dir
+	a.runStudy()
+	study := filepath.Join(dir, "study")
+	_, pt, _ := makeImages(t, filepath.Join(study, "patients"), 0, 2)
+	tt.Frame()
+	if err := tt.Click("Load patients/"); err != nil {
+		t.Fatalf("%v (shown: %q)", err, tt.Texts())
+	}
+	tt.Frame()
+	if !slices.Equal(a.zmap.files.files, pt) {
+		t.Errorf("loaded %q, not %q", a.zmap.files.files, pt)
+	}
+	// What is there is asked of the file system once, and again after a
+	// second: until then a folder that has gone is still seen.
+	patients := seenKey{filepath.Join(study, "patients"), true}
+	if !a.onDisk(patients.path, true) || a.onDisk(patients.path, false) {
+		t.Error("the folder of patients is not seen as a folder")
+	}
+	os.RemoveAll(patients.path)
+	if !a.onDisk(patients.path, true) {
+		t.Error("the file system is asked on every frame")
+	}
+	a.seen[patients] = seenFile{true, time.Now().Add(-2 * time.Second)}
+	if a.onDisk(patients.path, true) {
+		t.Error("a folder that is gone is seen for good")
+	}
+}

@@ -111,7 +111,7 @@ const (
 // it: a title, and what its colours mean.
 func (a *app) figure(c *ui.Context, pic *picture, title string, lg legend) {
 	dim, faint := ui.Hex("#e8e6e0"), ui.Hex("#a8a59c")
-	box := ui.Column(c).Radius(12).Clip().Background(ui.Hex("#000000"))
+	box := ui.Column(c).Radius(12).Clip().Background(ui.Hex("#000000")).InsetShadow(0, 0, 0, 1, ui.RGBA(255, 255, 255, 0.08))
 	box.Children(func() {
 		switch {
 		case pic.bitmap != nil:
@@ -174,17 +174,19 @@ func picker(c *ui.Context, key string, at *int, n int, name string) {
 		return
 	}
 	*at = min(max(*at, 0), n-1)
-	ui.Row(c.Key(key)).Gap(6).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(key)).Padding(6, 12, 6, 8).Radius(10).Gap(6).AlignItems(ui.Center).
+		Background(pal.panel).InsetShadow(0, 0, 0, 1, pal.border).Children(func() {
 		prev := iconButton(c.Key("prev"), iconChevron, T("Previous", "上一个")).Disabled(*at == 0)
 		prev.Rotate(180)
 		if prev.Clicked() && *at > 0 {
 			*at--
 		}
-		ui.Text(c, strconv.Itoa(*at+1)+" / "+strconv.Itoa(n)).FontSize(12).TextColor(pal.muted).SingleLine().Width(52).TextAlign(ui.Center)
+		ui.Text(c, strconv.Itoa(*at+1)+" / "+strconv.Itoa(n)).FontSize(12).FontWeight(600).TextColor(pal.muted).SingleLine().Width(52).TextAlign(ui.Center)
 		next := iconButton(c.Key("next"), iconChevron, T("Next", "下一个")).Disabled(*at == n-1)
 		if next.Clicked() && *at < n-1 {
 			*at++
 		}
+		ui.Box(c).Size(1, 14).Background(pal.line).Margin(0, 4).Shrink(0)
 		ui.Text(c, name).FontSize(12.5).FontWeight(500).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 	})
 }

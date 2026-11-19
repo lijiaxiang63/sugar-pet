@@ -9,7 +9,7 @@ know where things live here, the tutorial will simply tell you what to select.
    in groups: preparing the study and its reference, the analyses of single
    patients, and those of groups. Click any item to switch pages. A tick marks
    the pages whose last run succeeded, a spinner the one that is running, and
-   a number says how many images wait on a page that has not run yet.
+   a number says how many images are queued on a page that has neither.
 2. **Reference in use.** Displays the active healthy-control reference folder.
    Click it to switch to a different reference. This selection is shared across
    all pages. Once a study folder is in use, a card above it names that folder

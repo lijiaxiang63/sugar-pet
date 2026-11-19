@@ -93,7 +93,7 @@ func (a *app) masksView(c *ui.Context) {
 					ui.Text(c, T("Tick rows to build a custom region", "勾选脑区以快速组合自选区域")).FontSize(12).TextColor(t.TextMuted)
 				})
 				cols := []ui.TableColumn{
-					{Title: "", Width: 36, Align: ui.Center},
+					{ID: "pick", Width: 36, Align: ui.Center},
 					{Title: T("Number", "编号"), Width: 76, Align: ui.End},
 					{Title: T("Region", "脑区")},
 					{Title: T("Hemisphere", "半球"), Width: 96},

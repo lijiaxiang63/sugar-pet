@@ -163,7 +163,7 @@ func (a *app) spatialView(c *ui.Context) {
 						ui.Row(c).Gap(8).Children(func() {
 							b := button(c, T("Use for Intensity Normalisation", "用于强度归一化"), nil, buttonPrimary, 26)
 							if b.Clicked() {
-								a.norm.files.files = nil
+								a.norm.files.files, a.norm.files.query = nil, "" // a filter of the old list would hide the new
 								a.norm.files.add(p.written)
 								a.page = "normalize"
 							}

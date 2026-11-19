@@ -54,7 +54,7 @@ var methodHints = map[string]label{
 	"hn":            {"Peak ratio to the controls", "与对照比值的直方图主峰"},
 	"ihn":           {"HN again, without abnormal voxels", "去掉异常体素后重做 HN"},
 	"ips":           {"PS again, without abnormal voxels", "去掉异常体素后重做 PS"},
-	"ps":            {"Inside the gray-matter mask", "灰质掩膜内的摄取"},
+	"ps":            {"Gray matter, by default", "默认取灰质"},
 	"spm-global":    {"Voxels above 1/8 of the mean", "高于全图均值 1/8 的体素"},
 	"whole-brain":   {"Gray and white matter", "灰质和白质"},
 	"cerebellum":    {"Gray and white matter", "含灰质和白质"},

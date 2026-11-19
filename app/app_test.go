@@ -1387,6 +1387,7 @@ func TestStudyShortcuts(t *testing.T) {
 		t.Error("the folder of patients is not seen as a folder")
 	}
 	os.RemoveAll(patients.path)
+	a.seen[patients] = seenFile{true, time.Now().Add(time.Hour)} // just seen, however slow the test
 	if !a.onDisk(patients.path, true) {
 		t.Error("the file system is asked on every frame")
 	}
@@ -1455,6 +1456,26 @@ func TestStudyLinks(t *testing.T) {
 	}
 	if got := expandPaths([]string{filepath.Join(dir, "elsewhere")}); !slices.Equal(got, pt) {
 		t.Errorf("the folder itself holds %q, not %q", got, pt)
+	}
+	// An image is one image, by its own path and through the link.
+	var list fileList
+	list.add(pt[:1])
+	list.add([]string{link})
+	if want := []string{pt[0], want[1]}; !slices.Equal(list.files, want) {
+		t.Errorf("the list holds %q, not %q", list.files, want)
+	}
+	// A study folder named with ":" is no name to type, but may be picked,
+	// and is the study again at the next launch.
+	if odd := filepath.Join(dir, "study:baseline"); os.Mkdir(odd, 0o755) == nil {
+		a.study.choose(odd)
+		if msg := a.study.problem(); msg != "" {
+			t.Errorf("a folder that is there cannot be chosen: %s", msg)
+		}
+		b := newApp()
+		b.restoreStudy(odd)
+		if b.study.target() != odd || b.study.problem() != "" {
+			t.Errorf("after a new launch the target is %q (%s)", b.study.target(), b.study.problem())
+		}
 	}
 	// A name with a space at its end is no name to type, but may be picked.
 	spaced := filepath.Join(dir, "cohort ")

@@ -27,7 +27,7 @@ that version, so write it for the people who use the app.
 - The sidebar groups the pages (prepare, single patients, groups, resources)
   and lists Reference before Intensity Normalisation, as the recommended
   methods need a reference. It shows the study folder in use, and how many
-  images wait on a page that has not run.
+  images are queued on a page that has no tick.
 - Each method tile says in a few words what the method does.
 - Classify Parkinsonism shows the confidence of a reading as a coloured
   label beside it.

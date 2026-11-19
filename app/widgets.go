@@ -311,13 +311,22 @@ func expandPaths(paths []string) []string {
 }
 
 func (f *fileList) add(paths []string) {
+	// An image is told by where it leads: one reached through a link, as
+	// the folders of a study may be, and by its own path is one image, and
+	// would count twice in the statistics.
+	real := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
 	have := map[string]bool{}
 	for _, p := range f.files {
-		have[p] = true
+		have[p], have[real(p)] = true, true
 	}
 	for _, p := range expandPaths(paths) {
-		if !have[p] {
-			have[p] = true
+		if r := real(p); !have[p] && !have[r] {
+			have[p], have[r] = true, true
 			f.files = append(f.files, p)
 		}
 	}

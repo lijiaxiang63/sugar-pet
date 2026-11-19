@@ -101,6 +101,9 @@ func (p *studyPage) problem() string {
 	switch {
 	case p.parent == "":
 		return T("Choose where to create the study folder.", "请选择研究文件夹建在哪里。")
+	case p.chosen != "" && p.target() == p.chosen:
+		// A folder that is there has the name it has; the rules are for
+		// names typed here.
 	case name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`):
 		return T(`Give the study folder a name, without / \ or :.`, `请填写研究文件夹的名称，不能含 / \ 或 :。`)
 	}
@@ -479,6 +482,6 @@ func (a *app) restoreStudy(study string) {
 		a.study.last = study
 		return
 	}
-	a.study.parent, a.study.name = filepath.Dir(study), filepath.Base(study)
+	a.study.choose(study) // to the letter, as when it was picked
 	a.studyOutputs(study)
 }

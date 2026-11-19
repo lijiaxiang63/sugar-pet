@@ -112,9 +112,10 @@ it writes patients and controls into different folders.
 A reference the study already holds in `hc_reference/` becomes the reference
 in use, if none is. When you create the folders of another study, the pages
 go over to it: the images, tables and reference of the study you leave are
-taken off them, so that the images of one study are never written into
-another or compared with its controls. Images and a reference you chose from
-elsewhere are kept.
+taken off them, and so are the results of its runs, so that the images of one
+study are never written into another or compared with its controls. The files
+of those results stay where they are, in the folder of the study you left.
+Images and a reference you chose from elsewhere are kept.
 
 From the command line, the folders are created with:
 

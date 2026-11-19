@@ -759,6 +759,7 @@ func TestStudy(t *testing.T) {
 		t.Error("the pages still describe a reference that is no longer in use")
 	}
 
+	pages0 := []string{"spatial", "normalize", "reference", "zmap", "classify", "compare", "cluster"}
 	// Leaving a study takes its images and tables off the pages; those of
 	// elsewhere stay, and so does everything when the same study is used again.
 	mine, theirs := filepath.Join(one, "controls", "sub-hc01_pet.nii.gz"), filepath.Join(dir, "elsewhere", "sub-x_pet.nii.gz")
@@ -772,11 +773,51 @@ func TestStudy(t *testing.T) {
 		c.cmp.region.kind, c.cmp.region.file = 1, filepath.Join(dir, "elsewhere", "mask.nii.gz")
 		c.spatial.output = filepath.Join(one, "patients")
 	}
+	// The results of the runs that wrote into the study, and what the pages
+	// offer to do with them.
+	results := func(study string) {
+		out := func(name string) string { return filepath.Join(study, name) }
+		c.spatial.rows, c.spatial.written = []spatialRow{{image: "sub-pt01_pet.nii.gz"}}, []string{mine}
+		c.spatial.outDir, c.spatial.st.ok = out("patients"), "warped"
+		c.norm.rows, c.norm.outDir, c.norm.st.ok = []normRow{{image: "sub-pt01_pet.nii.gz"}}, out("normalised"), "normalised"
+		c.ref.st.ok = "built"
+		c.zmap.rows, c.zmap.outDir, c.zmap.st.ok = []zmapRow{{image: "sub-pt01_pet.nii.gz"}}, out("zmaps"), "mapped"
+		c.classify.rows, c.classify.outDir, c.classify.st.ok = []classifyRow{{image: "sub-pt01_pet.nii.gz"}}, out("reports"), "classified"
+		c.cmp.result, c.cmp.how, c.cmp.st.ok = &core.GroupComparison{TMap: filepath.Join(out("compare"), "a_vs_b_T.nii.gz")}, "corrected", "compared"
+		c.cluster.saved, c.cluster.volume, c.cluster.st.ok = out("reference_cluster.nii.gz"), 58, "found"
+	}
+	done := func() (pages []string) {
+		for _, p := range pages0 {
+			if c.done(p) {
+				pages = append(pages, p)
+			}
+		}
+		return pages
+	}
+	fill()
+	results(one)
+	c.useStudy(one)
+	if len(c.ref.files.files) != 2 || c.zmap.covTable != covTable || c.spatial.output == "" || len(done()) != len(pages0) || len(c.zmap.rows) != 1 {
+		t.Errorf("using the same study again took its images, tables or results off the pages (done: %q)", done())
+	}
+	c.useStudy(two)
+	if got := done(); len(got) != 0 {
+		t.Errorf("pages still marked as done after their study was left: %q", got)
+	}
+	if len(c.spatial.rows)+len(c.spatial.written)+len(c.norm.rows)+len(c.zmap.rows)+len(c.classify.rows) != 0 || c.cmp.result != nil || c.cmp.how != "" || c.cluster.saved != "" {
+		t.Error("results of the study left behind are still on the pages")
+	}
+	// Results written elsewhere are no part of the study, and stay.
+	results(filepath.Join(dir, "elsewhere"))
+	c.spatial.output = ""
+	c.useStudy(three)
+	if got := done(); len(got) != len(pages0)-1 || c.ref.st.ok != "" || len(c.zmap.rows) != 1 || c.cmp.result == nil {
+		// The Reference page keeps no record of where it wrote: it goes by its output.
+		t.Errorf("results written elsewhere were taken off the pages (done: %q)", got)
+	}
+	results(two)
 	fill()
 	c.useStudy(one)
-	if len(c.ref.files.files) != 2 || c.zmap.covTable != covTable || c.spatial.output == "" {
-		t.Error("using the same study again took its images or tables off the pages")
-	}
 	c.useStudy(two)
 	for name, list := range map[string]*fileList{"spatial": &c.spatial.files, "normalize": &c.norm.files, "reference": &c.ref.files, "zmap": &c.zmap.files,
 		"classify": &c.classify.files, "group 1": &c.cmp.g1, "group 2": &c.cmp.g2, "cluster": &c.cluster.files} {

@@ -124,8 +124,8 @@ func (a *app) studyView(c *ui.Context) {
 				case target == "":
 					caution(c, Tf("The pages write into %s.", "各页面目前写入 %s。", shortDir(p.inUse)))
 				default:
-					caution(c, Tf("The pages still write into %s. Creating the folders here makes them write into this folder, and takes the images, tables and reference of %[1]s off them.",
-						"各页面目前仍写入 %s。在这里创建文件夹之后，各页面改为写入这个文件夹，并移除其中属于 %[1]s 的图像、表格和参考库。", shortDir(p.inUse)))
+					caution(c, Tf("The pages still write into %s. Creating the folders here makes them write into this folder, and takes the images, tables, reference and results of %[1]s off them.",
+						"各页面目前仍写入 %s。在这里创建文件夹之后，各页面改为写入这个文件夹，并移除其中属于 %[1]s 的图像、表格、参考库和运行结果。", shortDir(p.inUse)))
 				}
 			})
 			group := func(title, caption string, yours bool) {
@@ -251,8 +251,10 @@ func (a *app) useStudy(study string) {
 }
 
 // leaveStudy takes off the pages what lies in a study folder that is no
-// longer the one in use: its images, its tables and its reference.
+// longer the one in use: its images, its tables, its reference, and the
+// results of the runs that wrote into it.
 func (a *app) leaveStudy(left string) {
+	a.forgetResults(left)
 	known := map[string]bool{} // by folder: the images of a study lie in few
 	in := func(path string) bool {
 		if path == "" {
@@ -300,6 +302,45 @@ func (a *app) leaveStudy(left string) {
 	}
 	if insideDir(a.norm.reference, left) {
 		a.setReference("")
+	}
+}
+
+// forgetResults takes off the pages the results of the runs that wrote into
+// a study folder, and how those runs went.  What a page offers to do with
+// its results, such as normalising the images it warped, goes with them.
+func (a *app) forgetResults(left string) {
+	// Where a page's last run wrote or, if it wrote nothing, would have.
+	wrote := func(outDir, output string) bool {
+		if outDir == "" {
+			outDir = output
+		}
+		return insideDir(outDir, left)
+	}
+	if p := &a.spatial; wrote(p.outDir, p.output) {
+		p.rows, p.notes, p.written, p.outDir, p.shown, p.st = nil, nil, nil, "", 0, status{}
+		p.pic.forget()
+	}
+	if p := &a.norm; wrote(p.outDir, p.output) {
+		p.rows, p.notes, p.outDir, p.st = nil, nil, "", status{}
+	}
+	if p := &a.ref; wrote("", p.output) {
+		p.st = status{}
+	}
+	if p := &a.zmap; wrote(p.outDir, p.output) {
+		p.rows, p.notes, p.outDir, p.shown, p.st = nil, nil, "", 0, status{}
+		p.pic.forget()
+	}
+	if p := &a.classify; wrote(p.outDir, p.output) {
+		p.rows, p.notes, p.outDir, p.shown, p.st = nil, nil, "", 0, status{}
+		p.pic.forget()
+	}
+	if p := &a.cmp; p.result != nil && insideDir(p.result.TMap, left) || p.result == nil && insideDir(p.output, left) {
+		p.result, p.how, p.st = nil, "", status{}
+		p.pic.forget()
+	}
+	if p := &a.cluster; wrote(p.saved, p.output) {
+		p.saved, p.volume, p.st = "", 0, status{}
+		p.pic.forget()
 	}
 }
 

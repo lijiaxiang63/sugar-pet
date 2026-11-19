@@ -83,7 +83,9 @@ func (cv *covChoice) read() {
 
 // sync reads the table again if its file has changed since it was read.  It
 // is for the view, which runs on every frame: now is the time of the frame,
-// and the file is looked at, not read, once in covCheckEvery.
+// and the file is looked at, not read, once in covCheckEvery.  A file that
+// could not be read is read at each look: what was in the way (the permission
+// to read it, say) may be gone without a change of its size or time.
 func (cv *covChoice) sync(now time.Time) {
 	if cv.path == "" {
 		return
@@ -92,7 +94,7 @@ func (cv *covChoice) sync(now time.Time) {
 		return
 	}
 	cv.checked = now
-	if stampOf(cv.path) != cv.stamp {
+	if cv.err != "" || stampOf(cv.path) != cv.stamp {
 		cv.read()
 	}
 }

@@ -433,12 +433,40 @@ func TestCovariateTable(t *testing.T) {
 	}
 	refused("建立参考库", &a.ref.st, "无法读取协变量表")
 	later()
-	if cv.table != nil || !tt.HasText("no such file") {
-		t.Fatalf("the page does not say that the file is gone: %q", tt.Texts())
+	if cv.table != nil || cv.err == "" || !tt.HasText(cv.err) {
+		t.Fatalf("the page does not say that the file is gone: %q, %q", cv.err, tt.Texts())
 	}
 	write([]string{"sex", "age", "bmi"}, people)
 	later()
 	ticks(cv, map[string]bool{"age": true, "sex": false, "bmi": false})
+
+	// A file that could not be read is tried again though it looks the
+	// same, as when the permission to read it is given back: here a table
+	// without rows is mended at the same size and time.
+	rewrite := func(text string) {
+		t.Helper()
+		if err := os.WriteFile(table, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rewrite("participant_id\tage\tsub-xx00\t61\n")
+	later()
+	if cv.table != nil || cv.err == "" {
+		t.Fatal("a table without rows was read")
+	}
+	stamp := cv.stamp
+	rewrite("participant_id\tage\nsub-xx00\t61\n")
+	if err := os.Chtimes(table, time.Time{}, time.Unix(0, stamp.modified)); err != nil {
+		t.Fatal(err)
+	}
+	if stampOf(table) != stamp {
+		t.Fatal("the mended file does not look as it did")
+	}
+	later()
+	if cv.table == nil {
+		t.Fatalf("the file was not read again: %s", cv.err)
+	}
+	ticks(cv, map[string]bool{"age": true})
 
 	// The Compare Groups page keeps its table the same way.
 	cv = &a.cmp.cov

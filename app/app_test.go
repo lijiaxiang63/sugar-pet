@@ -665,11 +665,12 @@ func TestStudy(t *testing.T) {
 	if err := json.Unmarshal([]byte(a.settingsText()), &kept); err != nil || kept.Study != study {
 		t.Fatalf("kept the study as %q (%v)", kept.Study, err)
 	}
+	// The reference is the one the app kept, also when that is none: the
+	// study's own is not put in its place.
 	os.WriteFile(filepath.Join(study, "hc_reference", "reference.json"), []byte("{}"), 0o644)
 	b := newApp()
 	b.restoreStudy(kept.Study)
-	if b.zmap.output != filepath.Join(study, "zmaps") || b.study.parent != dir || b.study.name != "study" ||
-		b.norm.reference != filepath.Join(study, "hc_reference") {
+	if b.zmap.output != filepath.Join(study, "zmaps") || b.study.parent != dir || b.study.name != "study" || b.norm.reference != "" {
 		t.Errorf("after a new launch: %q, %q, %q, %q", b.zmap.output, b.study.parent, b.study.name, b.norm.reference)
 	}
 	b = newApp()
@@ -698,9 +699,22 @@ func TestStudy(t *testing.T) {
 	if tt.HasText("Already there") || tt.HasText(ready) || a.study.st.ok != "" {
 		t.Errorf("a folder not laid out yet is spoken of as ready, shown: %q", tt.Texts())
 	}
-	if a.zmap.output != filepath.Join(study, "zmaps") || !tt.HasText("The pages still write into "+shortDir(study)+". They write into this folder once its folders are created.") {
+	if a.zmap.output != filepath.Join(study, "zmaps") || !strings.Contains(strings.Join(tt.Texts(), "\n"), "The pages still write into "+shortDir(study)+".") {
 		t.Errorf("not said where the pages still write, shown: %q", tt.Texts())
 	}
+	// A run that fails takes back what an earlier run of the folder showed.
+	a.study.name = "study"
+	tt.Frame()
+	os.Remove(filepath.Join(study, "zmaps"))
+	os.WriteFile(filepath.Join(study, "zmaps"), nil, 0o644)
+	if err := tt.Click("Create Folders"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.study.st.err == "" || tt.HasText("Already there") || tt.HasText("Created") {
+		t.Errorf("after a run that failed (%q), shown: %q", a.study.st.err, tt.Texts())
+	}
+	os.Remove(filepath.Join(study, "zmaps"))
 
 	// The reference follows the study: with the study's own in use, another
 	// study brings its own or none; one chosen from elsewhere is kept.
@@ -731,5 +745,58 @@ func TestStudy(t *testing.T) {
 	c.useStudy(one)
 	if c.norm.reference != outside {
 		t.Errorf("a reference chosen from elsewhere was replaced by %q", c.norm.reference)
+	}
+	// What a page read of a reference goes with the reference.
+	c.zmap.info, c.classify.info = &refInfo{N: 16}, &refInfo{N: 16}
+	c.setReference("")
+	if c.zmap.info != nil || c.classify.info != nil {
+		t.Error("the pages still describe a reference that is no longer in use")
+	}
+
+	// Leaving a study takes its images and tables off the pages; those of
+	// elsewhere stay, and so does everything when the same study is used again.
+	mine, theirs := filepath.Join(one, "controls", "sub-hc01_pet.nii.gz"), filepath.Join(dir, "elsewhere", "sub-x_pet.nii.gz")
+	covTable := filepath.Join(one, "participants.tsv")
+	fill := func() {
+		for _, list := range []*fileList{&c.spatial.files, &c.norm.files, &c.ref.files, &c.zmap.files, &c.classify.files, &c.cmp.g1, &c.cmp.g2, &c.cluster.files} {
+			list.files = []string{mine, theirs}
+		}
+		c.zmap.covTable, c.classify.covTable, c.cmp.covExtra, c.ref.cov.path, c.cmp.cov.path = covTable, covTable, covTable, covTable, covTable
+		c.spatial.output = filepath.Join(one, "patients")
+	}
+	fill()
+	c.useStudy(one)
+	if len(c.ref.files.files) != 2 || c.zmap.covTable != covTable || c.spatial.output == "" {
+		t.Error("using the same study again took its images or tables off the pages")
+	}
+	c.useStudy(two)
+	for name, list := range map[string]*fileList{"spatial": &c.spatial.files, "normalize": &c.norm.files, "reference": &c.ref.files, "zmap": &c.zmap.files,
+		"classify": &c.classify.files, "group 1": &c.cmp.g1, "group 2": &c.cmp.g2, "cluster": &c.cluster.files} {
+		if len(list.files) != 1 || list.files[0] != theirs {
+			t.Errorf("%s still holds %q after its study was left", name, list.files)
+		}
+	}
+	if c.zmap.covTable != "" || c.classify.covTable != "" || c.cmp.covExtra != "" || c.ref.cov.path != "" || c.cmp.cov.path != "" || c.spatial.output != "" {
+		t.Error("a table or an output of the study left behind is still chosen")
+	}
+	if c.ref.output != filepath.Join(two, "hc_reference") || c.norm.reference != refTwo {
+		t.Errorf("after going over to study two: output %q, reference %q", c.ref.output, c.norm.reference)
+	}
+	// The same folder under another spelling is the same study.
+	if runtime.GOOS != "windows" {
+		alias := filepath.Join(dir, "alias")
+		if err := os.Symlink(two, alias); err != nil {
+			t.Fatal(err)
+		}
+		c.ref.files.files = []string{filepath.Join(two, "controls", "sub-hc01_pet.nii.gz")}
+		c.useStudy(alias)
+		if len(c.ref.files.files) != 1 {
+			t.Error("the same study under another spelling was taken for another study")
+		}
+		c.setReference(filepath.Join(alias, "hc_reference"))
+		c.useStudy(three)
+		if c.norm.reference != "" || len(c.ref.files.files) != 0 {
+			t.Errorf("the study left under another spelling kept its reference %q or its images", c.norm.reference)
+		}
 	}
 }

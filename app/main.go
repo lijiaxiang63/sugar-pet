@@ -174,7 +174,10 @@ func (a *app) saveSettings() bool {
 func (a *app) setReference(path string) {
 	a.norm.reference, a.zmap.reference, a.cmp.reference, a.cluster.reference = path, path, path, path
 	a.classify.reference = path
+	// What the pages read of the reference before is read anew, or let go
+	// of with it.
 	a.zmap.loadedFrom, a.classify.loadedFrom = "", ""
+	a.zmap.info, a.classify.info = nil, nil
 	a.cmp.fwhmKnown = false
 }
 

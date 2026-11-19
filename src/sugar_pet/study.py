@@ -65,10 +65,24 @@ def _present(target: Path, is_folder: bool) -> bool:
         return False
     if not target.exists():
         raise ValueError(f"'{target}' is a link that leads nowhere")
-    if target.is_dir() != is_folder:
+    # A file is a regular file: a pipe or a device cannot be read as a table.
+    if not (target.is_dir() if is_folder else target.is_file()):
         kind = "a folder" if is_folder else "a file"
         raise ValueError(f"'{target}' exists and is not {kind}")
     return True
+
+
+def _new_table(target: Path) -> None:
+    """Create the table with its header.  One that is there is never written over."""
+    try:
+        with open(target, "x") as table:
+            table.write(PARTICIPANTS_HEADER)
+    except FileExistsError:  # it is there, or appeared just now: only opening it raises this
+        raise
+    except OSError:
+        # No table is better than one without its header, which would be kept from then on.
+        target.unlink(missing_ok=True)
+        raise
 
 
 def init_study(path: str | Path) -> list[tuple[StudyEntry, bool]]:
@@ -92,10 +106,11 @@ def init_study(path: str | Path) -> list[tuple[StudyEntry, bool]]:
                 if entry.is_folder:
                     target.mkdir()
                 else:
-                    # "x": never written over, also if it appeared just now
-                    with open(target, "x") as table:
-                        table.write(PARTICIPANTS_HEADER)
+                    _new_table(target)
             except FileExistsError:
-                created = not _present(target, entry.is_folder)
+                # It appeared meanwhile: it is kept, if it is what it should be.
+                if not _present(target, entry.is_folder):
+                    raise ValueError(f"'{target}' changed while the folders were created: run it again") from None
+                created = False
         result.append((entry, created))
     return result

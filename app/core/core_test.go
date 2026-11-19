@@ -344,4 +344,21 @@ func TestInitStudy(t *testing.T) {
 			t.Errorf("%s beside a linked folder: created is %v", e.Name, created[i])
 		}
 	}
+
+	// A path through a link and back is the folder the system reads it as,
+	// not the one its spelling shortens to.
+	site, here := filepath.Join(base, "data", "site"), filepath.Join(base, "here")
+	os.MkdirAll(site, 0o755)
+	os.MkdirAll(filepath.Join(here, "study"), 0o755)
+	os.Symlink(site, filepath.Join(here, "link"))
+	through := here + string(filepath.Separator) + "link" + string(filepath.Separator) + ".." + string(filepath.Separator) + "study"
+	if _, err := InitStudy(through); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(base, "data", "study", "patients")); err != nil {
+		t.Error("the study was not laid out where the path leads")
+	}
+	if _, err := os.Stat(filepath.Join(here, "study", "patients")); err == nil {
+		t.Error("the study was laid out in the folder the path's spelling shortens to")
+	}
 }

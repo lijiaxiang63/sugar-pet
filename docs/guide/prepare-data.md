@@ -109,10 +109,12 @@ you do not have to choose them one by one. The app remembers the study folder
 for the next launch. Only Spatial Normalisation is left for you to set, since
 it writes patients and controls into different folders.
 
-The reference in use follows the study folder too: a reference the study
-already holds in `hc_reference/` is used, and the reference of a study you
-leave is let go of, so that the images of one study are never compared with
-the controls of another. A reference you chose from elsewhere is kept.
+A reference the study already holds in `hc_reference/` becomes the reference
+in use, if none is. When you create the folders of another study, the pages
+go over to it: the images, tables and reference of the study you leave are
+taken off them, so that the images of one study are never written into
+another or compared with its controls. Images and a reference you chose from
+elsewhere are kept.
 
 From the command line, the folders are created with:
 

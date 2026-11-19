@@ -285,6 +285,9 @@ func initStudy(rest []string) {
 	}
 	created, err := core.InitStudy(root)
 	check(err)
+	if real, err := filepath.EvalSymlinks(root); err == nil {
+		root = real
+	}
 	if abs, err := filepath.Abs(root); err == nil {
 		root = abs
 	}

@@ -46,9 +46,10 @@ func studyEntryPresent(target string, dir bool) (bool, error) {
 		return false, errorf("'%s' is a link that leads nowhere", target)
 	case err != nil:
 		return false, err
-	case info.IsDir() != dir && dir:
+	case dir && !info.IsDir():
 		return false, errorf("'%s' exists and is not a folder", target)
-	case info.IsDir() != dir:
+	case !dir && !info.Mode().IsRegular():
+		// A pipe or a device cannot be read as a table.
 		return false, errorf("'%s' exists and is not a file", target)
 	}
 	return true, nil
@@ -58,13 +59,20 @@ func studyEntryPresent(target string, dir bool) (bool, error) {
 // path.  It reports, for each entry of StudyLayout, whether it was created
 // (false: it was there already).  Nothing that exists is changed.
 func InitStudy(path string) ([]bool, error) {
+	if path == "" {
+		path = "."
+	}
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
 		return nil, errorf("'%s' is a file, not a folder", path)
 	}
+	// The entries are named as the system reads the path.  filepath.Join
+	// would shorten "link/../study" to "study", which is another folder
+	// when link leads elsewhere.
+	in := func(name string) string { return path + string(filepath.Separator) + name }
 	// Everything is looked at before anything is made.
 	created := make([]bool, len(StudyLayout))
 	for i, e := range StudyLayout {
-		present, err := studyEntryPresent(filepath.Join(path, e.Name), e.Dir)
+		present, err := studyEntryPresent(in(e.Name), e.Dir)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +85,7 @@ func InitStudy(path string) ([]bool, error) {
 		if !created[i] {
 			continue
 		}
-		target := filepath.Join(path, e.Name)
+		target := in(e.Name)
 		var err error
 		if e.Dir {
 			err = os.Mkdir(target, 0o755)
@@ -89,11 +97,21 @@ func InitStudy(path string) ([]bool, error) {
 				if closed := table.Close(); err == nil {
 					err = closed
 				}
+				if err != nil {
+					// No table is better than one without its header,
+					// which would be kept from then on.
+					os.Remove(target)
+				}
 			}
 		}
 		if os.IsExist(err) {
-			if _, err := studyEntryPresent(target, e.Dir); err != nil {
+			// It appeared meanwhile: it is kept, if it is what it should be.
+			present, err := studyEntryPresent(target, e.Dir)
+			if err != nil {
 				return nil, err
+			}
+			if !present {
+				return nil, errorf("'%s' changed while the folders were created: run it again", target)
 			}
 			created[i] = false
 			continue

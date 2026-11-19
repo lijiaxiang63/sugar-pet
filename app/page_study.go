@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -29,9 +30,11 @@ type studyPage struct {
 	// now.  The settings may still hold files of it.
 	last string
 	// Whether the folder chosen is the one in use under another spelling:
-	// asked on every frame, answered by the file system once per choice.
+	// asked on every frame, answered by the file system once per choice,
+	// and again after a while, as a link may come to lead elsewhere.
 	sameKey string
 	same    bool
+	sameAt  time.Time
 	// statusOf is the study folder that st speaks of.
 	statusOf string
 }
@@ -73,8 +76,8 @@ func (p *studyPage) chosenInUse(target string) bool {
 	if target == "" || p.inUse == "" {
 		return false
 	}
-	if key := target + "\x00" + p.inUse; key != p.sameKey {
-		p.sameKey, p.same = key, p.holds(target)
+	if key := target + "\x00" + p.inUse; key != p.sameKey || time.Since(p.sameAt) > time.Second {
+		p.sameKey, p.same, p.sameAt = key, p.holds(target), time.Now()
 	}
 	return p.same
 }
@@ -300,10 +303,12 @@ func (a *app) studyOutputs(study string) {
 // kept.
 func (a *app) useStudy(study string) {
 	// The study left is the folder the pages went over to, also if this one
-	// has its name by now, or is led to by the same link.
+	// has its name by now, or is led to by the same link.  A study that was
+	// given another name is left under its old one: what the pages hold of
+	// it is named so, and is no longer there.
 	switch p := &a.study; {
 	case p.inUse != "":
-		if !p.holds(study) {
+		if !p.holds(study) || !sameDir(p.inUse, study) {
 			a.leaveStudy(p.inUse)
 		}
 	case p.last != "" && !sameDir(p.last, study):

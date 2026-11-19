@@ -178,6 +178,9 @@ func (a *app) setReference(path string) {
 	// of with it.
 	a.zmap.loadedFrom, a.classify.loadedFrom = "", ""
 	a.zmap.info, a.classify.info = nil, nil
+	// Also if the path is the same: another reference may have its name.
+	a.ref.current = ""
+	a.ref.pic.forget()
 	a.cmp.fwhmKnown = false
 }
 

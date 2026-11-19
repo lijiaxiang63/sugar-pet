@@ -947,6 +947,24 @@ func TestStudy(t *testing.T) {
 	}
 	os.Remove(one)
 	os.Rename(filepath.Join(dir, "one-before"), one)
+	// A study given another name is the same folder, but what the pages
+	// hold of it is named as before, and goes; its reference is found again.
+	c.useStudy(one)
+	fill()
+	c.setReference(refOne)
+	c.ref.current, c.ref.info = refOne, &refInfo{N: 16}
+	renamed := filepath.Join(dir, "one-renamed")
+	if err := os.Rename(one, renamed); err != nil {
+		t.Fatal(err)
+	}
+	c.useStudy(renamed)
+	if len(c.ref.files.files) != 1 || c.zmap.covTable != "" || c.norm.reference != filepath.Join(renamed, "hc_reference") {
+		t.Errorf("after the study was given another name: images %q, table %q, reference %q", c.ref.files.files, c.zmap.covTable, c.norm.reference)
+	}
+	if c.ref.current != "" {
+		t.Error("the Reference page still describes the reference it read before")
+	}
+	os.Rename(renamed, one)
 	// How a run failed is not said of the next study, wherever it was to write.
 	c.useStudy(one)
 	results(filepath.Join(dir, "elsewhere"))

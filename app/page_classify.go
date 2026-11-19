@@ -194,7 +194,7 @@ func (a *app) classifyView(c *ui.Context) {
 						if sp := a.studyParticipants(); sp != "" {
 							studyCovRow = func() {
 								setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
-									if button(c.Key("cls-cov-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() {
+									if button(c.Key("cls-cov-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() && a.stillInStudy("participants.tsv", false) {
 										p.covTable = sp
 									}
 								})

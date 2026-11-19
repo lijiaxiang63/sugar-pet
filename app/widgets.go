@@ -200,19 +200,51 @@ type seenFile struct {
 
 // onDisk reports whether a file is there or, with dir, a folder.  The pages
 // ask on every frame; the file system, which may be a slow one, answers once
-// a second, as what is there may change.
+// a second, as what is there may change.  A file is a regular one: a pipe
+// of its name would hang whoever reads it.
 func (a *app) onDisk(path string, dir bool) bool {
 	key := seenKey{path, dir}
 	if s, ok := a.seen[key]; ok && time.Since(s.at) < time.Second {
 		return s.there
 	}
 	info, err := os.Stat(path)
-	there := err == nil && info.IsDir() == dir
+	there := err == nil && (dir && info.IsDir() || !dir && info.Mode().IsRegular())
 	if a.seen == nil {
 		a.seen = map[seenKey]seenFile{}
 	}
 	a.seen[key] = seenFile{there, time.Now()}
 	return there
+}
+
+// inStudy is a folder (dir) or a file of the study in use, or "" if it is
+// not there, or if the folder in use is no longer that study: moved away,
+// with another under its name, whose images are not those the pages hold.
+func (a *app) inStudy(name string, dir bool) string {
+	p := &a.study
+	if p.inUse == "" {
+		return ""
+	}
+	// The folder in use is known by its own key: "" is no path.
+	held := seenKey{"", true}
+	s, ok := a.seen[held]
+	if !ok || time.Since(s.at) >= time.Second {
+		if a.seen == nil {
+			a.seen = map[seenKey]seenFile{}
+		}
+		s = seenFile{p.holds(p.inUse), time.Now()}
+		a.seen[held] = s
+	}
+	if path := filepath.Join(p.inUse, name); s.there && a.onDisk(path, dir) {
+		return path
+	}
+	return ""
+}
+
+// stillInStudy asks the file system now, when a shortcut to the study in
+// use is taken, whether what it leads to is there and of that study.
+func (a *app) stillInStudy(name string, dir bool) bool {
+	a.seen = nil
+	return a.inStudy(name, dir) != ""
 }
 
 // commonDir returns the shared parent folder if all files live in the same
@@ -245,19 +277,29 @@ func expandPaths(paths []string) []string {
 			}
 			continue
 		}
+		// A folder that is a link, as the patients of a study may be, is
+		// walked where it leads: WalkDir does not follow it.  The images
+		// keep the names they have under the link.
+		root := p
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			root = real
+		}
 		var found []string
-		filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
+		filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
 			if d.IsDir() {
 				// A saved reference is not a set of subjects.
-				if core.IsReferenceFolder(path) || strings.HasPrefix(d.Name(), ".") && path != p {
+				if core.IsReferenceFolder(path) || strings.HasPrefix(d.Name(), ".") && path != root {
 					return filepath.SkipDir
 				}
 				return nil
 			}
 			if core.IsNiftiName(d.Name()) && !strings.HasPrefix(d.Name(), ".") {
+				if rel, err := filepath.Rel(root, path); err == nil && root != p {
+					path = filepath.Join(p, rel)
+				}
 				found = append(found, path)
 			}
 			return nil
@@ -323,15 +365,13 @@ func (a *app) filesCardFromStudy(c *ui.Context, key string, f *fileList, title, 
 		box.InsetShadow(0, 0, 0, 1, pal.border)
 	}
 	studyDir := ""
-	if studySubdir != "" && a.study.inUse != "" {
-		if cand := filepath.Join(a.study.inUse, studySubdir); a.onDisk(cand, true) {
-			studyDir = cand
-		}
+	if studySubdir != "" {
+		studyDir = a.inStudy(studySubdir, true)
 	}
 	addButtons := func(kind buttonKind, height float32) {
 		if studyDir != "" {
 			label := Tf("Load %s/", "加载研究 %s/", studySubdir)
-			if button(c.Key("from-study"), label, iconFolder, buttonSoft, height).Tooltip(studyDir).Clicked() {
+			if button(c.Key("from-study"), label, iconFolder, buttonSoft, height).Tooltip(studyDir).Clicked() && a.stillInStudy(studySubdir, true) {
 				f.add([]string{studyDir})
 			}
 		}
@@ -570,11 +610,9 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 			ui.Text(c, text).FontSize(12.5).TextColor(color).MaxLines(2).LineHeight(1.3).Grow(1).MinWidth(0).Selectable()
 		})
 	}
-	switch {
-	case st.err != "":
-		message(iconWarn, pal.danger, st.err)
-	case problem != "":
-		message(iconInfo, pal.muted, problem)
+	// The way out of what is missing now, also beside the error of the last
+	// run, which stays on the bar while the button is disabled for it.
+	mend := func() {
 		switch a.remedy(page, problem) {
 		case "reference":
 			if button(c.Key("fix-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 28).Clicked() {
@@ -585,6 +623,14 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 				a.openSettings("spatial")
 			}
 		}
+	}
+	switch {
+	case st.err != "":
+		message(iconWarn, pal.danger, st.err)
+		mend()
+	case problem != "":
+		message(iconInfo, pal.muted, problem)
+		mend()
 	case st.ok != "":
 		message(iconCheck, pal.success, st.ok)
 	case a.job != nil:

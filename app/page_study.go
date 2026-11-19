@@ -37,6 +37,10 @@ type studyPage struct {
 	sameAt  time.Time
 	// statusOf is the study folder that st speaks of.
 	statusOf string
+	// chosen is the study folder picked as it is (choose): while location
+	// and name are still its own, it is the target to the letter, also if
+	// its name begins or ends with a space, which a typed name does not.
+	chosen string
 }
 
 func (p *studyPage) init() { p.name = "study" }
@@ -47,6 +51,9 @@ func (p *studyPage) target() string {
 	if p.parent == "" || name == "" {
 		return ""
 	}
+	if p.chosen != "" && filepath.Join(p.parent, p.name) == p.chosen {
+		return p.chosen
+	}
 	return filepath.Join(p.parent, name)
 }
 
@@ -54,7 +61,7 @@ func (p *studyPage) target() string {
 // location and its name, as if they had been filled in.  Nothing is written
 // and the pages are left alone until the folders are created.
 func (p *studyPage) choose(study string) {
-	p.parent, p.name = filepath.Dir(study), filepath.Base(study)
+	p.parent, p.name, p.chosen = filepath.Dir(study), filepath.Base(study), study
 }
 
 // holds reports whether a folder is the study in use, however it is spelt:

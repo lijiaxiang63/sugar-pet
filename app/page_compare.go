@@ -25,11 +25,24 @@ type comparePage struct {
 	name      string
 	output    string
 
+	// swapped is whether the groups were swapped: the study's controls are
+	// then offered to group 1 and its patients to group 2.
+	swapped bool
+
 	st     status
 	result *core.GroupComparison
 	how    string
 	table  ui.ListState
 	pic    picture
+}
+
+// swap makes group 1 group 2 and the other way round.  The result on the
+// page goes: its T-map has the sign of the groups as they were.
+func (p *comparePage) swap() {
+	p.g1.files, p.g2.files = p.g2.files, p.g1.files
+	p.g1.query, p.g2.query = p.g2.query, p.g1.query
+	p.swapped = !p.swapped
+	p.result, p.how, p.st = nil, "", status{}
 }
 
 func (p *comparePage) init() {
@@ -108,20 +121,34 @@ func (a *app) compareView(c *ui.Context) {
 		func() {
 			section(c, T("Groups", "分组"), T("The T-map is group 1 minus group 2: with patients as group 1 and controls as group 2, negative values mean hypometabolism.",
 				"T 图为第 1 组减第 2 组：以患者为第 1 组、对照为第 2 组时，负值表示低代谢。"), func() {
+				// The folders of the study follow the groups when they are
+				// swapped, until both lists are empty again.
+				if len(p.g1.files) == 0 && len(p.g2.files) == 0 {
+					p.swapped = false
+				}
+				hints := [2]string{T("e.g. the patients", "例如患者"), T("e.g. the controls", "例如对照")}
+				folders := [2]string{"patients", "controls"}
+				if p.swapped {
+					hints[0], hints[1] = hints[1], hints[0]
+					folders[0], folders[1] = folders[1], folders[0]
+				}
 				ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
 					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCardFromStudy(c, "cmp-g1", &p.g1, T("Group 1", "第 1 组"), T("e.g. the patients", "例如患者"), "patients")
+						a.filesCardFromStudy(c, "cmp-g1", &p.g1, T("Group 1", "第 1 组"), hints[0], folders[0])
 					})
 					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCardFromStudy(c, "cmp-g2", &p.g2, T("Group 2", "第 2 组"), T("e.g. the controls", "例如对照"), "controls")
+						a.filesCardFromStudy(c, "cmp-g2", &p.g2, T("Group 2", "第 2 组"), hints[1], folders[1])
 					})
 				})
 				if len(p.g1.files) > 0 || len(p.g2.files) > 0 {
 					ui.Row(c).Justify(ui.End).Children(func() {
-						if button(c.Key("cmp-swap"), T("Swap Groups", "互换两组"), iconSwap, buttonGhost, 26).
-							Tooltip(T("Swap Group 1 and Group 2 (reverses the sign of the T-map)", "交换第 1 组与第 2 组（将反转 T 图正负号）")).Clicked() {
-							p.g1.files, p.g2.files = p.g2.files, p.g1.files
-							p.g1.query, p.g2.query = p.g2.query, p.g1.query
+						// Not while the comparison runs: it would end under
+						// the groups the other way round.
+						swap := button(c.Key("cmp-swap"), T("Swap Groups", "互换两组"), iconSwap, buttonGhost, 26).
+							Tooltip(T("Swap Group 1 and Group 2 (reverses the sign of the T-map)", "交换第 1 组与第 2 组（将反转 T 图正负号）")).
+							Disabled(a.job != nil && a.job.page == "compare")
+						if swap.Clicked() {
+							p.swap()
 						}
 					})
 				}

@@ -1354,10 +1354,11 @@ func TestStudyShortcuts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := commonDir([]string{"/a/x.nii", "/a/y.nii"}); got != "/a" {
-		t.Errorf("the folder of two files in /a is %q", got)
+	one, other := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	if got := commonDir([]string{filepath.Join(one, "x.nii"), filepath.Join(one, "y.nii")}); got != one {
+		t.Errorf("the folder of two files in %s is %q", one, got)
 	}
-	if got := commonDir([]string{"/a/x.nii", "/b/y.nii"}); got != "" || commonDir(nil) != "" {
+	if got := commonDir([]string{filepath.Join(one, "x.nii"), filepath.Join(other, "y.nii")}); got != "" || commonDir(nil) != "" {
 		t.Errorf("files apart, or none, share the folder %q", got)
 	}
 	a := newApp()
@@ -1392,5 +1393,79 @@ func TestStudyShortcuts(t *testing.T) {
 	a.seen[patients] = seenFile{true, time.Now().Add(-2 * time.Second)}
 	if a.onDisk(patients.path, true) {
 		t.Error("a folder that is gone is seen for good")
+	}
+}
+
+// TestSwapGroups checks that swapping the groups of a comparison takes the
+// result off the page, whose T-map has the sign of the groups as they were,
+// and that the folders of the study follow the groups.
+func TestSwapGroups(t *testing.T) {
+	a := newApp()
+	a.demo()
+	p := &a.cmp
+	g1, g2 := slices.Clone(p.g1.files), slices.Clone(p.g2.files)
+	if p.result == nil || p.st.ok == "" {
+		t.Fatal("the made-up comparison has no result")
+	}
+	p.swap()
+	if !slices.Equal(p.g1.files, g2) || !slices.Equal(p.g2.files, g1) || !p.swapped {
+		t.Error("the groups are not swapped")
+	}
+	if p.result != nil || p.st.ok != "" || p.how != "" {
+		t.Errorf("the result of the groups as they were is still shown: %q", p.st.ok)
+	}
+	// Group 1, emptied, is where the controls go now: its hint says so.
+	a.page = "compare"
+	p.g1.files = nil
+	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
+	tt.Frame()
+	if !tt.HasText("e.g. the controls") || tt.HasText("e.g. the patients") || !p.swapped {
+		t.Errorf("the hints do not follow the groups (shown: %q)", tt.Texts())
+	}
+	// With both lists empty the groups are as at first.
+	p.g2.files = nil
+	tt.Frame()
+	tt.Frame()
+	if p.swapped || !tt.HasText("e.g. the patients") {
+		t.Error("empty groups are still swapped")
+	}
+}
+
+// TestStudyLinks checks what a study folder may hold in place of the usual:
+// a folder of patients that is a link is loaded where it leads, under the
+// names of the link; a table that is no regular file is not offered; and a
+// study folder chosen is the target to the letter.
+func TestStudyLinks(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newApp()
+	if a.onDisk(dir, false) || !a.onDisk(dir, true) {
+		t.Error("a folder is seen as a file")
+	}
+	_, pt, _ := makeImages(t, filepath.Join(dir, "elsewhere"), 0, 2)
+	link := filepath.Join(dir, "patients")
+	if err := os.Symlink(filepath.Join(dir, "elsewhere"), link); err != nil {
+		t.Skipf("no links here: %v", err)
+	}
+	want := []string{filepath.Join(link, filepath.Base(pt[0])), filepath.Join(link, filepath.Base(pt[1]))}
+	if got := expandPaths([]string{link}); !slices.Equal(got, want) {
+		t.Errorf("a linked folder holds %q, not %q", got, want)
+	}
+	if got := expandPaths([]string{filepath.Join(dir, "elsewhere")}); !slices.Equal(got, pt) {
+		t.Errorf("the folder itself holds %q, not %q", got, pt)
+	}
+	// A name with a space at its end is no name to type, but may be picked.
+	spaced := filepath.Join(dir, "cohort ")
+	if err := os.Mkdir(spaced, 0o755); err == nil {
+		a.study.choose(spaced)
+		if a.study.target() != spaced {
+			t.Errorf("chose %q, the target is %q", spaced, a.study.target())
+		}
+		a.study.name = "cohort"
+		if a.study.target() != filepath.Join(dir, "cohort") {
+			t.Errorf("a name typed afterwards gives the target %q", a.study.target())
+		}
 	}
 }

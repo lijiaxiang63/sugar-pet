@@ -152,13 +152,7 @@ func needReference() string {
 // studyParticipants returns the path to participants.tsv in the active study
 // if it exists, or "" otherwise.
 func (a *app) studyParticipants() string {
-	if a.study.inUse == "" {
-		return ""
-	}
-	if p := filepath.Join(a.study.inUse, "participants.tsv"); a.onDisk(p, false) {
-		return p
-	}
-	return ""
+	return a.inStudy("participants.tsv", false)
 }
 
 // covRows are the settings of a covariate table.
@@ -172,7 +166,7 @@ func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []f
 		if sp := a.studyParticipants(); sp != "" {
 			out = append(out, func() {
 				setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
-					if button(c.Key(key+"-use-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() {
+					if button(c.Key(key+"-use-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() && a.stillInStudy("participants.tsv", false) {
 						cv.path = sp
 						cv.load()
 					}

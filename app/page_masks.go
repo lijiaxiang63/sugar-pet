@@ -101,19 +101,20 @@ func (a *app) masksView(c *ui.Context) {
 				card(c).Children(func() {
 					ui.Table(c, &p.table, cols, len(shown), func(row, col int) {
 						l := shown[row]
+						hemi := T("Right", "右")
+						if l.Hemi == "L" {
+							hemi = T("Left", "左")
+						}
 						if col == 0 {
 							on := p.selected[l.Index]
-							check(c.Key("lbl-"+strconv.Itoa(l.Index)), &on, "")
+							// No text beside the box: the row is its label.
+							check(c.Key("lbl-"+strconv.Itoa(l.Index)), &on, "").Label(strconv.Itoa(l.Index) + " " + l.Name + ", " + hemi)
 							if on {
 								p.selected[l.Index] = true
 							} else {
 								delete(p.selected, l.Index)
 							}
 							return
-						}
-						hemi := T("Right", "右")
-						if l.Hemi == "L" {
-							hemi = T("Left", "左")
 						}
 						ui.Text(c, [...]string{"", strconv.Itoa(l.Index), l.Name, hemi}[col]).FontSize(12.5).SingleLine()
 					}).Height(330)

@@ -181,7 +181,7 @@ func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(i
 						tile(c, id, cols, func() {
 							var extra func()
 							if id == "hn" {
-								extra = func() { pill(c, T("Recommended", "推荐"), pal.accent) }
+								extra = func() { tag(c, T("Recommended", "推荐")) }
 							}
 							box := checkTileWithDesc(c, &on, methodName(id), methodHint(id), extra).Disabled(!ok)
 							if ok {

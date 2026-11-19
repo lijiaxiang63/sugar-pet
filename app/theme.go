@@ -305,6 +305,8 @@ func checkTile(c *ui.Context, on *bool, label string, extra func()) ui.Element {
 }
 
 // checkTileWithDesc is checkTile with an optional short caption under the label.
+// extra then builds what is pinned to the tile, as a tag: the name and the
+// caption have the row to themselves.
 func checkTileWithDesc(c *ui.Context, on *bool, label, desc string, extra func()) ui.Element {
 	pal := paletteFor(c)
 	b := ui.CheckboxBase(c, on).Padding(7, 10, 7, 9).Gap(8).Radius(9).AlignItems(ui.Center).Label(label)
@@ -334,14 +336,13 @@ func checkTileWithDesc(c *ui.Context, on *bool, label, desc string, extra func()
 			}
 		} else {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1.5).Children(func() {
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, label).FontSize(12.5).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1)
-					if extra != nil {
-						extra()
-					}
-				})
+				ui.Text(c, label).FontSize(12.5).FontWeight(600).SingleLine().Ellipsis("…").MinWidth(0)
 				ui.Text(c, desc).FontSize(11).TextColor(pal.muted).SingleLine().Ellipsis("…").MinWidth(0)
 			})
+			// What follows is the tile's, not the name's: a tag on its corner.
+			if extra != nil {
+				extra()
+			}
 		}
 	})
 	return b
@@ -376,6 +377,15 @@ func check(c *ui.Context, on *bool, label string) ui.Element {
 func pill(c *ui.Context, text string, color ui.Color) ui.Element {
 	return ui.Text(c, text).FontSize(10.5).FontWeight(600).TextColor(color).
 		Padding(1.5, 7).Radius(999).Background(color.Alpha(0.13)).SingleLine().Shrink(0)
+}
+
+// tag pins a small label in the accent to the top right corner of the
+// element being built, as a mark on a tile.  It takes no room from the
+// name of the tile.
+func tag(c *ui.Context, text string) {
+	pal := paletteFor(c)
+	ui.Text(c, text).Absolute().Top(-7).Right(8).PassThrough().FontSize(9.5).FontWeight(700).LetterSpacing(0.2).
+		TextColor(pal.onAccent).Padding(1.5, 6).Radius(999).Background(pal.accent).SingleLine()
 }
 
 // callout is a note that stands out from the page: a caution, the

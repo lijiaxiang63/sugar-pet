@@ -309,4 +309,39 @@ func TestInitStudy(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(other, "raw")); err == nil {
 		t.Error("folders were made although the study could not be laid out")
 	}
+
+	// A link that leads nowhere is not written through, and nothing is made;
+	// a link to a real folder is the folder.
+	if runtime.GOOS == "windows" {
+		return // making links needs a privilege there
+	}
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside.tsv")
+	linked := filepath.Join(base, "linked")
+	os.Mkdir(linked, 0o755)
+	if err := os.Symlink(outside, filepath.Join(linked, "participants.tsv")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InitStudy(linked); err == nil || !strings.Contains(err.Error(), "leads nowhere") {
+		t.Errorf("a link that leads nowhere gave %v", err)
+	}
+	if _, err := os.Stat(outside); err == nil {
+		t.Error("the table was written through the link")
+	}
+	if _, err := os.Stat(filepath.Join(linked, "raw")); err == nil {
+		t.Error("folders were made beside a link that leads nowhere")
+	}
+	elsewhere, real := filepath.Join(base, "elsewhere"), filepath.Join(base, "real")
+	os.Mkdir(elsewhere, 0o755)
+	os.Mkdir(real, 0o755)
+	os.Symlink(elsewhere, filepath.Join(real, "patients"))
+	created, err = InitStudy(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range StudyLayout {
+		if created[i] == (e.Name == "patients") {
+			t.Errorf("%s beside a linked folder: created is %v", e.Name, created[i])
+		}
+	}
 }

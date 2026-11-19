@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,6 +55,22 @@ STUDY_LAYOUT = (
 )
 
 
+def _present(target: Path, is_folder: bool) -> bool:
+    """Whether an entry of a study is there already.
+
+    One of the wrong kind is an error, and so is a link that leads nowhere:
+    writing through it would create a file outside the study.
+    """
+    if not os.path.lexists(target):
+        return False
+    if not target.exists():
+        raise ValueError(f"'{target}' is a link that leads nowhere")
+    if target.is_dir() != is_folder:
+        kind = "a folder" if is_folder else "a file"
+        raise ValueError(f"'{target}' exists and is not {kind}")
+    return True
+
+
 def init_study(path: str | Path) -> list[tuple[StudyEntry, bool]]:
     """Create the folders of a study and an empty ``participants.tsv`` in ``path``.
 
@@ -63,19 +80,22 @@ def init_study(path: str | Path) -> list[tuple[StudyEntry, bool]]:
     root = Path(path)
     if root.exists() and not root.is_dir():
         raise ValueError(f"'{root}' is a file, not a folder")
-    for entry in STUDY_LAYOUT:
-        target = root / entry.name
-        if target.exists() and target.is_dir() != entry.is_folder:
-            kind = "a folder" if entry.is_folder else "a file"
-            raise ValueError(f"'{target}' exists and is not {kind}")
+    # Everything is looked at before anything is made.
+    present = [_present(root / entry.name, entry.is_folder) for entry in STUDY_LAYOUT]
     root.mkdir(parents=True, exist_ok=True)
     result = []
-    for entry in STUDY_LAYOUT:
+    for entry, there in zip(STUDY_LAYOUT, present):
         target = root / entry.name
-        created = not target.exists()
-        if created and entry.is_folder:
-            target.mkdir()
-        elif created:
-            target.write_text(PARTICIPANTS_HEADER)
+        created = not there
+        if created:
+            try:
+                if entry.is_folder:
+                    target.mkdir()
+                else:
+                    # "x": never written over, also if it appeared just now
+                    with open(target, "x") as table:
+                        table.write(PARTICIPANTS_HEADER)
+            except FileExistsError:
+                created = not _present(target, entry.is_folder)
         result.append((entry, created))
     return result

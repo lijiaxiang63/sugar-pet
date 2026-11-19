@@ -690,10 +690,46 @@ func TestStudy(t *testing.T) {
 	if !tt.HasText("Already there") || tt.HasText("Created") {
 		t.Errorf("after creating again, shown: %q", tt.Texts())
 	}
-	// Another name is another folder: nothing is said of it yet.
+	// Another name is another folder: nothing is said of it yet, and the
+	// page says where the pages still write.
+	ready := a.study.st.ok
 	a.study.name = "other"
 	tt.Frame()
-	if tt.HasText("Already there") {
-		t.Error("the entries of a folder not laid out yet are marked")
+	if tt.HasText("Already there") || tt.HasText(ready) || a.study.st.ok != "" {
+		t.Errorf("a folder not laid out yet is spoken of as ready, shown: %q", tt.Texts())
+	}
+	if a.zmap.output != filepath.Join(study, "zmaps") || !tt.HasText("The pages still write into "+shortDir(study)+". They write into this folder once its folders are created.") {
+		t.Errorf("not said where the pages still write, shown: %q", tt.Texts())
+	}
+
+	// The reference follows the study: with the study's own in use, another
+	// study brings its own or none; one chosen from elsewhere is kept.
+	reference := func(dir string) string {
+		ref := filepath.Join(dir, "hc_reference")
+		os.MkdirAll(ref, 0o755)
+		os.WriteFile(filepath.Join(ref, "reference.json"), []byte("{}"), 0o644)
+		return ref
+	}
+	one, two, three := filepath.Join(dir, "one"), filepath.Join(dir, "two"), filepath.Join(dir, "three")
+	refOne, refTwo := reference(one), reference(two)
+	os.MkdirAll(three, 0o755)
+	c := newApp()
+	c.useStudy(one)
+	if c.norm.reference != refOne {
+		t.Fatalf("the reference of the study is not used: %q", c.norm.reference)
+	}
+	c.useStudy(two)
+	if c.norm.reference != refTwo || c.classify.reference != refTwo {
+		t.Errorf("study two is compared with the controls of %q", c.norm.reference)
+	}
+	c.useStudy(three)
+	if c.norm.reference != "" {
+		t.Errorf("study three, which has no reference, is compared with the controls of %q", c.norm.reference)
+	}
+	outside := reference(filepath.Join(dir, "outside"))
+	c.setReference(outside)
+	c.useStudy(one)
+	if c.norm.reference != outside {
+		t.Errorf("a reference chosen from elsewhere was replaced by %q", c.norm.reference)
 	}
 }

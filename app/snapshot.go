@@ -109,7 +109,7 @@ func (a *app) demo() {
 		a.cmp.g2.files = append(a.cmp.g2.files, control(i))
 		a.ref.files.files = append(a.ref.files.files, control(i))
 	}
-	a.study.parent, a.study.made = "/Users/ada", "/Users/ada/study"
+	a.study.parent, a.study.made, a.study.statusOf = "/Users/ada", "/Users/ada/study", "/Users/ada/study"
 	a.study.created = make([]bool, len(core.StudyLayout))
 	for i := range a.study.created {
 		a.study.created[i] = true

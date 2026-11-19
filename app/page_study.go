@@ -22,6 +22,8 @@ type studyPage struct {
 	created []bool
 	// inUse is the study folder the pages write into, kept between launches.
 	inUse string
+	// statusOf is the study folder that st speaks of.
+	statusOf string
 }
 
 func (p *studyPage) init() { p.name = "study" }
@@ -95,6 +97,10 @@ func studyRow(c *ui.Context, e core.StudyEntry, state string, created bool) {
 func (a *app) studyView(c *ui.Context) {
 	p := &a.study
 	target := p.target()
+	// How the last run went says nothing of another folder.
+	if p.statusOf != target {
+		p.st, p.statusOf = status{}, target
+	}
 	// What the last run made is shown while its folder is still the one chosen.
 	shown := target != "" && target == p.made && len(p.created) == len(core.StudyLayout)
 	a.frame(c, T("Study Folder", "研究文件夹"),
@@ -113,6 +119,10 @@ func (a *app) studyView(c *ui.Context) {
 					},
 					func() { setting(c, T("Name", "名称"), where, func() { ui.TextInput(c, &p.name).Width(210) }) },
 				)
+				if p.inUse != "" && target != "" && target != p.inUse {
+					caution(c, Tf("The pages still write into %s. They write into this folder once its folders are created.",
+						"各页面目前仍写入 %s。在这里创建文件夹之后，才会改为写入这个文件夹。", shortDir(p.inUse)))
+				}
 			})
 			group := func(title, caption string, yours bool) {
 				section(c, title, caption, func() {
@@ -166,15 +176,28 @@ func (a *app) runStudy() {
 
 // useStudy makes a study folder the one the pages write into: each page's
 // output is its folder of the study.  Spatial Normalisation is left alone,
-// as it writes patients and controls into different folders.  A reference
-// the study already holds is used if none is in use.
+// as it writes patients and controls into different folders.
+//
+// The reference in use follows the study: the one the study holds is used,
+// and that of the study left behind is let go of, so that the images of one
+// study are not compared with the controls of another.  A reference chosen
+// from elsewhere is kept.
 func (a *app) useStudy(study string) {
 	in := func(name string) string { return filepath.Join(study, name) }
 	a.ref.output, a.norm.output, a.zmap.output = in("hc_reference"), in("normalised"), in("zmaps")
 	a.classify.output, a.cmp.output = in("reports"), in("compare")
 	a.cluster.output = in("reference_cluster.nii.gz")
-	if a.norm.reference == "" && core.IsReferenceFolder(in("hc_reference")) {
-		a.setReference(in("hc_reference"))
+	ref, own, left := a.norm.reference, in("hc_reference"), ""
+	if a.study.inUse != "" {
+		left = filepath.Join(a.study.inUse, "hc_reference")
+	}
+	if ref == "" || ref == own || ref == left {
+		if !core.IsReferenceFolder(own) {
+			own = ""
+		}
+		if ref != own {
+			a.setReference(own)
+		}
 	}
 	a.study.inUse = study
 }

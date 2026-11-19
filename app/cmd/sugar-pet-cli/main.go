@@ -262,11 +262,26 @@ func main() {
 // initStudy creates the recommended folders of a study and says what each
 // is for.
 func initStudy(rest []string) {
-	a, err := parse(rest, nil, nil)
-	check(err)
+	for _, word := range rest {
+		if word == "-h" || word == "--help" {
+			fmt.Println("usage: sugar-pet-cli init [folder]")
+			fmt.Println("\nCreate the recommended folders of a study and an empty participants.tsv.")
+			fmt.Println("The folder to create or complete defaults to 'study'.")
+			return
+		}
+	}
+	// Nothing is made unless the command is understood.
+	for _, word := range rest {
+		if strings.HasPrefix(word, "-") {
+			fail(2, "init has no option '%s': it takes only the folder to create", word)
+		}
+	}
+	if len(rest) > 1 {
+		fail(2, "init takes one folder, not %d", len(rest))
+	}
 	root := "study"
-	if len(a.pos) > 0 {
-		root = a.pos[0]
+	if len(rest) == 1 {
+		root = rest[0]
 	}
 	created, err := core.InitStudy(root)
 	check(err)

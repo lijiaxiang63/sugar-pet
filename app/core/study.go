@@ -30,6 +30,30 @@ var StudyLayout = []StudyEntry{
 // ParticipantsHeader is the first line of a new participants.tsv.
 const ParticipantsHeader = "participant_id\tage\tsex\n"
 
+// studyEntryPresent reports whether an entry of a study is there already.
+// One of the wrong kind is an error, and so is a link that leads nowhere:
+// writing through it would create a file outside the study.
+func studyEntryPresent(target string, dir bool) (bool, error) {
+	if _, err := os.Lstat(target); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	info, err := os.Stat(target)
+	switch {
+	case os.IsNotExist(err):
+		return false, errorf("'%s' is a link that leads nowhere", target)
+	case err != nil:
+		return false, err
+	case info.IsDir() != dir && dir:
+		return false, errorf("'%s' exists and is not a folder", target)
+	case info.IsDir() != dir:
+		return false, errorf("'%s' exists and is not a file", target)
+	}
+	return true, nil
+}
+
 // InitStudy creates the folders of a study and an empty participants.tsv in
 // path.  It reports, for each entry of StudyLayout, whether it was created
 // (false: it was there already).  Nothing that exists is changed.
@@ -37,18 +61,14 @@ func InitStudy(path string) ([]bool, error) {
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
 		return nil, errorf("'%s' is a file, not a folder", path)
 	}
+	// Everything is looked at before anything is made.
 	created := make([]bool, len(StudyLayout))
 	for i, e := range StudyLayout {
-		target := filepath.Join(path, e.Name)
-		info, err := os.Stat(target)
-		switch {
-		case err != nil:
-			created[i] = true
-		case info.IsDir() != e.Dir && e.Dir:
-			return nil, errorf("'%s' exists and is not a folder", target)
-		case info.IsDir() != e.Dir:
-			return nil, errorf("'%s' exists and is not a file", target)
+		present, err := studyEntryPresent(filepath.Join(path, e.Name), e.Dir)
+		if err != nil {
+			return nil, err
 		}
+		created[i] = !present
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return nil, err
@@ -62,7 +82,21 @@ func InitStudy(path string) ([]bool, error) {
 		if e.Dir {
 			err = os.Mkdir(target, 0o755)
 		} else {
-			err = os.WriteFile(target, []byte(ParticipantsHeader), 0o644)
+			// O_EXCL: never written over, also if it appeared just now.
+			var table *os.File
+			if table, err = os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); err == nil {
+				_, err = table.WriteString(ParticipantsHeader)
+				if closed := table.Close(); err == nil {
+					err = closed
+				}
+			}
+		}
+		if os.IsExist(err) {
+			if _, err := studyEntryPresent(target, e.Dir); err != nil {
+				return nil, err
+			}
+			created[i] = false
+			continue
 		}
 		if err != nil {
 			return nil, err

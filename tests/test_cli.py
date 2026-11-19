@@ -210,3 +210,24 @@ def test_init(tmp_path, capsys):
     (other / "patients").write_text("")
     assert main(["init", str(other)]) == 2
     assert "is not a folder" in capsys.readouterr().err and not (other / "raw").exists()
+
+    # a link that leads nowhere is not written through, and nothing is made
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    (linked / "participants.tsv").symlink_to(tmp_path / "outside.tsv")
+    assert main(["init", str(linked)]) == 2
+    assert "leads nowhere" in capsys.readouterr().err
+    assert not (tmp_path / "outside.tsv").exists() and not (linked / "raw").exists()
+
+    # a link to a real folder is the folder
+    (tmp_path / "elsewhere").mkdir()
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "patients").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    assert main(["init", str(real)]) == 0
+    assert "8 created, 1 already there" in capsys.readouterr().out
+
+    # a file where a parent folder should be is an error, not a traceback
+    (tmp_path / "afile").write_text("")
+    assert main(["init", str(tmp_path / "afile" / "study")]) == 2
+    assert "cannot create the study folder" in capsys.readouterr().err

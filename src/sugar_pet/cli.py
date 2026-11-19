@@ -57,7 +57,10 @@ def _progress(done: int, total: int) -> None:
 
 def cmd_init(args) -> int:
     root = Path(args.folder)
-    entries = init_study(root)
+    try:
+        entries = init_study(root)
+    except OSError as err:  # a file where a parent folder should be, no permission, ...
+        raise ValueError(f"cannot create the study folder: {err}") from err
     print(f"Study folder: {root.resolve()}")
     for title, yours in (("For you to fill:", True), ("Written by the analyses:", False)):
         print(f"\n{title}")

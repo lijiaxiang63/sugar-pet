@@ -203,7 +203,8 @@ regions, cerebellum and pons, are often affected themselves.
 
 `sugar-pet init study/` creates the folders the commands below use
 (`patients/`, `controls/`, `hc_reference/` and so on) and an empty
-`participants.tsv`, and says what each is for. The app does the same on its
+`participants.tsv`, and says what each is for. Put your data in it and run
+the commands from inside it (`cd study/`). The app does the same on its
 Study Folder page.
 
 **1. Treat patients and controls the same way.** Same scanner and

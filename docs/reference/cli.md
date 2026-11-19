@@ -25,6 +25,7 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 
 | App page | Command |
 | --- | --- |
+| Study Folder | `sugar-pet init` |
 | Spatial Normalisation | `sugar-pet spatial-norm` |
 | Intensity Normalisation | `sugar-pet normalize` |
 | Reference | `sugar-pet build-reference` |
@@ -38,9 +39,13 @@ Run `sugar-pet <command> --help` to see all options for a subcommand.
 
 ## Running the tutorial as a script
 
-Inside `study/`, the full [tutorial](../tutorial/) translates to:
+The full [tutorial](../tutorial/) translates to:
 
 ```bash
+# Before you start: create the study folder, then put your data in it
+sugar-pet init study/
+cd study/
+
 # Step 1 (optional): warp to MNI space
 sugar-pet spatial-norm raw/*_pet.nii.gz -o patients/ --spm-path /path/to/spm12 --jobs 4
 

@@ -263,3 +263,50 @@ func TestSpatialCancel(t *testing.T) {
 	}
 	t.Fatalf("process %d outlived the cancelled run", pid)
 }
+
+// TestInitStudy checks that a study folder is laid out as the guide
+// recommends, and that what is there already is kept.
+func TestInitStudy(t *testing.T) {
+	study := filepath.Join(t.TempDir(), "study")
+	created, err := InitStudy(study)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range StudyLayout {
+		info, err := os.Stat(filepath.Join(study, e.Name))
+		if err != nil || info.IsDir() != e.Dir || !created[i] {
+			t.Errorf("%s: not created as it should be", e.Name)
+		}
+	}
+	table := filepath.Join(study, "participants.tsv")
+	if text, _ := os.ReadFile(table); string(text) != ParticipantsHeader {
+		t.Errorf("participants.tsv holds %q", text)
+	}
+
+	// Again: the table that was filled is kept, the folder that went is made.
+	filled := ParticipantsHeader + "sub-01\t60\tF\n"
+	os.WriteFile(table, []byte(filled), 0o644)
+	os.Remove(filepath.Join(study, "zmaps"))
+	created, err = InitStudy(study)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range StudyLayout {
+		if created[i] != (e.Name == "zmaps") {
+			t.Errorf("%s: created is %v", e.Name, created[i])
+		}
+	}
+	if text, _ := os.ReadFile(table); string(text) != filled {
+		t.Errorf("participants.tsv was changed to %q", text)
+	}
+
+	// A file in the way is reported, and nothing is made.
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, "patients"), nil, 0o644)
+	if _, err := InitStudy(other); err == nil {
+		t.Error("a file named patients was accepted as the folder")
+	}
+	if _, err := os.Stat(filepath.Join(other, "raw")); err == nil {
+		t.Error("folders were made although the study could not be laid out")
+	}
+}

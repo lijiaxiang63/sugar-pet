@@ -577,8 +577,11 @@ func TestOptionsKept(t *testing.T) {
 		t.Fatalf("unsound options were taken: %+v", opt)
 	}
 
-	// Every page says which options are in effect.
-	for _, p := range pages[:len(pages)-1] {
+	// Every page that has options says which are in effect.
+	for _, p := range pages {
+		if p.id == "study" || p.id == "masks" {
+			continue
+		}
 		if d.summary(p.id) == "" {
 			t.Errorf("page %s has no summary of its options", p.id)
 		}
@@ -617,5 +620,80 @@ func TestPicture(t *testing.T) {
 	}
 	if got := core.Picture(nil, mask, core.PictureOptions{Solid: true, Outline: true}).Bounds(); got != bounds {
 		t.Fatalf("a mask on the template is %v, the image %v", got, bounds)
+	}
+}
+
+// TestStudy lays out a study folder with the button of the page, twice:
+// what is there the second time is kept.
+func TestStudy(t *testing.T) {
+	dir := t.TempDir()
+	a := newApp()
+	a.page = "study"
+	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
+	tt.Frame()
+	if tt.HasText("Created") || a.study.problem() == "" {
+		t.Fatal("the page is ready before a place is chosen")
+	}
+	a.study.parent = dir
+	tt.Frame()
+	if err := tt.Click("Create Folders"); err != nil {
+		t.Fatalf("%v (shown: %q)", err, tt.Texts())
+	}
+	tt.Frame()
+	study := filepath.Join(dir, "study")
+	for _, e := range core.StudyLayout {
+		if info, err := os.Stat(filepath.Join(study, e.Name)); err != nil || info.IsDir() != e.Dir {
+			t.Errorf("%s was not created", e.Name)
+		}
+	}
+	if a.study.st.err != "" || !tt.HasText(a.study.st.ok) || !tt.HasText("Created") || tt.HasText("Already there") {
+		t.Fatalf("after creating: %q, shown: %q", a.study.st, tt.Texts())
+	}
+	// The pages now write into the study; Spatial Normalisation is left alone.
+	outputs := map[string]string{"hc_reference": a.ref.output, "normalised": a.norm.output, "zmaps": a.zmap.output,
+		"reports": a.classify.output, "compare": a.cmp.output, "reference_cluster.nii.gz": a.cluster.output}
+	for name, got := range outputs {
+		if got != filepath.Join(study, name) {
+			t.Errorf("the output for %s is %q", name, got)
+		}
+	}
+	if a.spatial.output != "" || a.norm.reference != "" {
+		t.Errorf("set although the study says nothing of it: %q, %q", a.spatial.output, a.norm.reference)
+	}
+	// The study is kept between launches, and used again while it is there.
+	var kept settings
+	if err := json.Unmarshal([]byte(a.settingsText()), &kept); err != nil || kept.Study != study {
+		t.Fatalf("kept the study as %q (%v)", kept.Study, err)
+	}
+	os.WriteFile(filepath.Join(study, "hc_reference", "reference.json"), []byte("{}"), 0o644)
+	b := newApp()
+	b.restoreStudy(kept.Study)
+	if b.zmap.output != filepath.Join(study, "zmaps") || b.study.parent != dir || b.study.name != "study" ||
+		b.norm.reference != filepath.Join(study, "hc_reference") {
+		t.Errorf("after a new launch: %q, %q, %q, %q", b.zmap.output, b.study.parent, b.study.name, b.norm.reference)
+	}
+	b = newApp()
+	b.restoreStudy(filepath.Join(dir, "gone"))
+	if b.zmap.output != "" || b.study.inUse != "" {
+		t.Error("a study folder that is gone is used")
+	}
+	os.Remove(filepath.Join(study, "hc_reference", "reference.json"))
+	table := filepath.Join(study, "participants.tsv")
+	os.WriteFile(table, []byte(core.ParticipantsHeader+"sub-01\t60\tF\n"), 0o644)
+	if err := tt.Click("Create Folders"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if text, _ := os.ReadFile(table); !strings.Contains(string(text), "sub-01") {
+		t.Error("the table that was filled was written over")
+	}
+	if !tt.HasText("Already there") || tt.HasText("Created") {
+		t.Errorf("after creating again, shown: %q", tt.Texts())
+	}
+	// Another name is another folder: nothing is said of it yet.
+	a.study.name = "other"
+	tt.Frame()
+	if tt.HasText("Already there") {
+		t.Error("the entries of a folder not laid out yet are marked")
 	}
 }

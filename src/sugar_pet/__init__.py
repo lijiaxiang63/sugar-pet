@@ -13,11 +13,13 @@ from .compare import GroupComparison, compare_groups
 from .masks import MASKS, atlas_labels, builtin_mask, labels_mask
 from .normalize import METHODS, NormResult, normalize
 from .reference import Reference
+from .study import STUDY_LAYOUT, init_study
 from .zscore import zmap
 
 __all__ = [
     "MASKS",
     "METHODS",
+    "STUDY_LAYOUT",
     "Classification",
     "GroupComparison",
     "NormResult",
@@ -26,6 +28,7 @@ __all__ = [
     "builtin_mask",
     "classify",
     "compare_groups",
+    "init_study",
     "labels_mask",
     "normalize",
     "reference_cluster",

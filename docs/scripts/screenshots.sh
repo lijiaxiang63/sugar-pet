@@ -27,6 +27,7 @@ height=900
 # and "settings-<section>" a section of the settings window, which is drawn
 # at its own size (820 x 620, see Shot.vue).
 shots="
+study:study
 spatial:spatial                 spatial-end:spatial-results
 reference:reference             reference-2:reference-controls
 reference-end:reference-settings

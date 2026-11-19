@@ -137,6 +137,8 @@ sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o out/
 
 适用于“患者组 vs. 健康对照组”的常规对比研究，设计时主要考虑了非典型帕金森综合征（MSA、PSP、CBS），这类疾病中传统参考区（小脑、脑桥）往往自身就存在病变。
 
+`sugar-pet init study/` 会建好下面各条命令用到的文件夹（`patients/`、`controls/`、`hc_reference/` 等）和一个空的 `participants.tsv`，并说明每个文件夹的作用。桌面应用的“研究文件夹”页面也能完成同样的操作。
+
 **1. 统一预处理标准。** 患者和对照尽量来自同一台扫描仪、采用相同的重建参数，走同一套空间标准化流程，并且逐幅目视检查配准质量。
 
 **2. 用全部对照建一个参考库**，同时提供年龄和性别信息：

@@ -152,7 +152,7 @@ func progress(done, total int) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <methods|normalize|build-reference|zmap|classify|compare|reference-cluster|masks|labels|spatial-norm> ...")
+		fmt.Fprintln(os.Stderr, "usage: sugar-pet-cli <init|methods|normalize|build-reference|zmap|classify|compare|reference-cluster|masks|labels|spatial-norm> ...")
 		os.Exit(2)
 	}
 	ctx := context.Background()
@@ -160,6 +160,8 @@ func main() {
 	switch command {
 	case "--version":
 		fmt.Println("sugar-pet", core.Version)
+	case "init":
+		initStudy(rest)
 	case "methods":
 		fmt.Println("Normalisation methods (-m):")
 		for _, m := range core.Methods {
@@ -255,6 +257,46 @@ func main() {
 	default:
 		fail(2, "unknown command '%s'", command)
 	}
+}
+
+// initStudy creates the recommended folders of a study and says what each
+// is for.
+func initStudy(rest []string) {
+	a, err := parse(rest, nil, nil)
+	check(err)
+	root := "study"
+	if len(a.pos) > 0 {
+		root = a.pos[0]
+	}
+	created, err := core.InitStudy(root)
+	check(err)
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
+	fmt.Printf("Study folder: %s\n", root)
+	made := 0
+	for _, group := range []struct {
+		title string
+		yours bool
+	}{{"For you to fill:", true}, {"Written by the analyses:", false}} {
+		fmt.Printf("\n%s\n", group.title)
+		for i, e := range core.StudyLayout {
+			if e.Yours != group.yours {
+				continue
+			}
+			name, state := e.Name, "already there"
+			if e.Dir {
+				name += "/"
+			}
+			if created[i] {
+				state = "created"
+				made++
+			}
+			fmt.Printf("  %-18s%s\n    %s\n", name, state, e.Text)
+		}
+	}
+	fmt.Printf("\n%d created, %d already there. Nothing that existed was changed.\n", made, len(created)-made)
+	fmt.Println("Next: put your images in patients/ and controls/, and fill in participants.tsv.")
 }
 
 func normalize(rest []string) int {

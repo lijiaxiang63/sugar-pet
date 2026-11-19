@@ -186,3 +186,27 @@ def test_compare_two_groups(tmp_path, controls, lesion, capsys):
     assert "no row" in capsys.readouterr().err
     assert main([*args, "-m", "magic"]) == 2
     assert main(["compare", "--group1", patients[0], "--group2", *healthy, "-m", "ps", "-o", str(out)]) == 2
+
+
+def test_init(tmp_path, capsys):
+    study = tmp_path / "study"
+    assert main(["init", str(study)]) == 0
+    out = capsys.readouterr().out
+    folders = ["raw", "patients", "controls", "hc_reference", "normalised", "zmaps", "reports", "compare"]
+    assert all((study / name).is_dir() for name in folders)
+    assert (study / "participants.tsv").read_text() == "participant_id\tage\tsex\n"
+    assert "9 created, 0 already there" in out and "patients/" in out
+
+    # run again: what is there is kept, what is missing is made
+    (study / "participants.tsv").write_text("participant_id\tage\tsex\nsub-01\t60\tF\n")
+    (study / "zmaps").rmdir()
+    assert main(["init", str(study)]) == 0
+    assert "1 created, 8 already there" in capsys.readouterr().out
+    assert (study / "zmaps").is_dir() and "sub-01" in (study / "participants.tsv").read_text()
+
+    # a file in the way is reported, and nothing is made
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "patients").write_text("")
+    assert main(["init", str(other)]) == 2
+    assert "is not a folder" in capsys.readouterr().err and not (other / "raw").exists()

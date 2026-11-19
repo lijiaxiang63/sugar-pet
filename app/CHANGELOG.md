@@ -4,10 +4,16 @@ What changed in SUGAR-PET, the desktop app, from version to version. The
 section of a version is what the app's update window shows when it offers
 that version, so write it for the people who use the app.
 
-## [Unreleased]
+## [0.8.0] - 2026-11
 
 ### Added
 
+- A Study Folder page, first in the sidebar, creates the folders the guide
+  recommends for a study (`raw`, `patients`, `controls`, `hc_reference`,
+  `normalised`, `zmaps`, `reports`, `compare`) and a `participants.tsv`
+  holding only its header, and says what each is for. What is there
+  already is kept. Each folder becomes the output of its page, and the app
+  uses the study again at the next launch.
 - With a study folder in use, the lists of images offer its `patients`,
   `controls` or `raw` folder with one click, and the pages offer its
   `participants.tsv` as the covariate table.
@@ -32,6 +38,15 @@ that version, so write it for the people who use the app.
 - Classify Parkinsonism shows the confidence of a reading as a coloured
   label beside it.
 - A list of images from one folder names that folder once, not on every row.
+- The Reference and Compare Groups pages read the covariate table again
+  when its file changes, so a `participants.tsv` filled in after it was
+  chosen is used as it is now.
+
+### Fixed
+
+- A folder that is a link is searched for images where it leads.
+- The same image added by two paths, one of them through a link, is listed
+  once.
 
 ## [0.7.0] - 2026-11
 

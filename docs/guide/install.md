@@ -8,7 +8,7 @@ environment and no MATLAB installation (unless you use the optional
 
 Go to the [latest release](https://github.com/lijiaxiang63/sugar-pet/releases/latest)
 and download the package for your operating system (`<version>` denotes the
-release number, e.g. `0.7.0`):
+release number, e.g. `0.8.0`):
 
 | System | File |
 | --- | --- |

@@ -11,6 +11,7 @@ wheels/
 
 # local data, never commit
 work/
+study/
 *.nii
 !src/sugar_pet/data/*.nii.gz
 .DS_Store

@@ -2,7 +2,7 @@
   "name": "SUGAR-PET",
   "slug": "sugar-pet",
   "identifier": "org.sugarpet.desktop",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "license": "MIT",
   "icon": "assets/icon.png",
   "out": "build",

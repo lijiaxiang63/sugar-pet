@@ -4,7 +4,7 @@ What changed in SUGAR-PET, the desktop app, from version to version. The
 section of a version is what the app's update window shows when it offers
 that version, so write it for the people who use the app.
 
-## [Unreleased]
+## [0.9.0] - 2026-11
 
 ### Added
 
@@ -128,6 +128,8 @@ that version, so write it for the people who use the app.
   Classify Parkinsonism and Compare Groups both use it; the other methods
   are for comparison. Their pages no longer have a method of their own to
   choose.
+- The user guide, in English and Chinese, is rewritten for projects, the
+  control statistics and Quick Classification, with new screenshots.
 
 ### Removed
 
@@ -136,7 +138,6 @@ that version, so write it for the people who use the app.
   when opened, and Intensity Normalisation summarises its own controls.
   The `sugar-pet build-reference` command of the Python package is
   unchanged.
-
 - The option **Write normalised images** of Intensity Normalisation: the
   images are always written, as the steps after it read them. A
   `write_images` kept in the settings is no longer used.

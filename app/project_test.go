@@ -428,7 +428,8 @@ func TestProjectRecords(t *testing.T) {
 	if back := local(there, a.proj.dir); string(back) != string(raw) {
 		t.Fatal("the paths of the project are not read back as they were")
 	}
-	if elsewhere := local(there, filepath.FromSlash("/mnt/shared/study")); !strings.Contains(string(elsewhere), filepath.Join(filepath.FromSlash("/mnt/shared/study"), "zmaps")) {
+	moved, _ := json.Marshal(filepath.Join(filepath.FromSlash("/mnt/shared/study"), "zmaps")) // as JSON writes it: a \ is escaped
+	if elsewhere := local(there, filepath.FromSlash("/mnt/shared/study")); !strings.Contains(string(elsewhere), strings.Trim(string(moved), `"`)) {
 		t.Fatal("the paths of a project that was moved do not follow it")
 	}
 	var s projectState

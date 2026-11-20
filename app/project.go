@@ -110,10 +110,9 @@ type normState struct {
 }
 
 type compareState struct {
-	Method  string      `json:"method"`
-	Region  regionState `json:"region"`
-	Name    string      `json:"name"`
-	Swapped bool        `json:"swapped,omitempty"`
+	Method  string `json:"method"`
+	Name    string `json:"name"`
+	Swapped bool   `json:"swapped,omitempty"`
 }
 
 // stepRecords is how far the analysis has come: what each step last did.
@@ -135,10 +134,10 @@ type spatialRun struct {
 	Warped map[string]string `json:"warped,omitempty"`
 }
 
+// referenceRun is the last building of the reference of the project, which
+// a run of Intensity Normalisation begins with.
 type referenceRun struct {
-	Status status `json:"status"`
-	At     string `json:"at,omitempty"`
-	Built  string `json:"built,omitempty"`
+	From *refBuilt `json:"from,omitempty"`
 }
 
 type normRun struct {
@@ -219,14 +218,14 @@ func (a *app) projectState() *projectState {
 	}
 	s.Covariates = covState{Table: a.cov.path, Columns: a.cov.columns, Adjust: a.cov.adjust}
 	s.Normalize = normState{Methods: a.norm.chosen(), Region: a.norm.region.state()}
-	s.Compare = compareState{Method: a.cmp.method, Region: a.cmp.region.state(), Name: a.cmp.name, Swapped: a.cmp.swapped}
+	s.Compare = compareState{Method: a.cmp.method, Name: a.cmp.name, Swapped: a.cmp.swapped}
 
 	ran := func(st status, more bool) bool { return st.ok != "" || st.err != "" || more }
 	if sp := &a.spatial; ran(sp.st, len(sp.rows) > 0) {
 		s.Steps.Spatial = &spatialRun{Status: sp.st, At: a.at("spatial"), Rows: sp.rows, Notes: sp.notes, Warped: sp.warped}
 	}
-	if r := &a.ref; ran(r.st, false) {
-		s.Steps.Reference = &referenceRun{Status: r.st, At: a.at("reference"), Built: r.built}
+	if a.ref.built != nil {
+		s.Steps.Reference = &referenceRun{From: a.ref.built}
 	}
 	if n := &a.norm; ran(n.st, len(n.rows) > 0) {
 		s.Steps.Normalize = &normRun{Status: n.st, At: a.at("normalize"), Folder: n.outDir, Rows: n.rows, Notes: n.notes, Done: n.done}
@@ -274,7 +273,7 @@ func (a *app) applyState(s *projectState) {
 	}
 	a.norm.region = s.Normalize.Region.choice()
 	a.classify.main = s.Classify
-	a.cmp.region, a.cmp.swapped = s.Compare.Region.choice(), s.Compare.Swapped
+	a.cmp.swapped = s.Compare.Swapped
 	if slices.ContainsFunc(core.Methods, func(m core.Named) bool { return m.Name == s.Compare.Method }) {
 		a.cmp.method = s.Compare.Method
 	}
@@ -305,12 +304,8 @@ func (a *app) applyState(s *projectState) {
 		}
 		a.setAt("spatial", r.At)
 	}
-	if r := s.Steps.Reference; r != nil {
-		a.ref.st, a.ref.built = r.Status, r.Built
-		if a.ref.st.ok != "" && !core.IsReferenceFolder(a.ref.built) {
-			a.ref.st = status{err: gone}
-		}
-		a.setAt("reference", r.At)
+	if r := s.Steps.Reference; r != nil && core.IsReferenceFolder(a.ref.output) {
+		a.ref.built = r.From
 	}
 	if r := s.Steps.Normalize; r != nil {
 		n := &a.norm
@@ -680,7 +675,9 @@ func (a *app) feed() {
 		return
 	}
 	patients, controls := a.images()
-	a.norm.files.files, a.ref.files.files, a.cluster.files.files = patients, controls, patients
+	a.ref.files.files, a.cluster.files.files = controls, patients
+	// Intensity Normalisation takes both groups, the patients first.
+	a.norm.files.files, a.norm.controls = append(append([]string(nil), patients...), controls...), controls
 	if a.cmp.swapped {
 		patients, controls = controls, patients
 	}

@@ -64,14 +64,14 @@ func (p *zmapPage) allowed(id string) (bool, string) {
 			}
 		}
 	}
-	return false, T("The reference holds no control statistics for this method. Rebuild it with this method ticked.",
-		"参考库中没有该方法的对照统计。请重建参考库并勾选该方法。")
+	return false, T("The reference in use holds no control statistics for this method.",
+		"当前参考库中没有该方法的对照统计。")
 }
 
 // noMethod is what the page says when no method of step 1 can make maps.
 func noMethod(methods []string) string {
-	return Tf("Z-score maps cannot be made with %s: the reference holds no control statistics for it. Go back to step 1 and choose HN, or rebuild the reference with the method ticked.",
-		"无法用%s制作 Z 值图：参考库中没有它的对照统计。请返回第 1 步改用 HN，或重建参考库并勾选该方法。", methodNames(methods))
+	return Tf("Z-score maps cannot be made with %s: the reference in use holds no control statistics for it. Go back to step 1 and choose HN.",
+		"无法用%s制作 Z 值图：当前参考库中没有它的对照统计。请返回第 1 步改用 HN。", methodNames(methods))
 }
 
 // zmapProblem is what keeps step 2 from running, or "".
@@ -86,6 +86,12 @@ func (a *app) zmapProblem() string {
 		return needReference()
 	case p.info != nil && p.info.err != "":
 		return p.info.err
+	}
+	if patients, _ := n.of(false); len(patients) == 0 {
+		if len(n.asked) == len(n.controls) {
+			return a.needImages("patients")
+		}
+		return T("Step 1 normalised none of the patients: see its notes.", "第 1 步没有成功归一化任何患者图像：详见该步的说明。")
 	}
 	yes, no := p.usable(n.methods)
 	if len(yes) == 0 {
@@ -110,8 +116,8 @@ func (a *app) zmapView(c *ui.Context) {
 		T("How far each voxel is from the healthy controls", "每个体素偏离健康对照的程度"),
 		func() {
 			a.steps(c)
-			section(c, T("From step 1", "来自第 1 步"), T("The normalised images step 1 wrote are read as they are: smoothed like the controls and compared with them voxel by voxel. Negative values mean lower uptake.",
-				"直接读取第 1 步写出的归一化图像：按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。"), func() {
+			section(c, T("From step 1", "来自第 1 步"), T("The normalised images of the patients are read as step 1 wrote them: smoothed like the controls and compared with them voxel by voxel. Negative values mean lower uptake. No map is made of the controls: they are what the reference is made of.",
+				"直接读取第 1 步写出的患者归一化图像：按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。对照本身不做 Z 值图：参考库就是由它们建成的。"), func() {
 				if n == nil {
 					a.taken(c, "zmap")
 					return
@@ -121,13 +127,13 @@ func (a *app) zmapView(c *ui.Context) {
 					shown = T("None that can make maps", "没有可用于 Z 值图的方法")
 				}
 				a.taken(c, "zmap",
-					fact(c, T("Images", "图像"), imagesText(n.files, len(n.asked)-len(n.files))),
+					fact(c, T("Patients", "患者"), imagesText(n.of(false))),
 					fact(c, T("Methods", "方法"), shown),
 					fact(c, T("Reference", "参考库"), referenceText(p.reference, p.info)),
 				)
 				if len(skipped) > 0 && len(methods) > 0 {
-					caution(c, Tf("No map is made with %s: the reference holds no control statistics for it. To have one, rebuild the reference with the method ticked.",
-						"本步不用%s制作 Z 值图：参考库中没有它的对照统计。如有需要，请重建参考库并勾选该方法。", methodNames(skipped)))
+					caution(c, Tf("No map is made with %s: the reference in use holds no control statistics for it.",
+						"本步不用%s制作 Z 值图：当前参考库中没有它的对照统计。", methodNames(skipped)))
 				}
 			})
 			if p.reference != "" && (p.info == nil || p.info.err == "") {
@@ -199,7 +205,7 @@ func (a *app) runZMap() {
 	if from == nil { // the button is disabled while step 1 is not done
 		return
 	}
-	files := append([]string(nil), from.files...)
+	files, _ := from.of(false) // the patients: the controls are the reference
 	methods, _ := p.usable(from.methods)
 	reference, out, table := p.reference, p.output, p.covariates()
 	record := &zmapDone{from: from, methods: methods, table: table, maps: map[string]map[string]string{}}

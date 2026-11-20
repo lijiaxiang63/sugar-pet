@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -245,6 +246,13 @@ func (a *app) dataProblem() string {
 	if len(p.patients.files)+len(p.controls.files) == 0 {
 		return T("Add the images of the project: patients, healthy controls, or both.", "请添加项目的图像：患者、健康对照，或两者都加。")
 	}
+	// An image is of one group: it is normalised once, and then compared
+	// with the other.
+	for _, path := range p.controls.files {
+		if slices.Contains(p.patients.files, path) {
+			return Tf("%s is among the patients and among the controls: remove it from one of the two.", "%s 同时出现在患者和对照中：请从其中一组移除。", filepath.Base(path))
+		}
+	}
 	return ""
 }
 
@@ -299,7 +307,7 @@ func (a *app) source(c *ui.Context, key, page, label string, facts ...func()) {
 
 // The labels of the ways back to where a page's input is chosen.
 func changeInData() string      { return T("Change in Data", "到“数据”页面修改") }
-func changeInReference() string { return T("Change in Reference", "到“参考库”页面修改") }
+func changeInReference() string { return T("Open Reference", "查看参考库") }
 
 // countText says how many images a group holds and where they lie.
 func countText(files []string) string {
@@ -354,8 +362,8 @@ func (a *app) dataView(c *ui.Context) {
 					},
 				)
 			})
-			section(c, T("Images", "图像"), T("One FDG-PET scan per subject. Every page of the project takes its images from here: the controls build the reference, the patients are normalised, mapped and classified, and both are compared.",
-				"每位受试者一幅 FDG-PET 图像。项目的每个页面都从这里取图像：对照用于建立参考库，患者用于归一化、制图和分类，两者一起用于组间比较。"), func() {
+			section(c, T("Images", "图像"), T("One FDG-PET scan per subject. Every page of the project takes its images from here: both groups are normalised, the controls make the reference, the patients are mapped and classified, and the two groups are compared.",
+				"每位受试者一幅 FDG-PET 图像。项目的每个页面都从这里取图像：两组都做强度归一化，对照用于建立参考库，患者用于制图和分类，两组一起用于组间比较。"), func() {
 				rows(c,
 					func() {
 						setting(c, T("The images are in", "图像所在的空间"), T("Images in native space are warped into MNI space by Spatial Normalisation before anything else reads them; that needs MATLAB and SPM.",
@@ -408,7 +416,7 @@ func (a *app) dataView(c *ui.Context) {
 		},
 		func() {
 			a.runBar(c, "data", a.dataProblem(), "", &p.st, nil)
-			to := "reference"
+			to := "normalize"
 			if p.native {
 				to = "spatial"
 			}

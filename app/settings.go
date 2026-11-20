@@ -502,8 +502,8 @@ func (a *app) settingsNormalize(c *ui.Context) {
 		caution(c, T("These are no longer the settings Intensity Normalisation last ran with. Run it again: until then Z-score Maps and Classify Parkinsonism cannot go on.",
 			"这些设置已与上次运行强度归一化时不同。请重新运行强度归一化：在此之前，Z 值图和帕金森综合征分类无法继续。"))
 	}
-	section(c, T("Factors", "因子"), T("The factors of the controls are estimated the same way when a reference is built: step 1 and the reference must agree for Z-score maps.",
-		"建立参考库时，对照的因子也按这里的方式估计：要做 Z 值图，第 1 步与参考库须保持一致。"), func() {
+	section(c, T("Factors", "因子"), T("The reference of the project estimates the factors of its controls the same way. An imported reference must agree with these for Z-score maps.",
+		"项目的参考库也按这里的方式估计对照的因子。导入的参考库须与这里一致，才能做 Z 值图。"), func() {
 		rows(c,
 			func() {
 				setting(c, lblStatistic.String(), T("For the reference regions and PS.", "用于参考区法和 PS。"), func() {
@@ -567,7 +567,7 @@ func maskChoices() (ids, names []string) {
 
 func (a *app) settingsReference(c *ui.Context) {
 	o := &a.opt
-	section(c, T("Building a reference", "建立参考库"), T("These apply to the next reference built on the Reference page; one already built keeps its own.", "对之后在“参考库”页面新建的参考库生效；已建好的参考库不受影响。"), func() {
+	section(c, T("Building the reference", "建立参考库"), T("Intensity Normalisation builds the reference from the healthy controls of the project; after a change here it builds it anew the next time it runs. An imported reference keeps its own.", "强度归一化会用项目的健康对照自动建立参考库；这里改动后，下次运行时会重新建立。导入的参考库不受影响。"), func() {
 		ids, names := maskChoices()
 		var maskRow func()
 		if o.RefMask == "file" {
@@ -589,8 +589,8 @@ func (a *app) settingsReference(c *ui.Context) {
 		)
 	})
 	section(c, lblRefStats.String(),
-		T("PS, iPS, HN and iHN never need this. Tick the methods you also want z-score maps for; White matter adds a check to the classification that does not rest on gray matter.",
-			"PS、iPS、HN、iHN 无需勾选。若还要用以下方法制作 Z 值图，请勾选；勾选“深部白质”可为分类增加一种不依赖灰质的核对方式。"), func() {
+		T("The reference always keeps the control statistics of the methods chosen for Intensity Normalisation, so there is nothing to tick for z-score maps. Tick a method to keep its statistics as well: White matter adds a check to the classification that does not rest on gray matter.",
+			"参考库总会保留强度归一化所选方法的对照统计，做 Z 值图无需在此勾选。如要额外保留某种方法的统计，请勾选：勾选“深部白质”可为分类增加一种不依赖灰质的核对方式。"), func() {
 			card(c).Padding(8, 11).Children(func() {
 				ui.Row(c).Wrap().Children(func() {
 					for _, m := range core.StatsMethods() {

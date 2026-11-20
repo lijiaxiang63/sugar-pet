@@ -30,10 +30,21 @@ that version, so write it for the people who use the app.
   space. Native images are warped by Spatial Normalisation into the
   `patients` and `controls` folders of the project, and the pages after it
   read them from there.
-- The reference of a project is built from its controls or **imported**
-  from a folder built elsewhere, as when many projects share the controls of
-  one lab. The Reference page says which it is, and takes the project's own
-  back.
+- **Intensity Normalisation normalises the patients and the healthy
+  controls of the project together**, the same way, and shows the factors of
+  both in one table and one chart, by group. The normalised images are
+  written by group, in `normalised/patients` and `normalised/controls`, and
+  `factors.tsv` has a `group` column.
+- **The reference is no step of its own any more.** It is the controls of
+  the project, summarised: Intensity Normalisation builds it from them
+  before it normalises the images, and builds it anew after the controls,
+  the covariates or the settings of the reference change. It always keeps
+  the control statistics of the methods chosen, so a z-score map can be made
+  with each of them. The Reference page shows the reference in use and has
+  nothing to run.
+- A project without controls of its own **imports** a reference built
+  elsewhere, on the Reference page, as when many projects share the controls
+  of one lab; the page takes the project's own controls back.
 - A step whose files are no longer in the project, or whose images changed
   on disk since it ran, is not shown as done when the project is opened.
 - **New Project…**, **Open Project…** and **Close Project** in the File menu
@@ -55,7 +66,12 @@ that version, so write it for the people who use the app.
   the group comparison all use it. Compare Groups no longer takes a second
   table.
 - Compare Groups compares the patients of the project with its controls;
-  **Swap Groups** turns them round.
+  **Swap Groups** turns them round. It reads the images Intensity
+  Normalisation wrote, by one of the methods that ran with, and normalises
+  nothing itself: what is tested is what step 1 shows, made with the
+  settings of the project. Before, it normalised every image again with the
+  default settings, whatever the project's were. It waits for Intensity
+  Normalisation as Z-score Maps does.
 - The individual analysis is three steps in a row: Intensity Normalisation,
   then Z-score Maps, then Classify Parkinsonism. A line of steps at the top
   of the three pages shows where you are and which steps are done, and a

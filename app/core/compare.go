@@ -30,7 +30,18 @@ type CompareOptions struct {
 	Q            float64     // fdr: q value
 	Name         string      // prefix of the result files
 	KeepImages   bool        // keep the normalised, smoothed images
-	Progress     func(done, total int)
+	// Normalised gives the images as they were normalised already, one per
+	// image, group 1 first, then group 2: they are read as they are, and
+	// Method only names what made them.  Nil normalises the images here.
+	Normalised []Normalised
+	Progress   func(done, total int)
+}
+
+// Normalised is an image that was intensity-normalised before, and the
+// factor it was divided by.
+type Normalised struct {
+	Path   string
+	Factor float64
 }
 
 // DefaultCompareOptions returns the defaults of the Python package.
@@ -130,6 +141,9 @@ func CompareGroups(ctx context.Context, group1, group2 []string, output string, 
 		}
 	}
 
+	if opt.Normalised != nil && len(opt.Normalised) != n {
+		return nil, errorf("%d normalised images for %d images (group 1 first, then group 2)", len(opt.Normalised), n)
+	}
 	normOpt := DefaultNormOptions()
 	normOpt.Reference, normOpt.Mask = ref, opt.Mask
 	var first *Volume
@@ -140,11 +154,20 @@ func CompareGroups(ctx context.Context, group1, group2 []string, output string, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		res, err := NormalizeFile(path, opt.Method, normOpt)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+		var img *Volume
+		if opt.Normalised != nil {
+			var err error
+			if img, err = LoadImage(opt.Normalised[i].Path); err != nil {
+				return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+			}
+			factors[i] = opt.Normalised[i].Factor
+		} else {
+			res, err := NormalizeFile(path, opt.Method, normOpt)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+			}
+			img, factors[i] = res.Image, res.Factor
 		}
-		img := res.Image
 		if first == nil {
 			first = img
 			covered = make([]bool, img.NVox())
@@ -158,7 +181,6 @@ func CompareGroups(ctx context.Context, group1, group2 []string, output string, 
 			covered[v] = covered[v] && ok
 		}
 		smoothed[i] = Smooth(img.Data, img.Dim, img.Aff, fwhm)
-		factors[i] = res.Factor
 		if opt.KeepImages {
 			group := "group1"
 			if i >= n1 {

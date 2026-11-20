@@ -13,8 +13,9 @@ import (
 
 // The individual analysis is three steps, each resting on the one before:
 // Intensity Normalisation takes the images and the methods, Z-score Maps
-// compares what it normalised with the controls, and Classify Parkinsonism
-// reads the maps.  A step shows what it takes from the one before and asks
+// compares the patients it normalised with the controls, and Classify
+// Parkinsonism reads the maps.  Compare Groups rests on the first as well:
+// it tests the patients against the controls as that step normalised them.  A step shows what it takes from the one before and asks
 // for none of it again: to change it, the user goes back to where it was
 // chosen, and a step whose ground has changed waits until that is run anew.
 var flowSteps = []string{"normalize", "zmap", "classify"}
@@ -22,11 +23,17 @@ var flowSteps = []string{"normalize", "zmap", "classify"}
 // normDone is what the last run of Intensity Normalisation that went well
 // did: the ground of step 2.
 type normDone struct {
-	asked     []string // the images the run was asked for
-	files     []string // those that every method normalised
+	asked []string // the images the run was asked for: patients and controls
+	files []string // those that every method normalised
+	// controls are those of asked that are healthy controls of the project;
+	// the others are its patients.
+	controls  []string
 	methods   []string
 	reference string
-	settings  string // options.normSettings as the run had them
+	// refSig is app.refSignature as the run found it: what the reference of
+	// the project was built with ("" with an imported one, or with none).
+	refSig   string
+	settings string // options.normSettings as the run had them
 	// What the run wrote of each image, by image and method: the normalised
 	// image, which step 2 reads, and the factor it was divided by.
 	images  map[string]map[string]string
@@ -58,6 +65,29 @@ type zmapDone struct {
 	maps map[string]map[string]string
 }
 
+// of returns the images of the patients, or of the controls, that every
+// method normalised, and how many more of them the run was asked for.
+func (d *normDone) of(controls bool) (files []string, dropped int) {
+	for _, path := range d.asked {
+		if slices.Contains(d.controls, path) != controls {
+			continue
+		}
+		if slices.Contains(d.files, path) {
+			files = append(files, path)
+		} else {
+			dropped++
+		}
+	}
+	return files, dropped
+}
+
+// pageImages are the patients a run of step 1 normalised: what the steps
+// after it work on.
+func (a *app) pageImages(d *normDone) []string {
+	patients, _ := d.of(false)
+	return patients
+}
+
 // normChanged names what was changed on step 1 since it ran: its images,
 // methods, reference or settings.  "" while it holds what it ran with.
 func (a *app) normChanged() string {
@@ -74,6 +104,9 @@ func (a *app) normChanged() string {
 	}
 	if d.reference != p.reference || d.rebuilt {
 		what = append(what, T("reference", "参考库"))
+	} else if d.refSig != a.refSignature() {
+		// The reference of the project would be built anew.
+		what = append(what, T("covariates or reference settings", "协变量或参考库设置"))
 	}
 	if d.settings != a.opt.normSettings(d.methods) {
 		what = append(what, T("settings", "设置"))
@@ -127,8 +160,8 @@ func (d *normDone) unfit(methods []string, ref *refInfo) string {
 		return ""
 	}
 	and := T(" and ", "和")
-	return Tf("Step 1 estimated its factors with %s, the reference those of its controls with %s: the images cannot be compared with the controls. Make Settings › Intensity Normalisation agree with the reference and run step 1 again, or build the reference again with the settings as they are.",
-		"第 1 步估计因子时用的是%s，而参考库估计对照的因子时用的是%s，两者无法比较。请把“设置 › 强度归一化”改成与参考库一致并重新运行第 1 步，或者按现在的设置重新建立参考库。",
+	return Tf("Step 1 estimated its factors with %s, the imported reference those of its controls with %s: the images cannot be compared with the controls. Make Settings › Intensity Normalisation agree with the reference and run step 1 again, or use a reference built with the settings as they are.",
+		"第 1 步估计因子时用的是%s，而导入的参考库估计对照的因子时用的是%s，两者无法比较。请把“设置 › 强度归一化”改成与参考库一致并重新运行第 1 步，或者改用按现在的设置建立的参考库。",
 		strings.Join(mine, and), strings.Join(theirs, and))
 }
 
@@ -187,10 +220,11 @@ func (a *app) stepDone(page string) bool {
 	return false
 }
 
-// lock is the step a page of the individual analysis waits for, and what the
-// page says while it waits; "", "" when the step before it is done.
+// lock is the step a page that rests on the individual analysis waits for,
+// and what the page says while it waits; "", "" when the step before it is
+// done.  Compare Groups waits for step 1, as Z-score Maps does.
 func (a *app) lock(page string) (step, why string) {
-	if page != "zmap" && page != "classify" {
+	if page != "zmap" && page != "classify" && page != "compare" {
 		return "", ""
 	}
 	if a.normCurrent() == nil {

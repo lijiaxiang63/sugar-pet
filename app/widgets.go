@@ -579,6 +579,9 @@ func (a *app) remedy(page, problem string) string {
 	// The images a page works on come from the Data page or, of images in
 	// native space, from Spatial Normalisation.
 	if a.proj != nil {
+		if problem == a.dataProblem() {
+			return "data"
+		}
 		for _, group := range []string{"patients", "controls"} {
 			if problem == a.needImages(group) {
 				if a.proj.native && a.pageCount("data") > 0 && page != "spatial" {
@@ -598,9 +601,7 @@ func (a *app) remedy(page, problem string) string {
 			return "data"
 		}
 	case "normalize":
-		lack = a.norm.referenceProblem()
-	case "compare":
-		lack = a.cmp.referenceProblem()
+		lack = a.normReferenceProblem()
 	case "zmap":
 		if a.zmap.reference == "" {
 			lack = needReference()

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -146,18 +147,31 @@ func (cv *covChoice) problem() string {
 // needReference is what a page says while it has no reference, which the
 // run bar offers to mend (remedy).
 func needReference() string {
-	return T("The project has no reference yet: build one on the Reference page, or import one there.", "项目还没有参考库：请先到“参考库”页面建立，或导入已有的参考库。")
+	return T("The project has no reference yet: Intensity Normalisation builds it from the healthy controls (at least 3), or import one on the Reference page.",
+		"项目还没有参考库：运行强度归一化时会用健康对照（至少 3 例）自动建立，也可以到“参考库”页面导入。")
 }
 
 // referenceFact is the line of a page that says which reference it uses.
 func (a *app) referenceFact(c *ui.Context) func() {
-	a.zmap.load()
-	value := referenceText(a.zmap.reference, a.zmap.info)
-	if a.zmap.reference == "" {
-		value = T("None yet", "尚未建立")
-	}
+	return fact(c, T("Reference", "参考库"), a.referenceLine())
+}
 
-	return fact(c, T("Reference", "参考库"), value)
+// referenceLine says in a line which reference the project uses, or how it
+// comes to one.
+func (a *app) referenceLine() string {
+	a.zmap.load()
+	ref, n := a.zmap.reference, len(a.ref.files.files)
+	switch {
+	case a.imported():
+		return referenceText(ref, a.zmap.info) + T(" · imported", " · 导入")
+	case ref == "" && !a.buildsReference():
+		return T("None: it takes at least 3 healthy controls, or an imported reference", "无：需要至少 3 例健康对照，或导入参考库")
+	case ref == "":
+		return Tf("Built from the %d controls when Intensity Normalisation runs", "运行强度归一化时由 %d 例对照自动建立", n)
+	case a.refStale():
+		return Tf("Built anew from the %d controls when Intensity Normalisation runs", "下次运行强度归一化时由 %d 例对照重新建立", n)
+	}
+	return referenceText(ref, a.zmap.info)
 }
 
 // covText says in a line which covariates the project adjusts for.
@@ -263,32 +277,34 @@ func (r *refInfo) covariateNames() []string {
 	return names
 }
 
+// The reference of a project is its healthy controls, summarised: it is no
+// step of its own.  Intensity Normalisation builds it from the controls
+// before it normalises the images, and builds it anew once the controls,
+// the covariates or the settings it was built with have changed.  A project
+// without controls of its own imports a reference built elsewhere instead.
 type refPage struct {
-	files  fileList
-	output string
+	files  fileList // the healthy controls of the project
+	output string   // where the reference of the project is built
 
-	st      status
-	built   string // where the last build wrote, or was to write
-	current string // the reference the summary below is of
+	built   *refBuilt // what the reference in output was built from
+	current string    // the reference the summary below is of
 	info    *refInfo
 	pic     picture
 }
 
+// refBuilt is what the reference of the project was last built from.
+type refBuilt struct {
+	sig      string               // app.refSignature as it was then
+	statsFor []string             // the methods it keeps control statistics for
+	controls map[string]fileStamp // the controls, as they were on disk
+	stamp    fileStamp            // its reference.json, as the build wrote it
+}
+
 func (p *refPage) init() {}
 
-func (a *app) refProblem() string {
-	p, o := &a.ref, &a.opt
-	switch {
-	case len(p.files.files) == 0:
-		return a.needImages("controls")
-	case len(p.files.files) < 3:
-		return T("A reference needs at least 3 healthy controls (10 or more is better): add them on the Data page, or import a reference.",
-			"建立参考库至少需要 3 例健康对照（建议 10 例以上）：请到“数据”页面添加，或导入已有的参考库。")
-	}
-	if o.RefMask == "file" && o.RefMaskFile == "" {
-		return T("Choose the mask file of the reference in the settings.", "请在设置中选择参考库的掩膜文件。")
-	}
-	return a.cov.problem()
+// imported reports whether the reference in use was built elsewhere.
+func (a *app) imported() bool {
+	return a.norm.reference != "" && !sameDir(a.norm.reference, a.ref.output)
 }
 
 // ownReference reports whether the reference in use is the one built in
@@ -296,6 +312,167 @@ func (a *app) refProblem() string {
 func (a *app) ownReference() bool {
 	return a.norm.reference != "" && sameDir(a.norm.reference, a.ref.output)
 }
+
+// buildsReference reports whether the project makes its own reference: it
+// has imported none, and holds the 3 controls that one takes at least.
+func (a *app) buildsReference() bool {
+	return a.ref.output != "" && !a.imported() && len(a.ref.files.files) >= 3
+}
+
+// refStatsFor are the methods the reference of the project keeps control
+// statistics for: those ticked in the settings, and those chosen for
+// Intensity Normalisation, so that a map can be made with each of them.
+func (a *app) refStatsFor() []string {
+	var out []string
+	for _, m := range core.StatsMethods() {
+		if a.opt.RefStatsFor[m] || a.norm.methods[m] {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// refSignature is what, besides its controls, the reference of the project
+// is built with: the covariates and the settings.  "" while the project
+// builds none.  It names no folder, so that a project moved keeps it.
+func (a *app) refSignature() string {
+	if !a.buildsReference() {
+		return ""
+	}
+	o, cv := &a.opt, &a.cov
+	covariates := "none"
+	if cv.path != "" {
+		covariates = fmt.Sprint(cv.stamp.size, cv.stamp.modified, cv.names())
+	}
+	mask := o.RefMask
+	if mask == "file" {
+		mask = filepath.Base(o.RefMaskFile)
+	}
+	factors := "auto"
+	if !o.FWHMAuto {
+		factors = num(o.FWHM)
+	}
+	return fmt.Sprint("covariates ", covariates, "; mask ", mask, "; smoothing ", num(o.RefFWHM), "; statistic ", o.Statistic,
+		"; factors after ", factors, "; also ", o.statsFor())
+}
+
+// refStale reports whether the reference of the project is not, or no
+// longer, what its controls and the settings make: the next run of
+// Intensity Normalisation builds it.
+func (a *app) refStale() bool {
+	if !a.buildsReference() {
+		return false
+	}
+	b, files := a.ref.built, a.ref.files.files
+	if b == nil || b.sig != a.refSignature() || len(b.controls) != len(files) {
+		return true
+	}
+	for _, m := range a.refStatsFor() {
+		if !slices.Contains(b.statsFor, m) {
+			return true
+		}
+	}
+	for _, path := range files {
+		if _, ok := b.controls[path]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// buildProblem is what keeps the reference of the project from being built,
+// or "".
+func (a *app) buildProblem() string {
+	if o := &a.opt; o.RefMask == "file" && o.RefMaskFile == "" {
+		return T("Choose the mask file of the reference in the settings.", "请在设置中选择参考库的掩膜文件。")
+	}
+	return a.cov.problem()
+}
+
+// refBuild is the building of the reference of the project, with which a
+// run of Intensity Normalisation begins.
+type refBuild struct {
+	files []string
+	out   string
+	opt   core.BuildOptions
+	built *refBuilt
+}
+
+// referenceBuild is the building a run of Intensity Normalisation begins
+// with: nil where the project builds no reference, or the one it has is
+// still what its controls and the settings make.  Or what keeps it from
+// being built.
+func (a *app) referenceBuild() (*refBuild, string) {
+	if !a.buildsReference() {
+		return nil, ""
+	}
+	if msg := a.cov.fresh(); msg != "" {
+		return nil, msg
+	}
+	files, out := append([]string(nil), a.ref.files.files...), a.ref.output
+	stamps := map[string]fileStamp{}
+	for _, path := range files {
+		stamps[path] = stampOf(path)
+	}
+	if b := a.ref.built; b != nil && !a.refStale() && b.stamp.found && stampOf(filepath.Join(out, "reference.json")) == b.stamp {
+		same := true
+		for path, now := range stamps {
+			same = same && now == b.controls[path]
+		}
+		if same {
+			return nil, ""
+		}
+	}
+	o := a.opt
+	opt := core.BuildOptions{FWHM: o.RefFWHM, Mask: core.MaskSpec{Name: o.RefMask}, StatsFor: a.refStatsFor()}
+	// The factors of the controls are estimated as those of every image
+	// are, so that the two can be compared.
+	if o.Statistic == 1 {
+		opt.Statistic = "median"
+	}
+	if !o.FWHMAuto {
+		fwhm := o.FWHM
+		opt.FactorFWHM = &fwhm
+	}
+	if o.RefMask == "file" {
+		opt.Mask = core.MaskSpec{Name: o.RefMaskFile}
+	}
+	if a.cov.table != nil {
+		names := a.cov.names()
+		found, err := a.cov.table.Lookup(files, names)
+		if err != nil {
+			return nil, err.Error()
+		}
+		opt.Covariates = core.CovariatesFromRows(found, names)
+	}
+	return &refBuild{files: files, out: out, opt: opt,
+		built: &refBuilt{sig: a.refSignature(), statsFor: opt.StatsFor, controls: stamps}}, ""
+}
+
+// run builds the reference and saves it in the project.
+func (b *refBuild) run(ctx context.Context, step func(done, total int)) (*refBuilt, error) {
+	b.opt.Progress = step
+	step(0, len(b.files))
+	ref, err := core.BuildReference(ctx, b.files, b.opt)
+	if err != nil {
+		return nil, err
+	}
+	if err := ref.Save(b.out); err != nil {
+		return nil, err
+	}
+	b.built.stamp = stampOf(filepath.Join(b.out, "reference.json"))
+	return b.built, nil
+}
+
+// useOwn goes back from an imported reference to that of the project.
+func (a *app) useOwn() {
+	own := a.ref.output
+	if !core.IsReferenceFolder(own) {
+		own = "" // built when Intensity Normalisation runs
+	}
+	a.setReference(own)
+}
+
 func (a *app) referenceView(c *ui.Context) {
 	p := &a.ref
 	if ref := a.norm.reference; ref != p.current {
@@ -304,14 +481,28 @@ func (a *app) referenceView(c *ui.Context) {
 			p.info = readRefInfo(ref)
 		}
 	}
+	controls := len(p.files.files)
+	// The way back from an imported reference, where the project can have
+	// one of its own.
+	ownButton := func() {
+		if a.imported() && (controls >= 3 || core.IsReferenceFolder(p.output)) {
+			if smallButton(c.Key("ref-own"), T("Use the Project's Controls", "改用项目的对照")).Clicked() {
+				a.useOwn()
+			}
+		}
+	}
 	a.frame(c, T("Reference", "参考库"),
-		T("Summarise healthy controls once, then use them for every patient", "用健康对照建立一次，之后每个患者都可使用"),
+		T("The healthy controls, summarised: what every patient is compared with", "健康对照的统计汇总：每位患者都与它比较"),
 		func() {
 			section(c, T("Reference in use", "当前参考库"), "", func() {
 				if p.info == nil || p.info.err != "" {
 					rows(c, func() {
-						desc := T("HN, iPS, iHN and z-score maps need a reference. Build one below from the controls of the project, or import one built elsewhere.",
-							"HN、iPS、iHN 和 Z 值图都需要参考库。可以在下方用项目的健康对照建立，也可以导入在别处建好的参考库。")
+						desc := T("HN, iPS, iHN and z-score maps need a reference. Add at least 3 healthy controls on the Data page and Intensity Normalisation builds it from them; or import one built elsewhere.",
+							"HN、iPS、iHN 和 Z 值图都需要参考库。在“数据”页面添加至少 3 例健康对照，运行强度归一化时就会自动建立；也可以导入在别处建好的参考库。")
+						if a.buildsReference() {
+							desc = Tf("Intensity Normalisation builds it from the %d healthy controls of the project before it normalises the images. To use one built elsewhere instead, import it.",
+								"运行强度归一化时，会先用项目的 %d 例健康对照自动建立，再对图像做归一化。如要改用在别处建好的参考库，请导入。", controls)
+						}
 						if p.info != nil {
 							desc = p.info.err
 						}
@@ -319,11 +510,7 @@ func (a *app) referenceView(c *ui.Context) {
 							if smallButton(c.Key("ref-import"), T("Import…", "导入…")).Clicked() {
 								a.chooseReference()
 							}
-							if own := a.ref.output; core.IsReferenceFolder(own) {
-								if smallButton(c.Key("ref-own"), T("Use the Project's Own", "使用项目自己的")).Clicked() {
-									a.setReference(own)
-								}
-							}
+							ownButton()
 						})
 					})
 					return
@@ -338,6 +525,10 @@ func (a *app) referenceView(c *ui.Context) {
 					cov = strings.Join(names, T(", ", "、"))
 				}
 				ui.Column(c).Gap(8).Children(func() {
+					if a.refStale() {
+						caution(c, T("The controls, the covariates or the settings have changed since this reference was built: Intensity Normalisation builds it anew the next time it runs.",
+							"建立该参考库之后，对照、协变量或设置有了变化：下次运行强度归一化时会重新建立。"))
+					}
 					stats(c,
 						[2]string{strconv.Itoa(info.N), T("Controls", "对照人数")},
 						[2]string{strconv.FormatFloat(info.FWHM, 'g', 4, 64) + " mm", T("Smoothing (FWHM)", "平滑 (FWHM)")},
@@ -345,8 +536,8 @@ func (a *app) referenceView(c *ui.Context) {
 					)
 					rows(c,
 						func() {
-							origin := T("Built from the controls of this project", "由本项目的健康对照建立")
-							if !a.ownReference() {
+							origin := T("Built from the healthy controls of this project", "由本项目的健康对照建立")
+							if a.imported() {
 								origin = T("Imported from ", "导入自 ") + shortDir(filepath.Dir(p.current))
 							}
 							setting(c, filepath.Base(p.current), origin, func() {
@@ -354,102 +545,32 @@ func (a *app) referenceView(c *ui.Context) {
 								if smallButton(c.Key("ref-import"), T("Import Another…", "导入其他…")).Clicked() {
 									a.chooseReference()
 								}
-								if own := a.ref.output; !a.ownReference() && core.IsReferenceFolder(own) {
-									if smallButton(c.Key("ref-own"), T("Use the Project's Own", "使用项目自己的")).Clicked() {
-										a.setReference(own)
-									}
-								}
+								ownButton()
 							})
 						},
 						func() { setting(c, T("Z-score maps available for", "可制作 Z 值图的方法"), extra, nil) },
 					)
 					a.show(&p.pic, p.current, referencePicture(p.current))
 					a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
-					ui.Row(c).Gap(8).Wrap().GapY(6).Children(func() {
-						// The individual analysis begins at its first step; the
-						// others are reached from there.
-						if button(c.Key("ref-to-norm"), T("Go to Intensity Normalisation", "前往强度归一化"), iconArrowRight, buttonSoft, 26).Clicked() {
-							a.page = "normalize"
-						}
-						if button(c.Key("ref-to-cmp"), T("Go to Compare Groups", "前往组间比较"), iconArrowRight, buttonSoft, 26).Clicked() {
-							a.page = "compare"
-						}
-					})
 				})
 			})
-			ui.Column(c).Gap(18).Children(func() {
-				ui.Box(c).Height(1).Background(paletteFor(c).line)
-				ui.Text(c, T("Build the project's reference", "建立项目的参考库")).FontSize(17).FontWeight(700).LetterSpacing(-0.2).Padding(0, 2)
-			})
-			section(c, T("Healthy controls", "健康对照"), T("The controls of the project, in MNI space and all on the same grid. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
-				"项目中的健康对照图像，须在 MNI 空间且在同一网格上。少于约 10 例时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
-				a.source(c, "ref-data", "data", changeInData(),
-					fact(c, T("Controls", "对照"), countText(p.files.files)),
-					fact(c, T("Covariates", "协变量"), a.covText()))
-			})
-			section(c, T("Save", "保存"), "", func() {
-				rows(c, fact(c, T("Written to", "输出位置"), a.writesTo(p.output)+T(" · it becomes the reference in use", " · 建好后自动成为当前参考库")))
-				a.optionsLine(c, "reference", "reference", groupReference)
-			})
-		},
-		func() {
-			a.runBar(c, "reference", a.refProblem(), T("Build Reference", "建立参考库"), &p.st, a.runReference)
-			a.next(c, "normalize", a.norm.reference != "" && len(a.norm.files.files) > 0)
-		},
-	)
-}
-
-func (a *app) runReference() {
-	p := &a.ref
-	p.built = p.output
-	files := append([]string(nil), p.files.files...)
-	o := a.opt
-	opt := core.BuildOptions{FWHM: o.RefFWHM, Mask: core.MaskSpec{Name: o.RefMask}, StatsFor: o.statsFor()}
-	// The factors of the controls are estimated as Intensity Normalisation
-	// estimates those of an image, so that the two can be compared.
-	if o.Statistic == 1 {
-		opt.Statistic = "median"
-	}
-	if !o.FWHMAuto {
-		fwhm := o.FWHM
-		opt.FactorFWHM = &fwhm
-	}
-	if o.RefMask == "file" {
-		opt.Mask = core.MaskSpec{Name: o.RefMaskFile}
-	}
-	if msg := a.cov.fresh(); msg != "" {
-		p.st.err = msg
-		return
-	}
-	if a.cov.table != nil {
-		names := a.cov.names()
-		found, err := a.cov.table.Lookup(files, names)
-		if err != nil {
-			p.st.err = err.Error()
-			return
-		}
-		opt.Covariates = core.CovariatesFromRows(found, names)
-	}
-	out := p.output
-	a.start("reference", T("Reading the controls", "正在读取对照图像"), func(ctx context.Context, step func(int, int)) (func(), error) {
-		opt.Progress = step
-		step(0, len(files))
-		ref, err := core.BuildReference(ctx, files, opt)
-		if err != nil {
-			return nil, err
-		}
-		if err := ref.Save(out); err != nil {
-			return nil, err
-		}
-		return func() {
-			a.setReference(out)
-			p.current = ""
-			// Images normalised with the reference that was in this folder
-			// are not normalised with this one.
-			if d := a.norm.done; d != nil && d.reference == out {
-				d.rebuilt = true
+			if a.imported() {
+				return
 			}
-			p.st.ok = Tf("Reference built from %d controls; it is now the reference in use.", "已用 %d 例对照建立参考库，并设为当前参考库。", len(files))
-		}, nil
-	}, func(err error) { p.st.err = err.Error() })
+			section(c, T("How it is built", "如何建立"), T("There is nothing to run here: Intensity Normalisation builds the reference from the healthy controls of the project, and builds it anew after the controls, the covariates or these settings change. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
+				"这里没有需要运行的步骤：强度归一化会用项目的健康对照自动建立参考库，对照、协变量或这些设置变动后会重新建立。少于约 10 例对照时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
+				a.source(c, "ref-data", "data", changeInData(),
+					fact(c, T("Healthy controls", "健康对照"), countText(p.files.files)),
+					fact(c, T("Covariates", "协变量"), a.covText()),
+					fact(c, T("Saved in", "保存位置"), a.writesTo(p.output)))
+				a.optionsLine(c, "reference", "reference", groupReference)
+				ui.Row(c).Children(func() {
+					if button(c.Key("ref-to-norm"), T("Go to Intensity Normalisation", "前往强度归一化"), iconArrowRight, buttonSoft, 26).Clicked() {
+						a.page = "normalize"
+					}
+				})
+			})
+		},
+		nil,
+	)
 }

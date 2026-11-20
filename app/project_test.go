@@ -177,7 +177,8 @@ func TestProject(t *testing.T) {
 	a.norm.methods = map[string]bool{"cerebellum": true, "pons": true}
 	a.cmp.name, a.cmp.swapped, a.opt.Target, a.page = "pd_vs_hc", true, 50, "compare"
 	mapOf := writeFile(t, filepath.Join(dir, "normalised", "sub-pt01_desc-cerebellum_pet.nii.gz"), "normalised")
-	a.norm.done = &normDone{asked: pt, files: pt[:1], methods: a.norm.chosen(), settings: a.opt.normSettings(a.norm.chosen()),
+	a.norm.done = &normDone{asked: slices.Clone(a.norm.files.files), files: pt[:1], controls: slices.Clone(a.norm.controls),
+		methods: a.norm.chosen(), refSig: a.refSignature(), settings: a.opt.normSettings(a.norm.chosen()),
 		images: map[string]map[string]string{pt[0]: {"cerebellum": mapOf}}, factors: map[string]map[string]float64{pt[0]: {"cerebellum": 5.5}}, target: 50}
 	a.norm.done.stamp()
 	a.norm.st.ok, a.norm.outDir = "normalised", filepath.Join(dir, "normalised")
@@ -307,7 +308,7 @@ func TestStudyFolder(t *testing.T) {
 	if !slices.Equal(p.patients.files, []string{pt}) || !slices.Equal(p.controls.files, []string{hc}) {
 		t.Errorf("the images of the study were not taken: %v, %v", p.patients.files, p.controls.files)
 	}
-	if a.norm.reference != filepath.Join(study, "hc_reference") || !a.ownReference() || !a.done("reference") {
+	if a.norm.reference != filepath.Join(study, "hc_reference") || !a.ownReference() || a.imported() {
 		t.Errorf("the reference of the study is not in use: %q", a.norm.reference)
 	}
 	if a.cov.path != table || !slices.Equal(a.cov.names(), []string{"age", "sex"}) {
@@ -328,7 +329,7 @@ func TestStudyFolder(t *testing.T) {
 	if err := b.openProject(study); err != nil || b.norm.reference != other {
 		t.Fatalf("the imported reference was not kept: %v, %q", err, b.norm.reference)
 	}
-	if err := tt.Click("Use the Project's Own"); err != nil {
+	if err := tt.Click("Use the Project's Controls"); err != nil {
 		t.Fatalf("%v (shown: %q)", err, tt.Texts())
 	}
 	tt.Frame()
@@ -413,6 +414,7 @@ func TestProjectRecords(t *testing.T) {
 	check(whole(&zmapRow{}), &zmapRow{})
 	check(whole(&classifyRow{}), &classifyRow{})
 	check(whole(&spatialRow{}), &spatialRow{})
+	check(whole(&refBuilt{}), &refBuilt{})
 	norm := whole(&normDone{}).(*normDone)
 	norm.changed = false // found when a project is opened, not written
 	check(norm, &normDone{})
@@ -448,7 +450,8 @@ func TestProjectRecords(t *testing.T) {
 		t.Fatalf("the project is not read back as it was written (%v)", err)
 	}
 	if s.Steps.Normalize == nil || s.Steps.ZMap == nil || !s.Steps.ZMap.Current || s.Steps.Classify == nil || !s.Steps.Classify.Current ||
-		s.Steps.Compare == nil || s.Steps.Compare.Result == nil || s.Steps.Cluster == nil || s.Steps.Spatial == nil {
+		s.Steps.Compare == nil || s.Steps.Compare.Result == nil || s.Steps.Cluster == nil || s.Steps.Spatial == nil ||
+		s.Steps.Reference == nil || s.Steps.Reference.From == nil {
 		t.Fatalf("a step of the made-up project is not recorded: %+v", s.Steps)
 	}
 }

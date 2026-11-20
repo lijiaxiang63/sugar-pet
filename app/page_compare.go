@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,11 +12,13 @@ import (
 	"sugarpet/core"
 )
 
+// Compare Groups tests the patients of the project against its controls
+// as Intensity Normalisation wrote them: it normalises nothing itself, so
+// that what is tested is what step 1 shows, made with its settings.
 type comparePage struct {
 	g1, g2    fileList
-	method    string
+	method    string // one of the methods of step 1
 	reference string
-	region    regionChoice
 	// The smoothing of the reference, as last read from its folder.
 	fwhmKnown bool
 	fwhmOf    string
@@ -26,10 +29,6 @@ type comparePage struct {
 	// swapped is whether the groups were swapped: the controls of the
 	// project are then group 1 and its patients group 2.
 	swapped bool
-	// The method last taken from the individual analysis (follow): it is
-	// taken again when chosen anew there, until the user chooses another
-	// here.
-	methodFrom string
 
 	st     status
 	result *core.GroupComparison
@@ -47,20 +46,31 @@ func (p *comparePage) swap() {
 	p.result, p.how, p.st = nil, "", status{}
 }
 
-// followCompare takes the method of the individual analysis, so that it is
-// not chosen again here.
+// followCompare keeps the method one of those step 1 normalised with: the
+// one chosen here while it is among them, else the leading one.
 func (a *app) followCompare() {
-	p := &a.cmp
-	if m := leadingMethod(a.norm.chosen()); m != "" && m != p.methodFrom {
-		if p.method == p.methodFrom {
-			p.method = m
-		}
-		p.methodFrom = m
+	p, n := &a.cmp, a.normCurrent()
+	if n == nil || slices.Contains(n.methods, p.method) {
+		return
+	}
+	if p.method = leadingMethod(n.methods); p.method == "" {
+		p.method = n.methods[0]
 	}
 }
+
 func (p *comparePage) init() {
-	p.method, p.methodFrom, p.name = "hn", "hn", "patients_vs_controls"
-	p.region.mask = "brainstem"
+	p.method, p.name = "hn", "patients_vs_controls"
+}
+
+// groups are the images of group 1 and group 2 that step 1 normalised, and
+// how many more of each it was asked for.
+func (p *comparePage) groups(n *normDone) (g1, g2 []string, dropped [2]int) {
+	g1, dropped[0] = n.of(false)
+	g2, dropped[1] = n.of(true)
+	if p.swapped {
+		g1, g2, dropped = g2, g1, [2]int{dropped[1], dropped[0]}
+	}
+	return g1, g2, dropped
 }
 
 // referenceFWHM is the smoothing (mm) of the chosen reference, if there is
@@ -93,15 +103,6 @@ func (p *comparePage) smoothing(o *options) float64 {
 	return 8
 }
 
-// referenceProblem is what is missing while the method needs a reference
-// and none is chosen, or "".
-func (p *comparePage) referenceProblem() string {
-	if !core.NeedsReference(p.method) || p.reference != "" {
-		return ""
-	}
-	return Tf("%s needs a reference: build it on the Reference page, or import one there.", "%s 需要参考库：请先到“参考库”页面建立，或导入已有的参考库。", methodName(p.method))
-}
-
 func (a *app) cmpProblem() string {
 	p, o := &a.cmp, &a.opt
 	for i, g := range [][]string{p.g1.files, p.g2.files} {
@@ -116,12 +117,13 @@ func (a *app) cmpProblem() string {
 			return T("Each group needs at least 2 images: add more on the Data page.", "每组至少需要 2 幅图像：请到“数据”页面添加。")
 		}
 	}
-	switch {
-	case p.referenceProblem() != "":
-		return p.referenceProblem()
-	case p.method == "region" && p.region.problem() != "":
-		return p.region.problem()
-	case o.Analysis == "file" && o.AnalysisFile == "":
+	if _, why := a.lock("compare"); why != "" {
+		return why
+	}
+	if g1, g2, _ := p.groups(a.normCurrent()); min(len(g1), len(g2)) < 2 {
+		return T("Step 1 normalised fewer than 2 images of a group: see its notes.", "第 1 步成功归一化的图像有一组不足 2 幅：详见该步的说明。")
+	}
+	if o.Analysis == "file" && o.AnalysisFile == "" {
 		return T("Choose the mask file of the voxels to test in the settings.", "请在设置中选择检验范围的掩膜文件。")
 	}
 	if msg := a.cov.problem(); msg != "" {
@@ -136,8 +138,9 @@ func (a *app) compareView(c *ui.Context) {
 	p := &a.cmp
 	a.followCompare()
 	t := c.Theme()
+	n := a.normCurrent()
 	a.frame(c, T("Compare Groups", "组间比较"),
-		T("Voxel-wise two-sample t-test after intensity normalisation", "强度归一化后逐体素双样本 t 检验"),
+		T("Voxel-wise two-sample t-test of the normalised images", "对归一化后的图像做逐体素双样本 t 检验"),
 		func() {
 			section(c, T("Groups", "分组"), T("The T-map is group 1 minus group 2: with patients as group 1 and controls as group 2, negative values mean hypometabolism.",
 				"T 图为第 1 组减第 2 组：以患者为第 1 组、对照为第 2 组时，负值表示低代谢。"), func() {
@@ -145,9 +148,15 @@ func (a *app) compareView(c *ui.Context) {
 				if p.swapped {
 					names[0], names[1] = names[1], names[0]
 				}
+				// Once step 1 is done, what it normalised of each group.
+				texts := [2]string{countText(p.g1.files), countText(p.g2.files)}
+				if n != nil {
+					g1, g2, dropped := p.groups(n)
+					texts = [2]string{imagesText(g1, dropped[0]), imagesText(g2, dropped[1])}
+				}
 				a.source(c, "cmp-data", "data", changeInData(),
-					fact(c, T("Group 1", "第 1 组")+" · "+names[0], countText(p.g1.files)),
-					fact(c, T("Group 2", "第 2 组")+" · "+names[1], countText(p.g2.files)))
+					fact(c, T("Group 1", "第 1 组")+" · "+names[0], texts[0]),
+					fact(c, T("Group 2", "第 2 组")+" · "+names[1], texts[1]))
 				ui.Row(c).Justify(ui.End).Children(func() {
 					// Not while the comparison runs: it would end under
 					// the groups the other way round.
@@ -159,19 +168,25 @@ func (a *app) compareView(c *ui.Context) {
 					}
 				})
 			})
-			section(c, T("Intensity normalisation", "强度归一化"), "", func() {
-				var ids, names []string
-				for _, m := range core.Methods {
-					ids, names = append(ids, m.Name), append(names, methodName(m.Name))
+			section(c, T("Intensity normalisation", "强度归一化"), T("The images are read as Intensity Normalisation wrote them: nothing is normalised a second time here.",
+				"直接读取“强度归一化”写出的图像，这里不再重复归一化。"), func() {
+				var method func()
+				switch {
+				case n == nil:
+					method = fact(c, T("Method", "方法"), T("Chosen once Intensity Normalisation is done", "完成强度归一化后选择"))
+				case len(n.methods) == 1:
+					method = fact(c, T("Method", "方法"), methodName(p.method))
+				default:
+					method = func() {
+						names := make([]string, len(n.methods))
+						for i, m := range n.methods {
+							names[i] = methodName(m)
+						}
+						setting(c, T("Method", "方法"), T("Of those Intensity Normalisation ran with.", "从强度归一化用过的方法中选择。"),
+							func() { selectOf(c, &p.method, n.methods, names).Width(210) })
+					}
 				}
-				list := []func(){func() {
-					setting(c, T("Method", "方法"), methodAbout(p.method), func() { selectOf(c, &p.method, ids, names).Width(210) })
-				}}
-				if p.method == "region" {
-					list = append(list, a.regionRows(c, "cmp-region", &p.region)...)
-				}
-				list = append(list, a.referenceFact(c))
-				a.source(c, "cmp-ref", "reference", changeInReference(), list...)
+				a.source(c, "cmp-norm", "normalize", T("Change in Intensity Normalisation", "到“强度归一化”页面修改"), method)
 			})
 			section(c, T("Covariates", "协变量"), T("The comparison adjusts for the columns chosen on the Data page; the table must list every image of both groups.", "按“数据”页面选定的列做校正；表格须包含两组的全部图像。"), func() {
 				a.source(c, "cmp-cov", "data", changeInData(), fact(c, T("Adjusted for", "校正的列"), a.covText()))
@@ -258,7 +273,11 @@ func (a *app) compareView(c *ui.Context) {
 
 func (a *app) runCompare() {
 	p := &a.cmp
-	g1, g2 := append([]string(nil), p.g1.files...), append([]string(nil), p.g2.files...)
+	n := a.normCurrent()
+	if n == nil { // the button is disabled while step 1 is not done
+		return
+	}
+	g1, g2, _ := p.groups(n)
 	opt := core.DefaultCompareOptions()
 	o := a.opt
 	opt.Method, opt.Name, opt.KeepImages = p.method, strings.TrimSpace(p.name), o.KeepImages
@@ -271,13 +290,9 @@ func (a *app) runCompare() {
 	if o.Analysis == "file" {
 		opt.AnalysisMask = core.MaskSpec{Name: o.AnalysisFile}
 	}
-	if p.method == "region" {
-		spec, _, err := p.region.spec()
-		if err != nil {
-			p.st.err = err.Error()
-			return
-		}
-		opt.Mask = spec
+	// The images as step 1 wrote them with this method.
+	for _, path := range append(append([]string(nil), g1...), g2...) {
+		opt.Normalised = append(opt.Normalised, core.Normalised{Path: n.images[path][p.method], Factor: n.factors[path][p.method]})
 	}
 	if msg := a.cov.fresh(); msg != "" {
 		p.st.err = msg
@@ -292,19 +307,9 @@ func (a *app) runCompare() {
 		}
 		opt.Covariates = core.CovariatesFromRows(found, names)
 	}
-	reference, out := p.reference, p.output
-	if !core.NeedsReference(p.method) && p.method != "ps" {
-		reference = ""
-	}
+	out := p.output
 	p.result = nil
-	a.start("compare", T("Normalising the intensity of the images", "正在对图像做强度归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
-		if reference != "" {
-			ref, err := core.LoadReference(reference)
-			if err != nil {
-				return nil, err
-			}
-			opt.Reference = ref
-		}
+	a.start("compare", T("Reading the normalised images", "正在读取归一化后的图像"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		total := len(g1) + len(g2)
 		opt.Progress = func(done, _ int) {
 			step(done, total)

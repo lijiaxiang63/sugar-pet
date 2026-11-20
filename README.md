@@ -56,12 +56,15 @@ everything the analyses write, and a file (`sugar-pet-project.json`) that
 records what was chosen and how far each step has come, so that a project
 opened again is where it was left. It opens with a page to make or open a
 project. Its pages then follow the workflow below: **Data**, **Spatial
-Normalisation**, **Reference**, **Intensity Normalisation**, **Z-score
-Maps**, **Classify Parkinsonism**, **Compare Groups**, **Reference
-Cluster**, and the built-in **Masks & Atlas**. The project folder is laid
-out as `sugar-pet init` lays out a study, and the app reads and writes the
-same files as the command line (reference folders, `factors.tsv`, output
-names, cluster reports, classification reports), so the two can be mixed.
+Normalisation**, **Intensity Normalisation**, **Z-score Maps**, **Classify
+Parkinsonism**, **Compare Groups** and **Reference Cluster**, with the
+**Reference** in use and the built-in **Masks & Atlas** beside them.
+Intensity Normalisation takes the patients and the healthy controls of the
+project together, and first builds the reference from the controls: there
+is no step to build it. The project folder is laid out as `sugar-pet init`
+lays out a study, and the app reads and writes the same files as the
+command line (reference folders, `factors.tsv`, output names, cluster
+reports, classification reports), so the two can be mixed.
 
 The two normalisations are different steps. *Spatial* normalisation warps a
 native-space PET into MNI space; it is `sugar-pet spatial-norm`, needs

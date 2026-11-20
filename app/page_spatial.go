@@ -196,7 +196,7 @@ func (a *app) spatialView(c *ui.Context) {
 		},
 		func() {
 			a.runBar(c, "spatial", a.spatialProblem(), T("Warp to MNI Space", "开始空间标准化"), &p.st, a.runSpatial)
-			a.next(c, "reference", a.spatialDone())
+			a.next(c, "normalize", a.spatialDone())
 		},
 	)
 }

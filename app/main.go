@@ -220,10 +220,11 @@ var navGroups = []struct {
 	pages []string
 }{
 	{label{"Project", "项目"}, []string{"data"}},
-	{label{"Prepare", "准备与建库"}, []string{"spatial", "reference"}},
+	{label{"Prepare", "准备"}, []string{"spatial"}},
 	{label{"Individual", "个案分析"}, []string{"normalize", "zmap", "classify"}},
 	{label{"Group", "组水平统计"}, []string{"compare", "cluster"}},
-	{label{"Resources", "资源"}, []string{"masks"}},
+	// The reference is no step: step 1 builds it from the controls.
+	{label{"Resources", "资源"}, []string{"reference", "masks"}},
 }
 
 // pageInfoOf returns the metadata of a page by id.
@@ -243,13 +244,12 @@ func (a *app) pageCount(id string) int {
 		return len(a.proj.patients.files) + len(a.proj.controls.files)
 	case "spatial":
 		return len(a.spatial.files.files)
-	case "reference":
-		return len(a.ref.files.files)
 	case "normalize":
 		return len(a.norm.files.files)
 	case "zmap": // the steps after the first take their images from the one before
 		if n := a.normCurrent(); n != nil {
-			return len(n.files)
+			patients, _ := n.of(false)
+			return len(patients)
 		}
 	case "classify":
 		if z := a.zmapCurrent(); z != nil {
@@ -337,8 +337,6 @@ func (a *app) done(page string) bool {
 		return a.spatial.st.ok != "" && a.spatialDone()
 	case "normalize":
 		return a.norm.st.ok != "" && a.stepDone(page)
-	case "reference": // built here, or imported
-		return a.norm.reference != ""
 	case "zmap":
 		return a.zmap.st.ok != "" && a.stepDone(page)
 	case "classify":
@@ -443,7 +441,7 @@ func (a *app) sidebar(c *ui.Context) {
 		if ref != "" {
 			box.Tooltip(ref)
 		} else {
-			box.Tooltip(T("Build a reference from the controls of the project, or import one", "用项目的健康对照建立参考库，或导入已有的参考库"))
+			box.Tooltip(T("Intensity Normalisation builds the reference from the controls of the project; or import one", "运行强度归一化时由项目的健康对照自动建立，也可以导入已有的参考库"))
 		}
 		if box.Clicked() {
 			a.page = "reference"

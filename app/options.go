@@ -159,7 +159,7 @@ var (
 	lblLiteral    = label{"Plain mean for iPS", "iPS 用普通均值"}
 	lblRefMask    = label{"Mask", "掩膜"}
 	lblRefFWHM    = label{"Smoothing (FWHM, mm)", "平滑 (FWHM, mm)"}
-	lblRefStats   = label{"Z-score maps with other methods", "其他方法的 Z 值图"}
+	lblRefStats   = label{"Control statistics of other methods", "其他方法的对照统计"}
 	lblClsLang    = label{"Language of the report", "报告语言"}
 	lblCorrection = label{"Multiple-comparison correction", "多重比较校正"}
 	lblVoxelP     = label{"Voxel-level p", "体素水平 p 值"}
@@ -298,7 +298,7 @@ func (o *options) summary(page string) string {
 				names[i] = methodName(m)
 			}
 			sort.Strings(names)
-			also = T("z-score maps also with ", "另可用以下方法制作 Z 值图：") + strings.Join(names, T(", ", "、"))
+			also = T("also keeps the statistics of ", "另保留以下方法的对照统计：") + strings.Join(names, T(", ", "、"))
 		}
 		// The factors of the controls follow Intensity Normalisation.
 		factors := ""

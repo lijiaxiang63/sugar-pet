@@ -153,14 +153,24 @@ func (a *app) demo() {
 		hn, _ := strconv.ParseFloat(f[0], 64)
 		cerebellum, _ := strconv.ParseFloat(f[1], 64)
 		a.norm.rows = append(a.norm.rows,
-			normRow{image: image, method: "hn", factor: f[0], voxels: "193204", value: hn},
-			normRow{image: image, method: "cerebellum", factor: f[1], voxels: "22750", value: cerebellum})
+			normRow{image: image, group: "patients", method: "hn", factor: f[0], voxels: "193204", value: hn},
+			normRow{image: image, group: "patients", method: "cerebellum", factor: f[1], voxels: "22750", value: cerebellum})
 	}
-	a.norm.st.ok = Tf("%d image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅图像 × %d 种方法。", 6, 2)
+	// The controls are normalised with the patients: their factors lie
+	// around the same value.
+	for i := 1; i <= 16; i++ {
+		image := filepath.Base(control(i))
+		hn := 5.2 + 0.11*float64(i*7%13)
+		cerebellum := hn * (0.93 + 0.004*float64(i*5%7))
+		a.norm.rows = append(a.norm.rows,
+			normRow{image: image, group: "controls", method: "hn", factor: strconv.FormatFloat(hn, 'g', 6, 64), voxels: "193204", value: hn},
+			normRow{image: image, group: "controls", method: "cerebellum", factor: strconv.FormatFloat(cerebellum, 'g', 6, 64), voxels: "22750", value: cerebellum})
+	}
+	a.norm.st.ok = Tf("%d patient and %d control image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅患者图像、%d 幅对照图像 × %d 种方法。", 6, 16, 2)
 	// The steps of the individual analysis, each done on what is before it.
-	patients := a.norm.files.files
-	a.norm.done = &normDone{asked: patients, files: patients, methods: a.norm.chosen(), reference: a.norm.reference,
-		settings: a.opt.normSettings(a.norm.chosen())}
+	patients, controls := a.images()
+	a.norm.done = &normDone{asked: a.norm.files.files, files: a.norm.files.files, controls: controls, methods: a.norm.chosen(),
+		reference: a.norm.reference, settings: a.opt.normSettings(a.norm.chosen())}
 
 	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"cerebellum", "white-matter"}}
 	info.Covariates = []struct {
@@ -173,6 +183,12 @@ func (a *app) demo() {
 	a.cov.adjust = map[string]bool{"age": true, "sex": true}
 	a.cov.columns = a.cov.table.Columns()
 	a.cov.stamp = stampOf(a.cov.path) // the table is made up: nothing is to be read
+	// The reference is the one step 1 built from the controls.
+	a.ref.built = &refBuilt{sig: a.refSignature(), statsFor: a.refStatsFor(), controls: map[string]fileStamp{}}
+	for _, path := range controls {
+		a.ref.built.controls[path] = fileStamp{}
+	}
+	a.norm.done.refSig = a.ref.built.sig
 	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
 	a.zmap.covTable = a.cov.path
 	a.zmap.outDir = a.zmap.output

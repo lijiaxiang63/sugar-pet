@@ -192,7 +192,7 @@ func (a *app) classifyView(c *ui.Context) {
 					table = filepath.Base(z.table)
 				}
 				a.taken(c, "classify",
-					fact(c, T("Images", "图像"), imagesText(z.files, len(z.from.files)-len(z.files))),
+					fact(c, T("Images", "图像"), imagesText(z.files, len(a.pageImages(z.from))-len(z.files))),
 					fact(c, T("Method", "方法"), shown),
 					fact(c, T("Reference", "参考库"), reference),
 					fact(c, T("Covariate table", "协变量表"), table),

@@ -202,8 +202,9 @@ func makeImages(t *testing.T, dir string, controls, patients int) (hc, pt []stri
 }
 
 // TestWorkflow goes through the app as a user does, pressing its buttons:
-// build a reference, normalise, make z-score maps, classify patients,
-// compare two groups and find a reference cluster.
+// normalise the patients and the controls, which builds the reference, make
+// z-score maps, classify patients, compare the two groups and find a
+// reference cluster.
 func TestWorkflow(t *testing.T) {
 	if testing.Short() {
 		t.Skip("works on whole images")
@@ -279,24 +280,19 @@ func TestWorkflow(t *testing.T) {
 		}
 	}
 
-	// The reference, with the cerebellum's statistics and W-scores.
+	// The reference is the controls, and no step of its own: its page has
+	// nothing to run, and says that step 1 builds it.
 	ref := filepath.Join(dir, "hc_reference")
-	a.opt.RefStatsFor["cerebellum"] = true
 	a.cov.path = table
 	a.cov.load()
-	press("reference", "建立参考库", &a.ref.st)
-	exists(filepath.Join(ref, "reference.json"))
-	if a.norm.reference != ref || a.cmp.reference != ref {
-		t.Fatal("the new reference is not the one in use")
-	}
+	a.page = "reference"
 	tt.Frame()
-	if !tt.HasText("age、sex") {
-		t.Fatalf("the reference's covariates are not shown: %q", tt.Texts())
+	if _, shown := tt.Find("建立参考库"); shown || !tt.HasText("还没有参考库") || !tt.HasText("如何建立") || a.norm.reference != "" || !a.buildsReference() {
+		t.Fatalf("the Reference page before step 1: %q", tt.Texts())
 	}
-	drawn(&a.ref.pic)
 
-	// The steps after the first wait for it, and say so.
-	for _, page := range []string{"zmap", "classify"} {
+	// The pages that rest on step 1 wait for it, and say so.
+	for _, page := range []string{"zmap", "classify", "compare"} {
 		a.page = page
 		tt.Frame()
 		if step, why := a.lock(page); step != "normalize" || !tt.HasText(why) || !tt.HasText("前往第 1 步") {
@@ -304,15 +300,49 @@ func TestWorkflow(t *testing.T) {
 		}
 	}
 
-	// Step 1: normalisation by two methods.
+	// Step 1: the reference is built from the controls, with W-scores and
+	// the statistics of the methods chosen, and then the patients and the
+	// controls are normalised by the two methods.
 	out := filepath.Join(dir, "normalised")
 	a.norm.methods = map[string]bool{"hn": true, "cerebellum": true}
+	a.page = "normalize"
+	tt.Frame()
+	if !tt.HasText(fmt.Sprintf("运行强度归一化时由 %d 例对照自动建立", len(hc))) {
+		t.Fatalf("step 1 does not say that it builds the reference: %q", tt.Texts())
+	}
 	press("normalize", "开始强度归一化", &a.norm.st)
-	if len(a.norm.rows) != 2*len(pt) {
-		t.Fatalf("%d rows of factors, want %d", len(a.norm.rows), 2*len(pt))
+	exists(filepath.Join(ref, "reference.json"))
+	if a.norm.reference != ref || a.cmp.reference != ref || a.ref.built == nil || a.refStale() || !strings.HasPrefix(a.norm.st.ok, "已用 12 例对照建立参考库") {
+		t.Fatalf("step 1 did not build the reference of the project: %q, %q", a.norm.reference, a.norm.st.ok)
+	}
+	if info := readRefInfo(ref); !slices.Contains(info.StatsFor, "cerebellum") || fmt.Sprint(info.covariateNames()) != "[age sex]" || info.N != len(hc) {
+		t.Fatalf("the reference built: %+v", info)
+	}
+	if len(a.norm.rows) != 2*(len(pt)+len(hc)) || a.norm.rows[0].group != "patients" || a.norm.rows[len(a.norm.rows)-1].group != "controls" {
+		t.Fatalf("%d rows of factors, want %d", len(a.norm.rows), 2*(len(pt)+len(hc)))
 	}
 	exists(filepath.Join(out, "factors.tsv"))
-	exists(filepath.Join(out, core.OutputName(pt[0], "hn", "pet")))
+	exists(filepath.Join(out, "patients", core.OutputName(pt[0], "hn", "pet")))
+	exists(filepath.Join(out, "controls", core.OutputName(hc[0], "cerebellum", "pet")))
+	if got, _ := a.norm.done.of(true); !slices.Equal(got, hc) {
+		t.Fatalf("the controls step 1 normalised: %v", got)
+	}
+	// The Reference page shows what was built.
+	a.page = "reference"
+	tt.Frame()
+	if !tt.HasText("age、sex") || !tt.HasText("由本项目的健康对照建立") {
+		t.Fatalf("the reference is not shown: %q", tt.Texts())
+	}
+	drawn(&a.ref.pic)
+	// What the reference is built with changed: it is built anew by the next
+	// run, and step 1 is not what it would do now.
+	a.opt.RefFWHM += 2
+	if !a.refStale() || a.stepDone("normalize") || !strings.Contains(a.normChanged(), "参考库设置") {
+		t.Fatalf("with another smoothing of the reference: stale %v, changed %q", a.refStale(), a.normChanged())
+	}
+	a.opt.RefFWHM -= 2
+	a.page = "normalize"
+	tt.Frame()
 
 	if !a.stepDone("normalize") || a.stepDone("zmap") {
 		t.Fatal("step 1 is not marked as done, or step 2 is")
@@ -525,6 +555,12 @@ func TestWorkflow(t *testing.T) {
 			t.Fatalf("in the project opened again step %s is not done (step 1 changed: %q)", step, again.normChanged())
 		}
 	}
+	if again.ref.built == nil || again.refStale() {
+		t.Fatal("the project opened again would build its reference anew")
+	}
+	if build, problem := again.referenceBuild(); build != nil || problem != "" {
+		t.Fatalf("the project opened again builds its reference anew: %q", problem)
+	}
 	if len(again.norm.rows) != len(a.norm.rows) || len(again.zmap.rows) != len(a.zmap.rows) || len(again.classify.rows) != len(pt) ||
 		again.norm.reference != ref || again.classify.rows[0].reading != a.classify.rows[0].reading {
 		t.Fatalf("the project opened again does not show what the steps did: %d, %d and %d rows, reference %q",
@@ -560,6 +596,36 @@ func TestWorkflow(t *testing.T) {
 	}
 	exists(res.TMap)
 	exists(res.File("cluster_report"))
+	// The comparison read the images step 1 wrote: its T-map is the one of
+	// a comparison that normalises the original images itself.
+	own := core.DefaultCompareOptions()
+	own.Method, own.Reference, own.Correction, own.Name = "cerebellum", ref0, "none", "check"
+	own.FWHM = &ref0.FWHM
+	both := append(append([]string(nil), pt...), hc...)
+	covRows, err := cov.Lookup(both, []string{"age", "sex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own.Covariates = core.CovariatesFromRows(covRows, []string{"age", "sex"})
+	check, err := core.CompareGroups(context.Background(), pt, hc, t.TempDir(), own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantT, err := core.LoadImage(check.TMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotT, err := core.LoadImage(res.TMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apart := 0.0
+	for i, v := range wantT.Data {
+		apart = math.Max(apart, math.Abs(float64(v-gotT.Data[i])))
+	}
+	if apart > 1e-2 {
+		t.Fatalf("the T-map from the images of step 1 is up to %g from the one of the original images", apart)
+	}
 	drawn(&a.cmp.pic)
 	if a.cmp.pic.key != res.File("thresholded") {
 		t.Fatalf("the picture is of %q, want the thresholded map", a.cmp.pic.key)
@@ -594,9 +660,15 @@ func TestWorkflow(t *testing.T) {
 	if step, _ := a.lock("classify"); step != "normalize" || a.stepDone("zmap") {
 		t.Fatalf("after another method was chosen in step 1, step 3 waits for %q", step)
 	}
+	// The reference is as its controls and the settings make it: this run
+	// does not build it again.
+	built := a.ref.built
 	press("normalize", "开始强度归一化", &a.norm.st)
-	if len(a.norm.rows) != len(pt) || a.norm.rows[0].voxels == "" || a.norm.rows[0].mask != "custom" {
+	if len(a.norm.rows) != len(pt)+len(hc) || a.norm.rows[0].voxels == "" || a.norm.rows[0].mask != "custom" {
 		t.Fatalf("normalising by the cluster gave %+v", a.norm.rows)
+	}
+	if a.ref.built != built || strings.Contains(a.norm.st.ok, "参考库") {
+		t.Fatalf("the reference was built again though nothing of it changed: %q", a.norm.st.ok)
 	}
 	// No map can be made with a custom region: step 2 says so.
 	a.page = "zmap"
@@ -746,8 +818,8 @@ func TestCovariateTable(t *testing.T) {
 	if len(cv.table.Rows) != len(people)-1 {
 		t.Fatal("the page has read the file already")
 	}
-	a.page = "reference"
-	run("建立参考库", &a.ref.st)
+	a.page = "normalize"
+	run("开始强度归一化", &a.norm.st)
 	if got := readRefInfo(a.ref.output).covariateNames(); fmt.Sprint(got) != "[bmi age]" {
 		t.Fatalf("the reference adjusts for %v", got)
 	}
@@ -756,7 +828,7 @@ func TestCovariateTable(t *testing.T) {
 	// A ticked column leaves the file before the page shows it: the run
 	// does not go on with fewer columns than were ticked.
 	write([]string{"age", "sex"}, people)
-	refused("建立参考库", &a.ref.st, "列已发生变化")
+	refused("开始强度归一化", &a.norm.st, "列已发生变化")
 	ticks(cv, map[string]bool{"age": true, "sex": false})
 
 	// The file is gone: the run does not use the rows it read before, and
@@ -764,7 +836,7 @@ func TestCovariateTable(t *testing.T) {
 	if err := os.Remove(table); err != nil {
 		t.Fatal(err)
 	}
-	refused("建立参考库", &a.ref.st, "无法读取协变量表")
+	refused("开始强度归一化", &a.norm.st, "无法读取协变量表")
 	a.page = "data"
 	later()
 	if cv.table != nil || cv.err == "" || !tt.HasText(cv.err) {
@@ -808,12 +880,25 @@ func TestCovariateTable(t *testing.T) {
 	ticks(cv, map[string]bool{"age": true, "sex": true})
 	tt.Scroll(640, 400, 0, 900)
 	click("sex")
+	// The covariates are not those the reference was built with: the
+	// comparison waits for step 1, which builds it anew from the controls.
+	a.norm.methods = map[string]bool{"cerebellum": true}
+	a.page = "compare"
+	tt.Frame()
+	if step, why := a.lock("compare"); step != "normalize" || !strings.Contains(why, "协变量") || !a.refStale() {
+		t.Fatalf("with other covariates the comparison waits for %q: %q", step, why)
+	}
+	a.page = "normalize"
+	run("开始强度归一化", &a.norm.st)
+	if got := readRefInfo(a.ref.output).covariateNames(); fmt.Sprint(got) != "[age]" || a.refStale() {
+		t.Fatalf("the reference built anew adjusts for %v", got)
+	}
 	write([]string{"age", "sex", "bmi"}, people)
 	tt.Frame()
 	if len(cv.table.Rows) != len(people)-1 {
 		t.Fatal("the page has read the file already")
 	}
-	a.page, a.cmp.method = "compare", "cerebellum"
+	a.page = "compare"
 	run("开始比较", &a.cmp.st)
 	if res := a.cmp.result; res == nil || res.DOF != float64(len(people)-3) {
 		t.Fatalf("the comparison is not adjusted for age alone: %+v", res)
@@ -962,7 +1047,7 @@ func TestSpatial(t *testing.T) {
 	// The pages after this one read what was warped, each of its group: the
 	// patient that failed is left out, and the page is not done.
 	tt.Frame()
-	if !slices.Equal(a.norm.files.files, p.written[:1]) || !slices.Equal(a.ref.files.files, p.written[1:]) || a.spatialDone() || a.done("spatial") {
+	if !slices.Equal(a.norm.files.files, p.written) || !slices.Equal(a.norm.controls, p.written[1:]) || !slices.Equal(a.ref.files.files, p.written[1:]) || a.spatialDone() || a.done("spatial") {
 		t.Fatalf("the warped images were not handed on: patients %v, controls %v", a.norm.files.files, a.ref.files.files)
 	}
 	// The project opened again knows what was warped.
@@ -970,7 +1055,7 @@ func TestSpatial(t *testing.T) {
 	if err := again.openProject(a.proj.dir); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(again.norm.files.files, p.written[:1]) || len(again.spatial.rows) != 3 || !again.spatial.rows[1].failed {
+	if !slices.Equal(again.norm.files.files, p.written) || len(again.spatial.rows) != 3 || !again.spatial.rows[1].failed {
 		t.Fatalf("the project opened again reads %v, rows %+v", again.norm.files.files, again.spatial.rows)
 	}
 
@@ -1213,12 +1298,12 @@ func TestRemedy(t *testing.T) {
 			t.Errorf("normalize without images: remedy %q for %q", got, a.normProblem())
 		}
 		file := []string{"/study/patients/sub-01_pet.nii.gz"}
-		a.norm.files.files = file
+		a.proj.patients.files, a.norm.files.files = file, file
 		a.cluster.files.files = append(file, "/study/patients/sub-02_pet.nii.gz")
 		a.cmp.g1.files, a.cmp.g2.files, a.cmp.method = a.cluster.files.files, a.cluster.files.files, "hn"
-		// The steps after the first wait for the one before them, and lead there.
-		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize"} {
-			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem()}[page]
+		// The pages that rest on step 1 wait for it, and lead there.
+		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize", "compare": "normalize"} {
+			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "compare": a.cmpProblem()}[page]
 			if got := a.remedy(page, problem); got != step {
 				t.Errorf("%s before step 1 is done: remedy %q for %q", page, got, problem)
 			}
@@ -1233,7 +1318,7 @@ func TestRemedy(t *testing.T) {
 		a.norm.methods["hn"] = true
 		a.norm.done.methods = a.norm.chosen()
 		problems := map[string]string{"normalize": a.normProblem(), "zmap": a.zmapProblem(), "classify": a.classifyProblem(),
-			"cluster": a.clusterProblem(), "compare": a.cmpProblem()}
+			"cluster": a.clusterProblem()}
 		for page, problem := range problems {
 			if got := a.remedy(page, problem); got != "reference" {
 				t.Errorf("%s without a reference: remedy %q for %q", page, got, problem)
@@ -1268,30 +1353,41 @@ func TestRemedy(t *testing.T) {
 	}
 }
 
-// TestFollowCompare checks that Compare Groups takes the method of the
-// individual analysis, until another is chosen on its page.
+// TestFollowCompare checks that Compare Groups compares by one of the
+// methods step 1 normalised with: the one chosen on its page while it is
+// among them, else the leading one.
 func TestFollowCompare(t *testing.T) {
 	a := newApp()
 	a.followCompare()
 	if a.cmp.method != "hn" {
-		t.Fatalf("with nothing chosen before: method %q", a.cmp.method)
+		t.Fatalf("with nothing normalised yet: method %q", a.cmp.method)
 	}
-	// The method of step 1, HN before the others, and never a custom region.
-	a.norm.methods = map[string]bool{"cerebellum": true}
-	a.followCompare()
-	if a.cmp.method != "cerebellum" {
+	ran := func(methods ...string) {
+		a.norm.methods = map[string]bool{}
+		for _, m := range methods {
+			a.norm.methods[m] = true
+		}
+		a.norm.done = &normDone{methods: a.norm.chosen(), settings: a.opt.normSettings(a.norm.chosen())}
+		a.followCompare()
+	}
+	if ran("cerebellum"); a.cmp.method != "cerebellum" {
 		t.Errorf("the method of step 1 was not taken: %q", a.cmp.method)
 	}
-	a.norm.methods = map[string]bool{"region": true}
-	a.followCompare()
-	if a.cmp.method != "cerebellum" {
-		t.Errorf("a custom region of step 1 was taken: %q", a.cmp.method)
+	// HN before the others, and a custom region only when there is no other.
+	if ran("hn", "pons", "region"); a.cmp.method != "hn" {
+		t.Errorf("of several methods %q was taken", a.cmp.method)
 	}
-	a.cmp.method = "ps" // chosen on the page
-	a.norm.methods = map[string]bool{"hn": true, "pons": true}
-	a.followCompare()
-	if a.cmp.method != "ps" {
+	a.cmp.method = "pons" // chosen on the page
+	if ran("hn", "pons"); a.cmp.method != "pons" {
 		t.Errorf("the method chosen on the page was replaced by %q", a.cmp.method)
+	}
+	if ran("region"); a.cmp.method != "region" {
+		t.Errorf("with a custom region alone: %q", a.cmp.method)
+	}
+	// Chosen in step 1 and not run yet: it is not what was normalised.
+	a.norm.methods["ps"] = true
+	if a.followCompare(); a.cmp.method != "region" {
+		t.Errorf("a method step 1 has not run with was taken: %q", a.cmp.method)
 	}
 }
 

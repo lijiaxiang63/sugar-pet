@@ -48,6 +48,7 @@ func (s *fileStamp) UnmarshalJSON(raw []byte) error {
 
 type normRowJSON struct {
 	Image    string  `json:"image"`
+	Group    string  `json:"group,omitempty"`
 	Method   string  `json:"method"`
 	Factor   string  `json:"factor"`
 	Voxels   string  `json:"voxels,omitempty"`
@@ -57,13 +58,13 @@ type normRowJSON struct {
 }
 
 func (r normRow) MarshalJSON() ([]byte, error) {
-	return json.Marshal(normRowJSON{r.image, r.method, r.factor, r.voxels, r.excluded, r.mask, r.value})
+	return json.Marshal(normRowJSON{r.image, r.group, r.method, r.factor, r.voxels, r.excluded, r.mask, r.value})
 }
 
 func (r *normRow) UnmarshalJSON(raw []byte) error {
 	var j normRowJSON
 	err := json.Unmarshal(raw, &j)
-	*r = normRow{image: j.Image, method: j.Method, factor: j.Factor, voxels: j.Voxels, excluded: j.Excluded, mask: j.Mask, value: j.Value}
+	*r = normRow{image: j.Image, group: j.Group, method: j.Method, factor: j.Factor, voxels: j.Voxels, excluded: j.Excluded, mask: j.Mask, value: j.Value}
 	return err
 }
 
@@ -149,8 +150,10 @@ func (r *spatialRow) UnmarshalJSON(raw []byte) error {
 type normDoneJSON struct {
 	Asked     []string                      `json:"asked"`
 	Files     []string                      `json:"files"`
+	Controls  []string                      `json:"controls,omitempty"`
 	Methods   []string                      `json:"methods"`
 	Reference string                        `json:"reference,omitempty"`
+	RefSig    string                        `json:"reference_built_with,omitempty"`
 	Settings  string                        `json:"settings"`
 	Images    map[string]map[string]string  `json:"images"`
 	Factors   map[string]map[string]float64 `json:"factors"`
@@ -163,14 +166,15 @@ type normDoneJSON struct {
 }
 
 func (d normDone) MarshalJSON() ([]byte, error) {
-	return json.Marshal(normDoneJSON{d.asked, d.files, d.methods, d.reference, d.settings, d.images, d.factors, d.target, d.median, d.fwhm,
-		d.rebuilt, d.stamps, d.refStamp})
+	return json.Marshal(normDoneJSON{d.asked, d.files, d.controls, d.methods, d.reference, d.refSig, d.settings, d.images, d.factors,
+		d.target, d.median, d.fwhm, d.rebuilt, d.stamps, d.refStamp})
 }
 
 func (d *normDone) UnmarshalJSON(raw []byte) error {
 	var j normDoneJSON
 	err := json.Unmarshal(raw, &j)
-	*d = normDone{asked: j.Asked, files: j.Files, methods: j.Methods, reference: j.Reference, settings: j.Settings, images: j.Images,
+	*d = normDone{asked: j.Asked, files: j.Files, controls: j.Controls, methods: j.Methods, reference: j.Reference, refSig: j.RefSig,
+		settings: j.Settings, images: j.Images,
 		factors: j.Factors, target: j.Target, median: j.Median, fwhm: j.FWHM, rebuilt: j.Rebuilt, stamps: j.Stamps, refStamp: j.RefStamp}
 	return err
 }
@@ -195,17 +199,38 @@ func (d *zmapDone) UnmarshalJSON(raw []byte) error {
 	return err
 }
 
-// stamp notes the images a run of step 1 read, and the reference it used, as
-// they are on disk now: a project opened later tells by them whether they
-// are still what was normalised.
+// stamp notes the images a run of step 1 reads as they are on disk now, and
+// stampReference the reference it uses, once that is built: a project opened
+// later tells by them whether they are still what was normalised.
 func (d *normDone) stamp() {
 	d.stamps = map[string]fileStamp{}
 	for _, path := range d.asked {
 		d.stamps[path] = stampOf(path)
 	}
+}
+
+func (d *normDone) stampReference() {
 	if d.reference != "" {
 		d.refStamp = stampOf(filepath.Join(d.reference, "reference.json"))
 	}
+}
+
+type refBuiltJSON struct {
+	Signature string               `json:"built_with"`
+	StatsFor  []string             `json:"stats_for,omitempty"`
+	Controls  map[string]fileStamp `json:"controls"`
+	Stamp     fileStamp            `json:"stamp"`
+}
+
+func (b refBuilt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(refBuiltJSON{b.sig, b.statsFor, b.controls, b.stamp})
+}
+
+func (b *refBuilt) UnmarshalJSON(raw []byte) error {
+	var j refBuiltJSON
+	err := json.Unmarshal(raw, &j)
+	*b = refBuilt{sig: j.Signature, statsFor: j.StatsFor, controls: j.Controls, stamp: j.Stamp}
+	return err
 }
 
 // look compares the images and the reference with what stamp noted: an

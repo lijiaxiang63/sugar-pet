@@ -114,11 +114,13 @@ that version, so write it for the people who use the app.
   reference is built again in its folder.
 - Classify Parkinsonism rests on the maps of Z-score Maps and writes no
   second copy of the map into its own folder. Its method is no longer an
-  option in the settings; when the maps were made with several methods, the
-  page asks which one to classify by (HN unless you say otherwise). A
-  `classify_method` kept in the settings is no longer used.
-- Compare Groups starts with the method chosen in Intensity Normalisation,
-  until another is chosen on its page.
+  option in the settings. A `classify_method` kept in the settings is no
+  longer used.
+- **One primary method.** When Intensity Normalisation runs with several
+  methods, its page asks which one is primary (HN unless you say otherwise).
+  Classify Parkinsonism and Compare Groups both use it; the other methods
+  are for comparison. Their pages no longer have a method of their own to
+  choose.
 
 ### Removed
 

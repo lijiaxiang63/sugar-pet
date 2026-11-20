@@ -49,10 +49,10 @@ the page says so and **Classify** stays disabled.
    scores are adjusted for age and sex.
 3. To change any of these, click **Change in Step 2**.
 4. **Output folder:** Ada selects `study/reports/`.
-5. **Map to classify by:** shown only when step 2 made maps with several
-   methods; the classification rests on one of them. Keep **Histogram (HN)**:
-   it requires no prior assumption about which regions are spared, making it
-   well suited to undiagnosed cases.
+5. The classification rests on the **primary method** of step 1, chosen
+   there when it ran with several. Keep **Histogram (HN)**: it requires no
+   prior assumption about which regions are spared, making it well suited to
+   undiagnosed cases.
 6. **Options in effect:** the language of the report. **Options…** opens
    **Settings › Classify Parkinsonism** (below).
 7. Click **Classify**.

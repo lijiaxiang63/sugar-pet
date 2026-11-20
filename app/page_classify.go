@@ -49,9 +49,6 @@ type classifyPage struct {
 	loadedFrom string
 	info       *refInfo
 	output     string
-	// main is the method the classification rests on, chosen here when
-	// step 2 made maps with several; "" for the one the app takes.
-	main string
 
 	st     status
 	rows   []classifyRow
@@ -81,12 +78,6 @@ func (p *classifyPage) load() {
 
 // leading is the method the classification rests on: the one chosen here
 // if step 2 made a map with it, or else HN, or the first of step 2.
-func (p *classifyPage) leading(z *zmapDone) string {
-	if slices.Contains(z.methods, p.main) {
-		return p.main
-	}
-	return leadingMethod(z.methods)
-}
 
 // checks are the other normalisations the findings are checked with, where
 // the settings ask for the cross-check: none otherwise.
@@ -130,6 +121,8 @@ func (a *app) classifyProblem() string {
 		return needReference()
 	case p.info != nil && p.info.err != "":
 		return p.info.err
+	case !slices.Contains(z.methods, a.norm.primary()):
+		return primaryWithoutMap(a.norm.primary())
 	}
 	// Two reports under one name: the second patient's would replace the first's.
 	if first, second, stem, found := core.SharedReportStem(z.files); found {
@@ -139,6 +132,13 @@ func (a *app) classifyProblem() string {
 			short(first), short(second), stem+"_report.html")
 	}
 	return ""
+}
+
+// primaryWithoutMap is what step 3 says while step 2 made no map with the
+// primary method of step 1, as of a custom region.
+func primaryWithoutMap(method string) string {
+	return Tf("Step 2 made no map with %s, the primary method of step 1: choose another primary method in step 1.",
+		"第 2 步没有用第 1 步的主方法%s制作 Z 值图：请回到第 1 步换一种主方法。", methodName(method))
 }
 
 // reading says in a line what a classification concluded.
@@ -185,7 +185,7 @@ func (a *app) classifyView(c *ui.Context) {
 					a.taken(c, "classify")
 					return
 				}
-				method := p.leading(z)
+				method := a.norm.primary()
 				shown := methodName(method)
 				if checks := a.classifyChecks(method); len(checks) > 0 {
 					shown += Tf(" · checked with %s", " · 另以%s复核", methodNames(checks))
@@ -206,27 +206,12 @@ func (a *app) classifyView(c *ui.Context) {
 				)
 			})
 			section(c, T("Output", "输出"), "", func() {
-				var mainRow func()
-				if z != nil && len(z.methods) > 1 {
-					mainRow = func() {
-						setting(c, T("Map to classify by", "分类所依据的图"), T("Step 2 made maps with several methods; the classification rests on one. HN needs no region that the disease spares, which is unknown for a new patient.",
-							"第 2 步用多种方法各出了一幅图，分类以其中一种为准。HN 不需要预先指定未受累的区域，适合诊断未明的患者。"), func() {
-							labels := make([]string, len(z.methods))
-							for i, m := range z.methods {
-								labels[i] = methodName(m)
-							}
-							method := p.leading(z)
-							selectOf(c.Key("cls-main"), &method, z.methods, labels).Width(200)
-							p.main = method
-						})
-					}
-				}
 				rows(c, func() {
 					setting(c, T("Written to", "输出位置"), T("For each patient a report (HTML, prints to PDF), the map, and the numbers; for all, classification.tsv.",
 						"每位患者输出一份报告（HTML，可打印为 PDF）、一幅图和一份数据文件；另有汇总表 classification.tsv。"), func() {
 						ui.Text(c, a.writesTo(p.output)).FontSize(12.5).TextColor(pal.muted).SingleLine()
 					})
-				}, mainRow)
+				})
 				a.optionsLine(c, "classify", "classify", groupClassify)
 			})
 			caution(c, T("Decision support, not a diagnosis. The patterns are matched by fixed rules from the literature that were not validated on your patients. Read the result with the clinical findings, MRI and dopamine-transporter imaging.",
@@ -303,7 +288,7 @@ func (a *app) runClassify() {
 	}
 	files := append([]string(nil), from.files...)
 	norm := from.from
-	reference, out, table, method, lang := p.reference, p.output, from.table, p.leading(from), a.opt.reportLang()
+	reference, out, table, method, lang := p.reference, p.output, from.table, a.norm.primary(), a.opt.reportLang()
 	// Without the cross-check nothing but the maps of step 2 is read: no
 	// map of another normalisation is computed for it.
 	checked := a.opt.CrossCheck

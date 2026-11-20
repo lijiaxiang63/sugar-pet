@@ -209,7 +209,7 @@ func (a *app) zmapCurrent() *zmapDone {
 // classified reports whether step 3 ran on what step 2 did.
 func (a *app) classified() bool {
 	z := a.zmapCurrent()
-	return z != nil && a.classify.from == z && a.classify.method == a.classify.leading(z) && a.classify.checked == a.opt.CrossCheck
+	return z != nil && a.classify.from == z && a.classify.method == a.norm.primary() && a.classify.checked == a.opt.CrossCheck
 }
 
 // stepDone reports whether a step of the individual analysis is done, and
@@ -258,8 +258,8 @@ func stepNumber(page string) int {
 }
 
 // leadingMethod is the method an analysis that rests on one takes of
-// several: HN, which needs no region that the disease spares, or the first
-// that is no custom region.
+// several, where none was made primary: HN, which needs no region that the
+// disease spares, or the first that is no custom region.
 func leadingMethod(methods []string) string {
 	if slices.Contains(methods, "hn") {
 		return "hn"

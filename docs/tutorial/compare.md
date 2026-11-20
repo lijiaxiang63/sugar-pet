@@ -16,10 +16,10 @@ and outputs the surviving clusters with anatomical labels.
    minus group 2*, so with patients in Group 1, **negative T-values indicate
    hypometabolism**. Make sure each subject appears only once. **Swap
    Groups**, under the two lists, exchanges them.
-3. **Method:** starts as the method chosen in step 1 of the individual
-   analysis ([Intensity Normalisation](./normalize)); once you choose another
-   here, this page keeps its own. **Histogram (HN)** is recommended for the
-   primary analysis.
+3. **Method:** the primary method of step 1 of the individual analysis
+   ([Intensity Normalisation](./normalize)); to use another, make it
+   primary there. **Histogram (HN)** is recommended for the primary
+   analysis.
 4. **Reference:** pre-filled automatically; required for HN, iPS, and iHN.
    Both groups share the same reference.
 5. **Covariate table** (recommended): the table chosen when the reference
@@ -91,8 +91,9 @@ The statistics of the comparison are set in **Settings › Compare Groups**
 ## Check that the result is robust
 
 A finding that depends heavily on the normalisation choice is not robust.
-Re-run the comparison twice more, changing only **Method** and **Name of the
-result files**:
+Tick the methods below as well in Intensity Normalisation, then re-run the
+comparison twice more, changing only the **Primary method** there and the
+**Name of the result files** here:
 
 1. with **Occipital cortex**: an anatomical reference usually spared in MSA,
    PSP, and CBS;

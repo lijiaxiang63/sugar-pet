@@ -613,6 +613,8 @@ func (a *app) remedy(page, problem string) string {
 	case "classify":
 		if a.classify.reference == "" {
 			lack = needReference()
+		} else if problem == primaryWithoutMap(a.norm.primary()) {
+			return "normalize"
 		}
 	case "cluster":
 		if a.cluster.reference == "" {

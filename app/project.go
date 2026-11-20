@@ -73,7 +73,6 @@ type projectState struct {
 	Reference  string       `json:"reference"`
 	Page       string       `json:"page"`
 	Normalize  normState    `json:"normalize"`
-	Classify   string       `json:"classify_by,omitempty"`
 	Compare    compareState `json:"compare"`
 	Options    options      `json:"options"`
 	Steps      stepRecords  `json:"steps"`
@@ -106,11 +105,11 @@ func (s regionState) choice() regionChoice {
 
 type normState struct {
 	Methods []string    `json:"methods"`
+	Primary string      `json:"primary,omitempty"`
 	Region  regionState `json:"region"`
 }
 
 type compareState struct {
-	Method  string `json:"method"`
 	Name    string `json:"name"`
 	Swapped bool   `json:"swapped,omitempty"`
 }
@@ -211,7 +210,7 @@ func (a *app) projectState() *projectState {
 	p := a.proj
 	s := &projectState{Format: projectFormat, Name: p.name, Created: p.created, App: core.Version,
 		Copies: p.copies, Native: p.native, Patients: p.patients.files, Controls: p.controls.files,
-		Reference: a.norm.reference, Page: a.page, Classify: a.classify.main, Options: a.opt}
+		Reference: a.norm.reference, Page: a.page, Options: a.opt}
 	if s.Patients == nil {
 		s.Patients = []string{}
 	}
@@ -219,8 +218,8 @@ func (a *app) projectState() *projectState {
 		s.Controls = []string{}
 	}
 	s.Covariates = covState{Table: a.cov.path, Columns: a.cov.columns, Adjust: a.cov.adjust}
-	s.Normalize = normState{Methods: a.norm.chosen(), Region: a.norm.region.state()}
-	s.Compare = compareState{Method: a.cmp.method, Name: a.cmp.name, Swapped: a.cmp.swapped}
+	s.Normalize = normState{Methods: a.norm.chosen(), Primary: a.norm.main, Region: a.norm.region.state()}
+	s.Compare = compareState{Name: a.cmp.name, Swapped: a.cmp.swapped}
 
 	ran := func(st status, more bool) bool { return st.ok != "" || st.err != "" || more }
 	if sp := &a.spatial; ran(sp.st, len(sp.rows) > 0) {
@@ -274,11 +273,8 @@ func (a *app) applyState(s *projectState) {
 		a.norm.methods[m] = true
 	}
 	a.norm.region = s.Normalize.Region.choice()
-	a.classify.main = s.Classify
+	a.norm.main = s.Normalize.Primary
 	a.cmp.swapped = s.Compare.Swapped
-	if slices.ContainsFunc(core.Methods, func(m core.Named) bool { return m.Name == s.Compare.Method }) {
-		a.cmp.method = s.Compare.Method
-	}
 	if s.Compare.Name != "" {
 		a.cmp.name = s.Compare.Name
 	}

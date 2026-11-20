@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -17,7 +16,6 @@ import (
 // that what is tested is what step 1 shows, made with its settings.
 type comparePage struct {
 	g1, g2    fileList
-	method    string // one of the methods of step 1
 	reference string
 	// The smoothing of the reference, as last read from its folder.
 	fwhmKnown bool
@@ -46,20 +44,8 @@ func (p *comparePage) swap() {
 	p.result, p.how, p.st = nil, "", status{}
 }
 
-// followCompare keeps the method one of those step 1 normalised with: the
-// one chosen here while it is among them, else the leading one.
-func (a *app) followCompare() {
-	p, n := &a.cmp, a.normCurrent()
-	if n == nil || slices.Contains(n.methods, p.method) {
-		return
-	}
-	if p.method = leadingMethod(n.methods); p.method == "" {
-		p.method = n.methods[0]
-	}
-}
-
 func (p *comparePage) init() {
-	p.method, p.name = "hn", "patients_vs_controls"
+	p.name = "patients_vs_controls"
 }
 
 // groups are the images of group 1 and group 2 that step 1 normalised, and
@@ -136,7 +122,6 @@ func (a *app) cmpProblem() string {
 }
 func (a *app) compareView(c *ui.Context) {
 	p := &a.cmp
-	a.followCompare()
 	t := c.Theme()
 	n := a.normCurrent()
 	a.frame(c, T("Compare Groups", "组间比较"),
@@ -170,23 +155,11 @@ func (a *app) compareView(c *ui.Context) {
 			})
 			section(c, T("Intensity normalisation", "强度归一化"), T("The images are read as Intensity Normalisation wrote them: nothing is normalised a second time here.",
 				"直接读取“强度归一化”写出的图像，这里不再重复归一化。"), func() {
-				var method func()
-				switch {
-				case n == nil:
-					method = fact(c, T("Method", "方法"), T("Chosen once Intensity Normalisation is done", "完成强度归一化后选择"))
-				case len(n.methods) == 1:
-					method = fact(c, T("Method", "方法"), methodName(p.method))
-				default:
-					method = func() {
-						names := make([]string, len(n.methods))
-						for i, m := range n.methods {
-							names[i] = methodName(m)
-						}
-						setting(c, T("Method", "方法"), T("Of those Intensity Normalisation ran with.", "从强度归一化用过的方法中选择。"),
-							func() { selectOf(c, &p.method, n.methods, names).Width(210) })
-					}
+				method := methodName(a.norm.primary())
+				if len(a.norm.chosen()) > 1 {
+					method += T(" · the primary method", " · 主方法")
 				}
-				a.source(c, "cmp-norm", "normalize", T("Change in Intensity Normalisation", "到“强度归一化”页面修改"), method)
+				a.source(c, "cmp-norm", "normalize", T("Change in Intensity Normalisation", "到“强度归一化”页面修改"), fact(c, T("Method", "方法"), method))
 			})
 			section(c, T("Covariates", "协变量"), T("The comparison adjusts for the columns chosen on the Data page; the table must list every image of both groups.", "按“数据”页面选定的列做校正；表格须包含两组的全部图像。"), func() {
 				a.source(c, "cmp-cov", "data", changeInData(), fact(c, T("Adjusted for", "校正的列"), a.covText()))
@@ -280,7 +253,8 @@ func (a *app) runCompare() {
 	g1, g2, _ := p.groups(n)
 	opt := core.DefaultCompareOptions()
 	o := a.opt
-	opt.Method, opt.Name, opt.KeepImages = p.method, strings.TrimSpace(p.name), o.KeepImages
+	method := a.norm.primary() // one of those step 1 ran with: it is done
+	opt.Method, opt.Name, opt.KeepImages = method, strings.TrimSpace(p.name), o.KeepImages
 	opt.Correction = [...]string{"grf", "fdr", "none"}[o.Correction]
 	opt.VoxelP, opt.ClusterP, opt.Q = o.VoxelP, o.ClusterP, o.Q
 	p.fwhmKnown = false // the reference may have been built anew
@@ -292,7 +266,7 @@ func (a *app) runCompare() {
 	}
 	// The images as step 1 wrote them with this method.
 	for _, path := range append(append([]string(nil), g1...), g2...) {
-		opt.Normalised = append(opt.Normalised, core.Normalised{Path: n.images[path][p.method], Factor: n.factors[path][p.method]})
+		opt.Normalised = append(opt.Normalised, core.Normalised{Path: n.images[path][method], Factor: n.factors[path][method]})
 	}
 	if msg := a.cov.fresh(); msg != "" {
 		p.st.err = msg

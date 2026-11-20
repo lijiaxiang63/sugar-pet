@@ -23,9 +23,12 @@ type normPage struct {
 	// files are the images of the project, the patients and then the
 	// healthy controls, and controls those of them that are controls: both
 	// groups are normalised the same way, by the same run.
-	files     fileList
-	controls  []string
-	methods   map[string]bool
+	files    fileList
+	controls []string
+	methods  map[string]bool
+	// main is the method made primary of several chosen; "" for the one
+	// the app takes.
+	main      string
 	reference string
 	region    regionChoice
 	output    string
@@ -219,6 +222,25 @@ func (a *app) methodPicker(c *ui.Context, chosen map[string]bool, allowed func(i
 		}
 	})
 }
+
+// primary is the method that the analyses resting on one method take of
+// those chosen, Classify Parkinsonism and Compare Groups: the one made
+// primary while it is chosen, else HN, which needs no region that the
+// disease spares, else the first that is no custom region.
+func (p *normPage) primary() string {
+	chosen := p.chosen()
+	if slices.Contains(chosen, p.main) {
+		return p.main
+	}
+	if m := leadingMethod(chosen); m != "" {
+		return m
+	}
+	if len(chosen) > 0 {
+		return chosen[0]
+	}
+	return ""
+}
+
 func (p *normPage) chosen() []string {
 	var out []string
 	for _, m := range core.Methods {
@@ -287,6 +309,21 @@ func (a *app) normalizeView(c *ui.Context) {
 			})
 			section(c, T("Methods", "方法"), T("One method is enough. Several are for comparison only: each writes its own image from the original.", "选一种即可。多选仅用于对比：每种方法都从原图各自输出一幅图像，互不叠加。"), func() {
 				a.methodPicker(c, p.methods, nil)
+				if chosen := p.chosen(); len(chosen) > 1 {
+					rows(c, func() {
+						setting(c, T("Primary method", "主方法"),
+							T("Classify Parkinsonism and Compare Groups use it; the others are for comparison only.", "帕金森综合征分类和组间比较都用它，其余方法仅用于对比。"),
+							func() {
+								names := make([]string, len(chosen))
+								for i, m := range chosen {
+									names[i] = methodName(m)
+								}
+								main := p.primary()
+								selectOf(c.Key("norm-main"), &main, chosen, names).Width(200)
+								p.main = main
+							})
+					})
+				}
 			})
 			if p.methods["region"] {
 				section(c, T("Custom region", "自选区域"), "", func() { rows(c, a.regionRows(c, "norm-region", &p.region)...) })

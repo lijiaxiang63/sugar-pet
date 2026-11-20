@@ -307,8 +307,8 @@ func TestWorkflow(t *testing.T) {
 	a.norm.methods = map[string]bool{"hn": true, "cerebellum": true}
 	a.page = "normalize"
 	tt.Frame()
-	if !tt.HasText(fmt.Sprintf("运行强度归一化时由 %d 例对照自动建立", len(hc))) {
-		t.Fatalf("step 1 does not say that it builds the reference: %q", tt.Texts())
+	if !tt.HasText(fmt.Sprintf("运行强度归一化时由 %d 例对照自动建立", len(hc))) || !tt.HasText("主方法") {
+		t.Fatalf("step 1 does not say that it builds the reference, or which method is primary: %q", tt.Texts())
 	}
 	press("normalize", "开始强度归一化", &a.norm.st)
 	exists(filepath.Join(ref, "reference.json"))
@@ -480,7 +480,7 @@ func TestWorkflow(t *testing.T) {
 	reports := filepath.Join(dir, "reports")
 	a.page = "classify"
 	tt.Frame()
-	if !tt.HasText("来自前两步") || !tt.HasText("分类所依据的图") || tt.HasText("添加文件…") {
+	if !tt.HasText("来自前两步") || tt.HasText("分类所依据的图") || tt.HasText("添加文件…") {
 		t.Fatalf("step 3 does not show what it takes from the steps before: %q", tt.Texts())
 	}
 	press("classify", "开始分类", &a.classify.st)
@@ -532,20 +532,20 @@ func TestWorkflow(t *testing.T) {
 	if got := a.classify.rows[0].scores; len(got) != len(core.Patterns) {
 		t.Fatalf("pattern scores %v", got)
 	}
-	// The classification rests on HN of the two methods of step 2; the
-	// cerebellum's statistics are in the reference, so it can rest on that.
-	z := a.zmapCurrent()
-	if got := a.classify.leading(z); got != "hn" || a.classify.method != "hn" || len(a.classifyChecks("hn")) != 0 || a.classify.checked {
+	// The classification rests on HN, the primary method of the two of step
+	// 1; the cerebellum's statistics are in the reference, so it can rest on
+	// that, once made primary in step 1.
+	if got := a.norm.primary(); got != "hn" || a.classify.method != "hn" || len(a.classifyChecks("hn")) != 0 || a.classify.checked {
 		t.Fatalf("classified by %q (%q), checks %v", got, a.classify.method, a.classifyChecks("hn"))
 	}
 	if strings.Contains(string(gotJSON), `"ps"`) {
 		t.Fatal("without the cross-check a finding was checked by global scaling")
 	}
-	a.classify.main = "cerebellum"
-	if got := a.classify.leading(z); got != "cerebellum" || a.stepDone("classify") {
-		t.Fatalf("with the cerebellum chosen the classification rests on %q", got)
+	a.norm.main = "cerebellum"
+	if a.stepDone("classify") || !a.stepDone("normalize") || !a.stepDone("zmap") || a.classifyProblem() != "" {
+		t.Fatalf("with the cerebellum made primary: step 3 done %v, problem %q", a.stepDone("classify"), a.classifyProblem())
 	}
-	a.classify.main = ""
+	a.norm.main = ""
 	// The cross-check asked for in the settings: the reports are not what
 	// step 3 writes now.  Run again, it checks its findings by global
 	// scaling, as a classification of the original image does.
@@ -646,7 +646,12 @@ func TestWorkflow(t *testing.T) {
 	press("zmap", "生成 Z 值图", &a.zmap.st)
 
 	// The patients against the controls: the cortex takes up less.
-	a.cmp.method = "cerebellum"
+	a.norm.main = "cerebellum"
+	a.page = "compare"
+	tt.Frame()
+	if !tt.HasText("全小脑 · 主方法") {
+		t.Fatalf("the comparison does not show the primary method of step 1: %q", tt.Texts())
+	}
 	press("compare", "开始比较", &a.cmp.st)
 	res := a.cmp.result
 	if res == nil || !res.Corrected || res.NClusters == 0 || len(res.Clusters) == 0 {
@@ -1180,24 +1185,24 @@ func TestCompareSmoothing(t *testing.T) {
 	}
 	a := newApp()
 	p := &a.cmp
-	for _, p.method = range []string{"cerebellum", "hn"} {
+	for _, a.norm.main = range []string{"cerebellum", "hn"} {
 		a.setReference("")
 		if got := p.smoothing(&a.opt); got != 8 {
-			t.Errorf("%s without a reference: %g mm, want 8", p.method, got)
+			t.Errorf("%s without a reference: %g mm, want 8", a.norm.main, got)
 		}
 		write(6)
 		a.setReference(ref)
 		if got := p.smoothing(&a.opt); got != 6 {
-			t.Errorf("%s with a reference smoothed by 6 mm: %g mm", p.method, got)
+			t.Errorf("%s with a reference smoothed by 6 mm: %g mm", a.norm.main, got)
 		}
 		write(0)
 		a.setReference(ref) // as after building it anew
 		if got := p.smoothing(&a.opt); got != 0 {
-			t.Errorf("%s with an unsmoothed reference: %g mm", p.method, got)
+			t.Errorf("%s with an unsmoothed reference: %g mm", a.norm.main, got)
 		}
 		a.opt.CmpFWHMAuto, a.opt.CmpFWHM = false, 10
 		if got := p.smoothing(&a.opt); got != 10 {
-			t.Errorf("%s with 10 mm asked for: %g mm", p.method, got)
+			t.Errorf("%s with 10 mm asked for: %g mm", a.norm.main, got)
 		}
 		a.opt.CmpFWHMAuto = true
 	}
@@ -1369,7 +1374,7 @@ func TestRemedy(t *testing.T) {
 		file := []string{"/study/patients/sub-01_pet.nii.gz"}
 		a.proj.patients.files, a.norm.files.files = file, file
 		a.cluster.files.files = append(file, "/study/patients/sub-02_pet.nii.gz")
-		a.cmp.g1.files, a.cmp.g2.files, a.cmp.method = a.cluster.files.files, a.cluster.files.files, "hn"
+		a.cmp.g1.files, a.cmp.g2.files = a.cluster.files.files, a.cluster.files.files
 		// The pages that rest on step 1 wait for it, and lead there.
 		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize", "compare": "normalize"} {
 			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "compare": a.cmpProblem()}[page]
@@ -1425,38 +1430,42 @@ func TestRemedy(t *testing.T) {
 // TestFollowCompare checks that Compare Groups compares by one of the
 // methods step 1 normalised with: the one chosen on its page while it is
 // among them, else the leading one.
-func TestFollowCompare(t *testing.T) {
+func TestPrimaryMethod(t *testing.T) {
 	a := newApp()
-	a.followCompare()
-	if a.cmp.method != "hn" {
-		t.Fatalf("with nothing normalised yet: method %q", a.cmp.method)
+	if got := a.norm.primary(); got != "hn" {
+		t.Fatalf("of the methods a new project chooses: %q", got)
 	}
-	ran := func(methods ...string) {
+	choose := func(methods ...string) string {
 		a.norm.methods = map[string]bool{}
 		for _, m := range methods {
 			a.norm.methods[m] = true
 		}
-		a.norm.done = &normDone{methods: a.norm.chosen(), settings: a.opt.normSettings(a.norm.chosen())}
-		a.followCompare()
+		return a.norm.primary()
 	}
-	if ran("cerebellum"); a.cmp.method != "cerebellum" {
-		t.Errorf("the method of step 1 was not taken: %q", a.cmp.method)
+	if got := choose("cerebellum"); got != "cerebellum" {
+		t.Errorf("of one method: %q", got)
 	}
 	// HN before the others, and a custom region only when there is no other.
-	if ran("hn", "pons", "region"); a.cmp.method != "hn" {
-		t.Errorf("of several methods %q was taken", a.cmp.method)
+	if got := choose("hn", "pons", "region"); got != "hn" {
+		t.Errorf("of several methods %q was taken", got)
 	}
-	a.cmp.method = "pons" // chosen on the page
-	if ran("hn", "pons"); a.cmp.method != "pons" {
-		t.Errorf("the method chosen on the page was replaced by %q", a.cmp.method)
+	if got := choose("region"); got != "region" {
+		t.Errorf("with a custom region alone: %q", got)
 	}
-	if ran("region"); a.cmp.method != "region" {
-		t.Errorf("with a custom region alone: %q", a.cmp.method)
+	if got := choose(); got != "" {
+		t.Errorf("of none: %q", got)
 	}
-	// Chosen in step 1 and not run yet: it is not what was normalised.
-	a.norm.methods["ps"] = true
-	if a.followCompare(); a.cmp.method != "region" {
-		t.Errorf("a method step 1 has not run with was taken: %q", a.cmp.method)
+	// Made primary in step 1, while it is chosen.
+	a.norm.main = "pons"
+	if got := choose("hn", "pons"); got != "pons" {
+		t.Errorf("the method made primary was replaced by %q", got)
+	}
+	if got := choose("hn", "cerebellum"); got != "hn" {
+		t.Errorf("a method no longer chosen stayed primary: %q", got)
+	}
+	// The classification waits for a primary method step 2 made maps with.
+	if why := primaryWithoutMap("region"); !strings.Contains(why, methodName("region")) {
+		t.Errorf("the problem does not name the method: %q", why)
 	}
 }
 

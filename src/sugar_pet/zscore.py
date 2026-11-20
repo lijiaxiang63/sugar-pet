@@ -35,8 +35,11 @@ def zmap(
 
     ``ps``, ``ips``, ``hn`` and ``ihn`` work with any reference.  For the
     reference-region methods and ``spm-global`` the reference must have been
-    built with ``stats_for`` naming the method; their default region and the
-    mean are always used, because that is what the controls were scaled with.
+    built with ``stats_for`` naming the method.  The factor of the image is
+    always estimated the way those of the controls were: from the default
+    region of the method, with the statistic and the smoothing the reference
+    was built with (the mean and the default smoothing, unless
+    ``Reference.build`` was told otherwise).
 
     With ``covariates`` (for example ``{"age": 63, "sex": "F"}``) the result
     is a W-score map instead: the image is compared with what the controls
@@ -64,7 +67,16 @@ def _zmap(image, method, reference, covariates, p_threshold, exclude, max_iter):
         row, notes = design_row(ref.meta["covariates"], covariates)
         for note in notes:
             warnings.warn(note, stacklevel=3)
-    res = normalize(image, method, reference=ref, p_threshold=p_threshold, exclude=exclude, max_iter=max_iter)
+    res = normalize(
+        image,
+        method,
+        reference=ref,
+        fwhm=ref.factor_fwhm,
+        statistic=ref.statistic,
+        p_threshold=p_threshold,
+        exclude=exclude,
+        max_iter=max_iter,
+    )
     ref = ref.on_grid(res.image)
     if row is None:
         mean, std = ref.control_stats(method)

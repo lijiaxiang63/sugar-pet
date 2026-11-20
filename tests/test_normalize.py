@@ -1,3 +1,5 @@
+import json
+
 import nibabel as nib
 import numpy as np
 import pytest
@@ -333,3 +335,47 @@ def test_whole_brain_is_the_parenchyma_mean(healthy):
     # ... and proportional scaling is the same thing on the gray-matter mask
     assert normalize(healthy, "ps").factor == normalize(healthy, "region", mask="gray-matter").factor
     assert normalize(healthy, "ps", mask="parenchyma").factor == normalize(healthy, "whole-brain").factor
+
+
+@pytest.fixture(scope="module")
+def reference_by_median(controls):
+    """A reference whose controls were scaled by the median, after a smoothing of their own."""
+    return Reference.build(controls, fwhm=0, stats_for=["cerebellum", "spm-global"], statistic="median", factor_fwhm=6)
+
+
+def test_reference_factors_are_those_normalize_gives(controls, reference_by_median):
+    """The controls are scaled as normalize() scales an image with the same settings."""
+    ref = reference_by_median
+    assert (ref.statistic, ref.factor_fwhm) == ("median", 6.0)
+    for method, factors in ref.meta["control_factors"].items():
+        for i in (0, 5):
+            res = normalize(controls[i], method, reference=ref, statistic="median", fwhm=6)
+            assert res.factor == pytest.approx(factors[i], rel=1e-4), method
+    usual = Reference.build(controls, fwhm=0, stats_for=["cerebellum"])
+    for method in ("ps", "cerebellum"):
+        assert not np.allclose(usual.meta["control_factors"][method], ref.meta["control_factors"][method], rtol=1e-4)
+
+
+def test_how_the_factors_were_estimated_survives_a_roundtrip(reference_by_median, reference, tmp_path):
+    loaded = Reference.load(reference_by_median.save(tmp_path / "median"))
+    assert (loaded.statistic, loaded.factor_fwhm) == ("median", 6.0)
+    # The usual way is not written down: the file stays what it always was.
+    usual = json.loads((reference.save(tmp_path / "usual") / "reference.json").read_text())
+    assert "statistic" not in usual and "factor_fwhm_mm" not in usual
+    assert (reference.statistic, reference.factor_fwhm) == ("mean", None)
+    with pytest.raises(ValueError, match="statistic"):
+        Reference.build([], statistic="mode")
+
+
+@pytest.mark.parametrize("method", ["ps", "hn", "cerebellum", "spm-global"])
+def test_zmap_scales_the_image_as_the_controls_were(method, healthy, reference_by_median):
+    """A healthy subject stays near zero against controls scaled another way than the usual one."""
+    ref = reference_by_median
+    z = zmap(healthy, method, reference=ref).get_fdata()
+    inside = z != 0
+    assert abs(z[inside].mean()) < 0.5
+    # It is the map of the image normalised with the settings of the reference.
+    res = normalize(healthy, method, reference=ref, statistic=ref.statistic, fwhm=ref.factor_fwhm)
+    mean, std = ref.control_stats(method)
+    data = res.image.get_fdata(dtype=np.float32)
+    np.testing.assert_allclose(z[inside], (data[inside] - mean[inside]) / std[inside], atol=1e-3)

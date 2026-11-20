@@ -318,6 +318,12 @@ sugar-pet zmap patients/*.nii.gz -m pons -r hc_reference/ -o zmaps/
 
 (`--stats-for all` stores every reference region.)
 
+The factor of an image is estimated the way those of the controls were. That
+is the mean of the region and the default smoothing of each method, unless
+the reference was built with `--statistic median` or `--factor-fwhm 6` (the
+counterparts of `--statistic` and `--fwhm` of `normalize`): the reference
+remembers them, and `zmap` and `classify` follow.
+
 ### Adjusting for age and sex (W-scores)
 
 Uptake changes with age and differs a little between the sexes. If your

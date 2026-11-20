@@ -8,7 +8,7 @@ import nibabel as nib
 import numpy as np
 from scipy import ndimage, stats
 
-from .imageops import load_image, region_mean, smooth, valid_voxels
+from .imageops import load_image, region_stat, smooth, valid_voxels
 from .masks import same_grid
 from .reference import Reference
 
@@ -68,7 +68,8 @@ def reference_cluster(
         valid = valid_voxels(raw)
         covered += valid
         # Same proportional scaling as the controls of the reference.
-        scaled = smooth(raw, img.affine, ref.fwhm) / region_mean(raw, ref.mask & valid)
+        est = raw if ref.factor_fwhm is None else smooth(raw, img.affine, ref.factor_fwhm)
+        scaled = smooth(raw, img.affine, ref.fwhm) / region_stat(est, ref.mask & valid, ref.statistic)
         total += scaled
         squares += np.square(scaled, dtype=np.float64)
         if progress:

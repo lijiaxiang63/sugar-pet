@@ -11,7 +11,7 @@ import numpy as np
 
 from . import __version__
 from .covariates import build_design
-from .imageops import histogram_mode, load_image, region_mean, smooth, spm_global, valid_voxels
+from .imageops import histogram_mode, load_image, region_stat, smooth, spm_global, valid_voxels
 from .masks import REFERENCE_REGIONS, get_mask, resample_to, same_grid
 
 _VOLUMES = ("template", "ps_std", "hn_mean", "hn_std", "mask")
@@ -72,6 +72,11 @@ class Reference:
         ``{method: (coefficients, residual SD)}`` of the regression of the
         normalised controls on their covariates (age, sex, ...), when the
         reference was built with ``covariates``.  Used for W-scores.
+    statistic, factor_fwhm
+        How the factors of the controls were estimated (see :meth:`build`).
+        An image is to be compared with the controls only when its own
+        factor is estimated the same way, which :func:`~sugar_pet.zmap`
+        sees to.
     """
 
     template: np.ndarray
@@ -95,6 +100,9 @@ class Reference:
         stats_for: tuple[str, ...] | list[str] = (),
         covariates: dict[str, list] | None = None,
         progress=None,
+        *,
+        statistic: str = "mean",
+        factor_fwhm: float | None = None,
     ) -> Reference:
         """Build a reference from spatially normalised healthy-control images.
 
@@ -117,7 +125,17 @@ class Reference:
             ``{"age": [63, 58, ...], "sex": ["F", "M", ...]}``.  When given,
             the controls are also regressed on these at every voxel, so
             that z-score maps can be adjusted for them (W-scores).
+        statistic, factor_fwhm
+            How the factors of the controls are estimated, as the arguments
+            ``statistic`` and ``fwhm`` of :func:`~sugar_pet.normalize`: the
+            mean or the median of a region (for PS and the reference
+            regions), and the smoothing in mm before a factor is estimated
+            (``None``: the default of each method).  The reference remembers
+            them, and z-score maps estimate the factor of an image the same
+            way.  Leave them alone unless you normalise your images so.
         """
+        if statistic not in ("mean", "median"):
+            raise ValueError("statistic must be 'mean' or 'median'")
         if len(controls) < 3:
             raise ValueError("at least 3 control images are needed to build a reference")
         stats_for = list(dict.fromkeys(stats_for))
@@ -135,7 +153,9 @@ class Reference:
         regions = {m: get_mask(REFERENCE_REGIONS[m], first) for m in stats_for if m != "spm-global"}
         other: dict[str, list[float]] = {m: [] for m in stats_for}
         scaled = np.empty((len(controls),) + first.shape, dtype=np.float32)
-        unsmoothed = np.empty((len(controls), int(mask0.sum())), dtype=np.float32)
+        # The voxels of the mask as the factors are estimated from them: as
+        # given, or smoothed when a smoothing is set for the factors.
+        estimate = np.empty((len(controls), int(mask0.sum())), dtype=np.float32)
         in_fov = np.zeros(first.shape, dtype=np.int32)
         for i, item in enumerate(controls):
             img = first if i == 0 else load_image(item)
@@ -144,9 +164,13 @@ class Reference:
             data = img.get_fdata(dtype=np.float32)
             valid = valid_voxels(data)
             in_fov += valid
-            unsmoothed[i] = data[mask0]
+            est = data if factor_fwhm is None else smooth(data, img.affine, factor_fwhm)
+            estimate[i] = est[mask0]
             for m in stats_for:
-                other[m].append(spm_global(data) if m == "spm-global" else region_mean(data, regions[m] & valid))
+                if m == "spm-global":
+                    other[m].append(spm_global(est))
+                else:
+                    other[m].append(region_stat(est, regions[m] & valid, statistic))
             scaled[i] = smooth(data, img.affine, fwhm)
             if progress:
                 progress(i + 1, len(controls))
@@ -156,9 +180,15 @@ class Reference:
         if final.sum() < 1000:
             raise ValueError("the mask barely overlaps the controls; are they in MNI space?")
         # Proportional scaling is defined on the images as given (before
-        # smoothing), so that all data-driven methods share one scale.
-        ps = unsmoothed[:, final[mask0]].mean(axis=1, dtype=np.float64)
-        del unsmoothed
+        # smoothing, unless one is set for the factors), so that all
+        # data-driven methods share one scale.
+        estimate = estimate[:, final[mask0]]
+        if statistic == "mean":
+            ps = estimate.mean(axis=1, dtype=np.float64)
+        else:
+            ps = np.median(estimate, axis=1).astype(np.float64)
+        if factor_fwhm is None:
+            estimate = None  # the HN factor is of the controls as smoothed for the statistics
         mask0 = final
         for i in range(len(controls)):
             scaled[i] /= ps[i]
@@ -170,7 +200,14 @@ class Reference:
         # HN factor of each control against the template, then HN statistics.
         hn = []
         for i in range(len(controls)):
-            mode = histogram_mode(scaled[i][mask0] / template[mask0])
+            if estimate is None:
+                mode = histogram_mode(scaled[i][mask0] / template[mask0])
+            else:
+                # With a smoothing set for the factors the control is taken
+                # as normalize() takes an image: smoothed so, against the
+                # template.
+                keep = template[mask0] > 0
+                mode = histogram_mode(estimate[i][keep] / np.float32(ps[i]) / template[mask0][keep])
             hn.append(ps[i] * mode)
             scaled[i] /= mode
         hn_mean = scaled.mean(axis=0, dtype=np.float64).astype(np.float32)
@@ -202,10 +239,26 @@ class Reference:
             "mask": mask if isinstance(mask, str) else "custom",
             "control_factors": {k: [float(v) for v in vals] for k, vals in factors.items()},
         }
+        # Only what is not the usual way is written down, so that the file
+        # of a usual reference stays what it always was.
+        if statistic != "mean":
+            meta["statistic"] = statistic
+        if factor_fwhm is not None:
+            meta["factor_fwhm_mm"] = float(factor_fwhm)
         if terms:
             meta["covariates"] = terms
         n = len(controls)
         return cls(template, ps_std, hn_mean, hn_std, mask0, first.affine, n, float(fwhm), meta, stats, models)
+
+    @property
+    def statistic(self) -> str:
+        """``"mean"`` or ``"median"``: how the factor of a region was taken of the controls."""
+        return self.meta.get("statistic", "mean")
+
+    @property
+    def factor_fwhm(self) -> float | None:
+        """Smoothing (mm) before the factors of the controls were estimated; ``None`` for the default of each method."""
+        return self.meta.get("factor_fwhm_mm")
 
     @property
     def covariates(self) -> list[str]:

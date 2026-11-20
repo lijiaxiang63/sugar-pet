@@ -96,7 +96,14 @@ def cmd_build_reference(args) -> int:
         rows = read_table(args.covariates, args.controls, names)
         covariates = {name: [row[name] for row in rows] for name in names}
     ref = Reference.build(
-        args.controls, mask=args.mask, fwhm=args.fwhm, stats_for=stats_for, covariates=covariates, progress=_progress
+        args.controls,
+        mask=args.mask,
+        fwhm=args.fwhm,
+        stats_for=stats_for,
+        covariates=covariates,
+        progress=_progress,
+        statistic=args.statistic,
+        factor_fwhm=args.factor_fwhm,
     )
     for term in ref.meta.get("covariates", []):
         detail = f"{term['min']:g} to {term['max']:g}" if term["type"] == "numeric" else " / ".join(term["levels"])
@@ -493,6 +500,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="TSV/CSV table with the covariates of the controls (e.g. BIDS participants.tsv), for W-scores",
     )
     p.add_argument("--adjust-for", default="age,sex", help="columns of that table to adjust for [age,sex]")
+    p.add_argument(
+        "--statistic",
+        choices=["mean", "median"],
+        default="mean",
+        help="how the factors of the controls are estimated, as in normalize: mean or median of a region [mean]",
+    )
+    p.add_argument(
+        "--factor-fwhm",
+        type=float,
+        help="smoothing in mm before the factors of the controls are estimated, as --fwhm of normalize "
+        "[that of each method]",
+    )
     p.set_defaults(func=cmd_build_reference)
 
     p = sub.add_parser("zmap", help="z-score (or covariate-adjusted W-score) maps against the controls")

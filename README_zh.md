@@ -223,6 +223,8 @@ sugar-pet zmap patients/*.nii.gz -m pons -r hc_reference/ -o zmaps/
 
 （传 `--stats-for all` 可一次性保存所有参考区的统计量。）
 
+图像的因子总是按对照的方式估计：默认是区域均值和各方法自带的平滑。如果建库时加了 `--statistic median` 或 `--factor-fwhm 6`（分别对应 `normalize` 的 `--statistic` 和 `--fwhm`），参考库会把它们记下来，`zmap` 和 `classify` 随之照办。
+
 ### 校正年龄和性别（W 值）
 
 脑内 FDG 摄取会随年龄变化，男女之间也存在轻微差异。如果患者普遍比对照组年龄大，普通 Z 值会把衰老效应和疾病效应混在一起。W 值则将每位患者与“对照组中**同年龄、同性别**人群的预期摄取”作比较：`w = (图像 − 模型预测值) / 对照组残差标准差`。

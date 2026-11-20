@@ -85,6 +85,12 @@ that version, so write it for the people who use the app.
   normalises the original images again; Classify Parkinsonism reads the maps
   that Z-score Maps wrote and computes only the maps of its cross-checks.
   The results are the same as before.
+- Classify Parkinsonism no longer cross-checks its findings with another
+  normalisation unless asked to: it reads the maps of Z-score Maps alone and
+  computes no map itself. **Settings › Classify Parkinsonism › Cross-check
+  with another normalisation** turns the check by global scaling (and by
+  deep white matter, if the reference keeps its statistics) back on; the
+  maps for it are then computed during the classification, as before.
 - Z-score Maps makes a map with each method of Intensity Normalisation that
   the reference holds control statistics for, and says which it leaves out.
 - A reference is built with the *Region statistic* and the *Smoothing before

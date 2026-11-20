@@ -203,7 +203,7 @@ func (a *app) zmapCurrent() *zmapDone {
 // classified reports whether step 3 ran on what step 2 did.
 func (a *app) classified() bool {
 	z := a.zmapCurrent()
-	return z != nil && a.classify.from == z && a.classify.method == a.classify.leading(z)
+	return z != nil && a.classify.from == z && a.classify.method == a.classify.leading(z) && a.classify.checked == a.opt.CrossCheck
 }
 
 // stepDone reports whether a step of the individual analysis is done, and

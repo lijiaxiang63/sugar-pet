@@ -44,6 +44,10 @@ type options struct {
 
 	// Classification
 	ReportLanguage int `json:"report_language"` // 0 as the app, 1 English, 2 Chinese
+	// CrossCheck: the findings are also read on maps made with other
+	// normalisations, which are computed for it.  Off, the classification
+	// reads the maps of step 2 alone.
+	CrossCheck bool `json:"cross_check"`
 
 	// Group comparison
 	Correction   int     `json:"correction"` // 0 GRF, 1 FDR, 2 none
@@ -161,6 +165,7 @@ var (
 	lblRefFWHM    = label{"Smoothing (FWHM, mm)", "平滑 (FWHM, mm)"}
 	lblRefStats   = label{"Control statistics of other methods", "其他方法的对照统计"}
 	lblClsLang    = label{"Language of the report", "报告语言"}
+	lblClsCheck   = label{"Cross-check with another normalisation", "用另一种归一化方法交叉验证"}
 	lblCorrection = label{"Multiple-comparison correction", "多重比较校正"}
 	lblVoxelP     = label{"Voxel-level p", "体素水平 p 值"}
 	lblClusterP   = label{"Cluster-level p", "团块水平 p 值"}
@@ -196,6 +201,7 @@ func (o *options) changed(groups ...string) []string {
 	add(groupReference, o.RefFWHM != d.RefFWHM, lblRefFWHM)
 	add(groupReference, len(o.statsFor()) > 0, lblRefStats)
 	add(groupClassify, o.ReportLanguage != d.ReportLanguage, lblClsLang)
+	add(groupClassify, o.CrossCheck != d.CrossCheck, lblClsCheck)
 	add(groupCompare, o.Correction != d.Correction, lblCorrection)
 	add(groupCompare, o.Correction == 0 && o.VoxelP != d.VoxelP, lblVoxelP)
 	add(groupCompare, o.Correction == 0 && o.ClusterP != d.ClusterP, lblClusterP)
@@ -223,7 +229,7 @@ func (o *options) restore(groups ...string) {
 		case groupReference:
 			o.RefMask, o.RefMaskFile, o.RefFWHM, o.RefStatsFor = d.RefMask, d.RefMaskFile, d.RefFWHM, d.RefStatsFor
 		case groupClassify:
-			o.ReportLanguage = d.ReportLanguage
+			o.ReportLanguage, o.CrossCheck = d.ReportLanguage, d.CrossCheck
 		case groupCompare:
 			o.Correction, o.VoxelP, o.ClusterP, o.Q = d.Correction, d.VoxelP, d.ClusterP, d.Q
 			o.Analysis, o.AnalysisFile, o.CmpFWHMAuto, o.CmpFWHM, o.KeepImages = d.Analysis, d.AnalysisFile, d.CmpFWHMAuto, d.CmpFWHM, d.KeepImages
@@ -311,7 +317,11 @@ func (o *options) summary(page string) string {
 		return join(Tf("%s mask", "%s掩膜", maskOf(o.RefMask, o.RefMaskFile)), Tf("smoothing %s mm", "平滑 %s mm", num(o.RefFWHM)), factors, also)
 	case "classify":
 		language := [...]string{T("Report in the app's language", "报告语言与界面一致"), T("Report in English", "英文报告"), T("Report in Chinese", "中文报告")}[o.ReportLanguage]
-		return language
+		check := T("no cross-check", "不做交叉验证")
+		if o.CrossCheck {
+			check = T("cross-checked with another normalisation", "用另一种归一化方法交叉验证")
+		}
+		return join(language, check)
 	case "compare":
 		correction := T("No correction", "不校正")
 		switch o.Correction {

@@ -59,10 +59,12 @@ type classifyPage struct {
 	outDir string
 	shown  int // the row the picture is of
 	pic    picture
-	// from is the run of step 2 the last run that went well took, and
-	// method the one it rested on.
-	from   *zmapDone
-	method string
+	// from is the run of step 2 the last run that went well took, method
+	// the one it rested on, and checked whether it cross-checked its
+	// findings with other normalisations.
+	from    *zmapDone
+	method  string
+	checked bool
 }
 
 func (p *classifyPage) init() {}
@@ -86,9 +88,14 @@ func (p *classifyPage) leading(z *zmapDone) string {
 	return leadingMethod(z.methods)
 }
 
-// checks are the other normalisations the findings are checked with.
-func (p *classifyPage) checks(method string) []string {
-	var out []string
+// checks are the other normalisations the findings are checked with, where
+// the settings ask for the cross-check: none otherwise.
+func (a *app) classifyChecks(method string) []string {
+	p := &a.classify
+	out := []string{}
+	if !a.opt.CrossCheck {
+		return out
+	}
 	for _, m := range []string{"ps", "white-matter"} {
 		stored := m == "ps"
 		if p.info != nil {
@@ -180,7 +187,7 @@ func (a *app) classifyView(c *ui.Context) {
 				}
 				method := p.leading(z)
 				shown := methodName(method)
-				if checks := p.checks(method); len(checks) > 0 {
+				if checks := a.classifyChecks(method); len(checks) > 0 {
 					shown += Tf(" · checked with %s", " · 另以%s复核", methodNames(checks))
 				}
 				reference := referenceText(p.reference, p.info)
@@ -297,6 +304,9 @@ func (a *app) runClassify() {
 	files := append([]string(nil), from.files...)
 	norm := from.from
 	reference, out, table, method, lang := p.reference, p.output, from.table, p.leading(from), a.opt.reportLang()
+	// Without the cross-check nothing but the maps of step 2 is read: no
+	// map of another normalisation is computed for it.
+	checked := a.opt.CrossCheck
 	p.rows, p.notes, p.shown, p.from = nil, nil, 0, nil
 	a.start("classify", T("Classifying", "正在分类"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		ref, err := core.LoadReference(reference)
@@ -323,6 +333,9 @@ func (a *app) runClassify() {
 			}
 			name := filepath.Base(path)
 			opt := core.DefaultClassifyOptions()
+			if !checked {
+				opt.Checks = []string{}
+			}
 			var err error
 			if covariates != nil {
 				var found []map[string]string
@@ -385,7 +398,7 @@ func (a *app) runClassify() {
 		return func() {
 			p.rows, p.notes, p.outDir = rows, notes, out
 			if len(rows) > 0 {
-				p.from, p.method = from, method
+				p.from, p.method, p.checked = from, method, checked
 			}
 			if failed > 0 {
 				p.st.err = Tf("%d of %d failed; see the notes under the results.", "%d / %d 项失败，详见结果下方的说明。", failed, len(files))

@@ -167,6 +167,8 @@ type classifyRun struct {
 	Rows   []classifyRow `json:"rows,omitempty"`
 	Notes  []string      `json:"notes,omitempty"`
 	Method string        `json:"method,omitempty"`
+	// Checked: the findings were cross-checked with other normalisations.
+	Checked bool `json:"cross_checked,omitempty"`
 	// Current: the reports were made of what step 2 last did.
 	Current bool `json:"of_last_maps,omitempty"`
 }
@@ -236,7 +238,7 @@ func (a *app) projectState() *projectState {
 	}
 	if cl := &a.classify; ran(cl.st, len(cl.rows) > 0) {
 		s.Steps.Classify = &classifyRun{Status: cl.st, At: a.at("classify"), Folder: cl.outDir, Rows: cl.rows, Notes: cl.notes,
-			Method: cl.method, Current: cl.from != nil && cl.from == a.zmap.done}
+			Method: cl.method, Checked: cl.checked, Current: cl.from != nil && cl.from == a.zmap.done}
 	}
 	if cmp := &a.cmp; ran(cmp.st, cmp.result != nil) {
 		s.Steps.Compare = &compareRun{Status: cmp.st, At: a.at("compare"), How: cmp.how, Result: cmp.result}
@@ -339,7 +341,7 @@ func (a *app) applyState(s *projectState) {
 	}
 	if r := s.Steps.Classify; r != nil {
 		cl := &a.classify
-		cl.st, cl.rows, cl.notes, cl.outDir, cl.method = r.Status, r.Rows, r.Notes, r.Folder, r.Method
+		cl.st, cl.rows, cl.notes, cl.outDir, cl.method, cl.checked = r.Status, r.Rows, r.Notes, r.Folder, r.Method, r.Checked
 		if r.Current && a.zmap.done != nil {
 			cl.from = a.zmap.done
 		}

@@ -501,10 +501,11 @@ func TestWorkflow(t *testing.T) {
 		t.Fatalf("classification.tsv: %v, %q", err, summary)
 	}
 	exists(filepath.Join(reports, "sub-pt00_classification.json"))
-	// The classification read the maps of step 2 and made only the one of
-	// its cross-check: it says what one from the original image says.
+	// The classification read the maps of step 2 and, with no cross-check
+	// asked for, made none itself: it says what one from the original image
+	// says that is not cross-checked either.
 	copt := core.DefaultClassifyOptions()
-	copt.Covariates = values[0]
+	copt.Covariates, copt.Checks = values[0], []string{}
 	whole, err := core.Classify(raw, filepath.Base(pt[0]), "hn", ref0, copt)
 	if err != nil {
 		t.Fatal(err)
@@ -534,14 +535,41 @@ func TestWorkflow(t *testing.T) {
 	// The classification rests on HN of the two methods of step 2; the
 	// cerebellum's statistics are in the reference, so it can rest on that.
 	z := a.zmapCurrent()
-	if got := a.classify.leading(z); got != "hn" || a.classify.method != "hn" || len(a.classify.checks("hn")) != 1 {
-		t.Fatalf("classified by %q (%q), checks %v", got, a.classify.method, a.classify.checks("hn"))
+	if got := a.classify.leading(z); got != "hn" || a.classify.method != "hn" || len(a.classifyChecks("hn")) != 0 || a.classify.checked {
+		t.Fatalf("classified by %q (%q), checks %v", got, a.classify.method, a.classifyChecks("hn"))
+	}
+	if strings.Contains(string(gotJSON), `"ps"`) {
+		t.Fatal("without the cross-check a finding was checked by global scaling")
 	}
 	a.classify.main = "cerebellum"
 	if got := a.classify.leading(z); got != "cerebellum" || a.stepDone("classify") {
 		t.Fatalf("with the cerebellum chosen the classification rests on %q", got)
 	}
 	a.classify.main = ""
+	// The cross-check asked for in the settings: the reports are not what
+	// step 3 writes now.  Run again, it checks its findings by global
+	// scaling, as a classification of the original image does.
+	a.opt.CrossCheck = true
+	if a.stepDone("classify") || fmt.Sprint(a.classifyChecks("hn")) != "[ps]" {
+		t.Fatalf("with the cross-check asked for: step 3 done %v, checks %v", a.stepDone("classify"), a.classifyChecks("hn"))
+	}
+	a.page = "classify"
+	tt.Frame()
+	if !strings.Contains(fmt.Sprint(tt.Texts()), "复核") {
+		t.Fatalf("step 3 does not say what it checks with: %q", tt.Texts())
+	}
+	press("classify", "开始分类", &a.classify.st)
+	copt.Checks = nil
+	if whole, err = core.Classify(raw, filepath.Base(pt[0]), "hn", ref0, copt); err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, _ = whole.JSON()
+	if gotJSON, err = os.ReadFile(filepath.Join(reports, "sub-pt00_classification.json")); err != nil {
+		t.Fatal(err)
+	}
+	if where := jsonApart(wantJSON, gotJSON, 2e-3); where != "" || !a.classify.checked || !a.stepDone("classify") {
+		t.Fatalf("the cross-checked classification is not the one from the image: %s", where)
+	}
 
 	// The project opened again is where it was left: the three steps done,
 	// with what they showed, and nothing to run anew.

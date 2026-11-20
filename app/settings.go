@@ -612,6 +612,14 @@ func (a *app) settingsClassify(c *ui.Context) {
 	o := &a.opt
 	// The method is not chosen here: the classification rests on the maps
 	// of the step before it.
+	section(c, T("Cross-check", "交叉验证"), "", func() {
+		rows(c, func() {
+			setting(c, lblClsCheck.String(),
+				T("Off: the classification reads the maps of Z-score Maps alone, and computes nothing again. On: every finding is also read on maps made by global scaling (PS) and, if the reference keeps its statistics, by deep white matter; those Z-score Maps did not make are computed here, which takes longer. A finding the other normalisations do not show is then marked in the report and counts less towards a pattern.",
+					"关闭：分类只读取“Z 值图”写出的图，不做任何重复计算。开启：每项发现还会在按全局缩放（PS）得到的图上复核，参考库保留了深部白质统计时也按深部白质复核；“Z 值图”没有做过的图会在这里现算，耗时更长。其他归一化方法未显示的发现会在报告中标出，并在模式匹配中降低权重。"),
+				func() { toggle(c.Key("cls-check"), &o.CrossCheck, lblClsCheck.String()) })
+		})
+	})
 	section(c, T("Report", "报告"), "", func() {
 		rows(c, func() {
 			setting(c, lblClsLang.String(), "", func() {
@@ -619,6 +627,11 @@ func (a *app) settingsClassify(c *ui.Context) {
 			})
 		})
 	})
+	// The reports of the last run were made with the other choice.
+	if cl := &a.classify; cl.from != nil && cl.checked != o.CrossCheck {
+		caution(c, T("The last classification ran with the other choice of the cross-check: run Classify Parkinsonism again.",
+			"上次分类时交叉验证的选择与现在不同：请重新运行帕金森综合征分类。"))
+	}
 	a.restoreDefaults(c, "classify")
 }
 

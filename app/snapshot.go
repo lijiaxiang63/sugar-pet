@@ -123,15 +123,19 @@ func snapshots(args []string) {
 func (a *app) demo() {
 	// A project of images in native space, all of them warped: every page
 	// has something to show.
-	a.proj = &project{dir: "/Users/ada/study", name: "Parkinsonism 2026", created: "2026-03-02T09:30:00+01:00", unsaved: true, native: true}
+	a.proj = &project{dir: filepath.FromSlash("/Users/ada/study"), name: "Parkinsonism 2026", created: "2026-03-02T09:30:00+01:00", unsaved: true, native: true}
 	a.projectOutputs()
-	patient := func(i int) string { return fmt.Sprintf("/Users/ada/study/patients/sub-pt%02d_space-MNI_pet.nii.gz", i) }
-	control := func(i int) string { return fmt.Sprintf("/Users/ada/study/controls/sub-hc%02d_space-MNI_pet.nii.gz", i) }
+	patient := func(i int) string {
+		return filepath.FromSlash(fmt.Sprintf("/Users/ada/study/patients/sub-pt%02d_space-MNI_pet.nii.gz", i))
+	}
+	control := func(i int) string {
+		return filepath.FromSlash(fmt.Sprintf("/Users/ada/study/controls/sub-hc%02d_space-MNI_pet.nii.gz", i))
+	}
 	sp := &a.spatial
-	sp.spm, sp.matlab, sp.outDir = "/Users/ada/spm12", "/Applications/MATLAB_R2025b.app", a.proj.dir
+	sp.spm, sp.matlab, sp.outDir = filepath.FromSlash("/Users/ada/spm12"), "/Applications/MATLAB_R2025b.app", a.proj.dir
 	sp.warped = map[string]string{}
 	warp := func(list *fileList, name string, mni string) {
-		native := fmt.Sprintf("/Users/ada/study/raw/%s_pet.nii.gz", name)
+		native := filepath.FromSlash(fmt.Sprintf("/Users/ada/study/raw/%s_pet.nii.gz", name))
 		list.files = append(list.files, native)
 		sp.warped[native] = mni
 		sp.rows = append(sp.rows, spatialRow{image: filepath.Base(native), output: core.SpatialOutputName(native), path: mni})
@@ -145,7 +149,7 @@ func (a *app) demo() {
 	}
 	sp.st.ok = Tf("%d image(s) warped to MNI space.", "已完成：%d 幅图像已配准到 MNI 空间。", 22)
 	a.norm.methods["cerebellum"] = true
-	a.setReference("/Users/ada/study/hc_reference")
+	a.setReference(filepath.FromSlash("/Users/ada/study/hc_reference"))
 	a.norm.outDir = a.norm.output
 	for i, f := range [][2]string{{"5.81437", "5.42206"}, {"6.20915", "5.96384"}, {"4.97203", "4.51870"}, {"5.53866", "5.30129"}, {"6.74052", "6.18845"}, {"5.12790", "4.89317"}} {
 		image := filepath.Base(patient(i + 1))
@@ -175,7 +179,7 @@ func (a *app) demo() {
 	info.Covariates = []refTerm{{Name: "age", Type: "numeric"}, {Name: "sex", Type: "categorical", Levels: []string{"F", "M"}}}
 	a.refRead.of, a.refRead.info = a.reference, info
 	a.opt.RefStatsFor["cerebellum"], a.opt.RefStatsFor["white-matter"] = true, true
-	a.cov.path = "/Users/ada/study/participants.tsv"
+	a.cov.path = filepath.FromSlash("/Users/ada/study/participants.tsv")
 	a.cov.table = &core.Table{Path: a.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 22)}
 	a.cov.adjust = map[string]bool{"age": true, "sex": true}
 	a.cov.columns = a.cov.table.Columns()
@@ -232,7 +236,7 @@ func (a *app) demo() {
 
 	// One more patient, from the clinic, classified quickly.
 	q := &a.quick
-	q.input = "/Users/ada/clinic/sub-new01_pet.nii.gz"
+	q.input = filepath.FromSlash("/Users/ada/clinic/sub-new01_pet.nii.gz")
 	q.covs["age"], q.covs["sex"] = "67", "M"
 	row := cl.rows[0]
 	row.image, row.source = "sub-new01_pet.nii.gz", filepath.Join(q.output, "sub-new01", "sub-new01_space-MNI_pet.nii.gz")
@@ -245,9 +249,9 @@ func (a *app) demo() {
 		"GRF 校正：体素 p < %g，团块 p < %g，团块至少 %d 个体素（|z| > %.2f）。", 0.001, 0.05, 187, 3.29)
 	a.cmp.st.ok = Tf("%d cluster(s) survive the correction.", "有 %d 个团块通过校正。", 3)
 	a.cmp.result = &core.GroupComparison{
-		TMap: "/Users/ada/study/compare/patients_vs_controls_T.nii.gz", DOF: 26, FWHM: [3]float64{11.8, 12.4, 11.1},
+		TMap: filepath.FromSlash("/Users/ada/study/compare/patients_vs_controls_T.nii.gz"), DOF: 26, FWHM: [3]float64{11.8, 12.4, 11.1},
 		Corrected: true, NClusters: 3, ZThreshold: 3.29, MinClusterVoxels: 187,
-		Files: []core.NamedFile{{Role: "thresholded", Path: "/Users/ada/study/compare/ClusterThresholded_patients_vs_controls_T.nii.gz"}},
+		Files: []core.NamedFile{{Role: "thresholded", Path: filepath.FromSlash("/Users/ada/study/compare/ClusterThresholded_patients_vs_controls_T.nii.gz")}},
 		Clusters: []core.Cluster{
 			{Size: 2841, Peak: -7.92, MNI: [3]float64{-44, -62, 38}, PeakAtlas: [3]string{"Angular_L"},
 				Regions: [3][]core.Region{{{Name: "Angular_L", Voxels: 902, Pct: 31.7}, {Name: "Parietal_Inf_L", Voxels: 744, Pct: 26.2}, {Name: "Temporal_Mid_L", Voxels: 510, Pct: 18}}}},

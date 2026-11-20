@@ -15,7 +15,7 @@ to run this step beforehand.
 
 ## Choose the images and methods
 
-<Shot name="normalize" alt="The Intensity Normalisation page: images and methods" :marks="[[1, 163], [2, 512], [3, 637]]" />
+<Shot name="normalize" alt="The Intensity Normalisation page: images and methods" :marks="[[1, 160], [2, 525], [3, 688]]" />
 
 1. **Add the images** (in MNI space). Ada adds six patient scans from
    `study/patients/`.
@@ -60,7 +60,7 @@ define your region:
 
 Scroll down.
 
-<Shot name="normalize-output" alt="The reference, the output folder, the options and the chart of factors" :marks="[[4, 275], [5, 331], [6, 391], [7, 'run'], [8, 575]]" />
+<Shot name="normalize-output" alt="The reference, the output folder, the options and the chart of factors" :marks="[[4, 352], [5, 408], [6, 467], [7, 'run'], [8, 560]]" />
 
 4. **Reference:** pre-filled if you completed Step 2. Only required for HN,
    iPS, and iHN.
@@ -82,7 +82,8 @@ Scroll down.
    * *Voxels*: number of voxels used to estimate the factor.
    * *Excluded*: for iPS and iHN, the fraction of voxels excluded as abnormal.
 10. **Open factors.tsv** opens the saved table directly; **Show in Finder**
-    opens the output folder.
+    opens the output folder; **Go to Z-score Maps** moves on to the next
+    step.
 
 ## Output files
 

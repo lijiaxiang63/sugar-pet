@@ -39,7 +39,7 @@ you make them.
 
 ## Fill in the page
 
-<Shot name="spatial" alt="The Spatial Normalisation page, filled in" :marks="[[1, 181], [2, 499], [3, 555], [4, 615], [5, 'run']]" />
+<Shot name="spatial" alt="The Spatial Normalisation page, filled in" :marks="[[1, 177], [2, 494], [3, 550], [4, 609], [5, 'run']]" />
 
 1. **Add the native-space images.** Drag and drop them onto the list, or use
    **Add Files…** / **Add Folder…**. Ada adds the six scans from `study/raw/`.

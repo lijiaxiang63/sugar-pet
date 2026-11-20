@@ -98,7 +98,9 @@ study/
 
 You do not have to make these folders by hand. Open the **Study Folder**
 page, the first in the sidebar, choose where the study folder goes and what
-it is called, and click **Create Folders**:
+it is called, and click **Create Folders**. For a study folder you already
+have, **Choose Study Folder…** fills in its location and name instead; it
+writes nothing itself, and **Create Folders** then adds only what is missing.
 
 <Shot name="study" alt="The Study Folder page, after the folders were created" />
 

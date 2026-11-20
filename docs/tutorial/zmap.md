@@ -21,7 +21,7 @@ Z-scores conflate normal aging effects with disease.
 
 ## Fill in the page
 
-<Shot name="zmap" alt="The Z-score Maps page: images, reference and methods" :marks="[[1, 181], [2, 499], [3, 555], [4, 723]]" />
+<Shot name="zmap" alt="The Z-score Maps page: images, reference and methods" :marks="[[1, 177], [2, 494], [3, 558], [4, 724]]" />
 
 1. **Add the patient images** (in MNI space).
 2. **Reference:** pre-filled from Step 2. The line below shows the control
@@ -35,7 +35,7 @@ Z-scores conflate normal aging effects with disease.
 
 Scroll down.
 
-<Shot name="zmap-output" alt="The reference regions, the output folder and the start of the results" :marks="[[5, 265], [6, 368], [7, 'run']]" />
+<Shot name="zmap-output" alt="The reference regions, the output folder and the start of the results" :marks="[[5, 292], [6, 393], [7, 'run']]" />
 
 5. **Reference regions** are folded away: click **Reference regions: 7 more
    methods** to show them. Grayed-out methods require a reference built with

@@ -27,7 +27,7 @@ dopamine-transporter imaging.
 
 ## Fill in the page
 
-<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 181], [2, 409], [3, 465], [4, 601], [5, 669], [6, 'run']]" />
+<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 177], [2, 404], [3, 468], [4, 594], [5, 662], [6, 'run']]" />
 
 1. **Add the patient images** (in MNI space, one per patient).
 2. **Reference:** already filled in. The status line beneath it warns if
@@ -56,10 +56,11 @@ dopamine-transporter imaging.
 
 ## Check the results
 
-<Shot name="classify-results" alt="The results of the classification" :marks="[[7, 163], [8, 751, 121], [9, 1012, 163], [10, 560], [11, 784]]" />
+<Shot name="classify-results" alt="The results of the classification" :marks="[[7, 163], [8, 751, 121], [9, 1012, 153], [10, 560], [11, 784]]" />
 
-7. **Results:** one row per patient, showing the conclusion in bold and, under
-   it, the image and how the conclusion was reached.
+7. **Results:** one row per patient, showing the conclusion in bold (with its
+   confidence beside it when it names a pattern) and, under it, the image and
+   how the conclusion was reached.
 8. **Pattern bars:** how well the patient matches each of the six patterns
    (MSA-P, MSA-C, PSP, CBD, DLB, PD), from 0 to 100. The leading pattern is
    in colour; hover over a bar to read its score. Two bars of similar height,

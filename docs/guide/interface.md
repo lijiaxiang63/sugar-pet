@@ -64,7 +64,7 @@ are not on the pages: they live in the [Settings window](#the-settings-window),
 and their defaults match the original papers. So that nothing is hidden, a
 line under the cards of each page says which options are in effect.
 
-<Shot name="normalize-output" alt="The line of options under the cards of a page" :marks="[[1, 391], [2, 1016, 391]]" />
+<Shot name="normalize-output" alt="The line of options under the cards of a page" :marks="[[1, 467], [2, 1016, 467]]" />
 
 1. **Options in effect.** A one-line summary, here *Mean of the region ·
    target 1 · smoothing automatic*. When an option differs from its default, a

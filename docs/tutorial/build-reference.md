@@ -17,7 +17,7 @@ You need a reference for:
 
 Open the **Reference** page and scroll down to *Build a new reference*.
 
-<Shot name="reference-controls" alt="The Reference page: the controls for a new reference" :marks="[[1, 287]]" />
+<Shot name="reference-controls" alt="The Reference page: the controls for a new reference" :marks="[[1, 315]]" />
 
 1. **Add the control images.** Ada drops the `study/controls/` folder onto
    the list (16 images). All controls must be in MNI space on the same voxel
@@ -77,7 +77,8 @@ Once the reference is built, scroll back to the top of the page.
 7. **Mean of the controls:** axial slices of the average of your controls
    after smoothing. It should look like a clean, symmetric brain; a blurred
    edge or a doubled outline means some controls are not well aligned in MNI
-   space.
+   space. The buttons under the picture go straight to the pages that use
+   the reference.
 
 ::: tip Opening an existing reference
 Click **Open Another…** on this page—or click the active reference at the

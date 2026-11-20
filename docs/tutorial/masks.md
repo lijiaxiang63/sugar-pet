@@ -8,7 +8,7 @@ look up label IDs for a custom region.
 
 ## Built-in masks
 
-<Shot name="masks" alt="The built-in masks, with their short names and volumes" :marks="[[1, 192], [2, 805]]" />
+<Shot name="masks" alt="The built-in masks, with their short names and volumes" :marks="[[1, 188], [2, 802]]" />
 
 1. **Mask list:** each row shows the mask name, anatomical coverage, short
    name (used by the CLI and output filenames), and volume.
@@ -41,9 +41,12 @@ Scroll down to browse the CerebrA atlas labels.
 
 3. **Search** for a region by name.
 4. **Note the label numbers.** Each region has separate IDs for the right and
-   left hemispheres.
+   left hemispheres. Or tick the rows of the regions you want: a bar under
+   the table lists their numbers, and **Use as Custom Region** opens
+   Intensity Normalisation with them as its custom region, the one method
+   ticked.
 
-To use them, go to [Intensity Normalisation](./normalize#a-region-of-your-own),
+To type the numbers in yourself, go to [Intensity Normalisation](./normalize#a-region-of-your-own),
 tick **Custom region**, select **Atlas labels**, and enter the comma-separated
 IDs—for example `34,85` for bilateral lateral occipital cortex, or `40,91`
 for bilateral thalamus.

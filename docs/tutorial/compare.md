@@ -9,12 +9,13 @@ and outputs the surviving clusters with anatomical labels.
 
 ## Fill in the page
 
-<Shot name="compare" alt="The Compare Groups page: groups, normalisation and covariates" :marks="[[1, 181], [2, 1027, 181], [3, 514], [4, 570], [5, 702]]" />
+<Shot name="compare" alt="The Compare Groups page: groups, normalisation and covariates" :marks="[[1, 177], [2, 1027, 177], [3, 584], [4, 640], [5, 770]]" />
 
 1. **Group 1:** add the patient scans (12 images).
 2. **Group 2:** add the control scans (16 images). The contrast is *group 1
    minus group 2*, so with patients in Group 1, **negative T-values indicate
-   hypometabolism**. Make sure each subject appears only once.
+   hypometabolism**. Make sure each subject appears only once. **Swap
+   Groups**, under the two lists, exchanges them.
 3. **Method:** keep **Histogram (HN)** for the primary analysis.
 4. **Reference:** pre-filled automatically; required for HN, iPS, and iHN.
    Both groups share the same reference.
@@ -25,7 +26,7 @@ and outputs the surviving clusters with anatomical labels.
 
 Scroll down.
 
-<Shot name="compare-output" alt="The output, the options and the start of the results" :marks="[[6, 249], [7, 298], [8, 355], [9, 'run']]" />
+<Shot name="compare-output" alt="The output, the options and the start of the results" :marks="[[6, 315], [7, 364], [8, 420], [9, 'run']]" />
 
 6. **Output folder:** Ada selects `study/compare/`.
 7. **Name of the result files:** filename prefix for all outputs (here

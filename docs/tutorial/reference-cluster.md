@@ -20,7 +20,7 @@ cross-validation.
 
 ## Fill in the page
 
-<Shot name="cluster" alt="The Reference Cluster page, filled in" :marks="[[1, 181], [2, 514], [3, 570], [4, 630], [5, 'run']]" />
+<Shot name="cluster" alt="The Reference Cluster page, filled in" :marks="[[1, 177], [2, 548], [3, 604], [4, 664], [5, 'run']]" />
 
 1. **Add the patient images** (at least 2 scans, all on the same grid).
 2. **Reference:** the healthy controls to compare against; pre-filled after

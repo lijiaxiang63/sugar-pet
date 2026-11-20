@@ -222,6 +222,8 @@ func (a *app) stepDone(page string) bool {
 		return a.zmapCurrent() != nil
 	case "classify":
 		return a.classified()
+	case "spatial":
+		return a.spatialDone()
 	}
 	return false
 }
@@ -293,52 +295,67 @@ func imagesText(files []string, dropped int) string {
 }
 
 // steps is the line at the top of a page of the individual analysis: its
-// three steps in order, the one shown marked, those done ticked.
+// three steps in order, the one shown marked, those done ticked.  Images in
+// native space are warped before step 1 reads them: Spatial Normalisation
+// leads the line then, without a number, so that the steps keep theirs.
 func (a *app) steps(c *ui.Context) {
 	pal := paletteFor(c)
 	ui.Row(c.Key("steps")).Gap(5).AlignItems(ui.Center).Wrap().GapY(5).Children(func() {
+		if a.proj != nil && a.proj.native {
+			a.stepChip(c, "spatial", T("Before step 1", "第 1 步之前"), 0)
+		}
 		for i, id := range flowSteps {
-			if i > 0 {
+			if i > 0 || a.proj != nil && a.proj.native {
 				ui.Icon(c, iconChevron).Size(11, 11).TextColor(pal.faint).Shrink(0)
 			}
-			info := pageInfoOf(id)
-			title := T(info.en, info.zh)
-			here, done := a.page == id, a.stepDone(id)
-			step := ui.ButtonBase(c.Key("step-"+id)).Height(30).Padding(0, 12, 0, 5).Gap(8).Radius(15).AlignItems(ui.Center).Shrink(0).
-				Label(Tf("Step %d: %s", "第 %d 步：%s", i+1, title))
-			bg, fg, ring := ui.Transparent, pal.muted, pal.border
-			switch {
-			case here:
-				bg, fg, ring = pal.accentSoft, pal.text, pal.accentBorder
-			case step.Hovered():
-				bg = pal.rowHover
-			}
-			step.Background(step.AnimateColor("bg", bg, quick)).InsetShadow(0, 0, 0, 1, ring).Children(func() {
-				dot, mark := pal.text.Alpha(0.1), pal.muted
-				switch {
-				case done:
-					dot, mark = pal.success, pal.onAccent
-				case here:
-					dot, mark = pal.accent, pal.onAccent
-				}
-				ui.Box(c).Size(20, 20).Radius(10).Center().Shrink(0).Background(dot).Children(func() {
-					if done {
-						ui.Icon(c, iconTick).Size(11, 11).TextColor(mark)
-					} else {
-						ui.Text(c, strconv.Itoa(i+1)).FontSize(11).FontWeight(700).TextColor(mark).SingleLine()
-					}
-				})
-				weight := 500
-				if here {
-					weight = 650
-				}
-				ui.Text(c, title).FontSize(12.5).FontWeight(weight).TextColor(fg).SingleLine()
-			})
-			if step.Clicked() {
-				a.page = id
-			}
+			a.stepChip(c, id, Tf("Step %d", "第 %d 步", i+1), i+1)
 		}
 	})
+}
+
+// stepChip is a step of the line at the top of a page: its number, or the
+// icon of its page where it has none (n 0), and its title.
+func (a *app) stepChip(c *ui.Context, id, place string, n int) {
+	pal := paletteFor(c)
+	info := pageInfoOf(id)
+	title := T(info.en, info.zh)
+	here, done := a.page == id, a.stepDone(id)
+	step := ui.ButtonBase(c.Key("step-"+id)).Height(30).Padding(0, 12, 0, 5).Gap(8).Radius(15).AlignItems(ui.Center).Shrink(0).
+		Label(place + T(": ", "：") + title)
+	bg, fg, ring := ui.Transparent, pal.muted, pal.border
+	switch {
+	case here:
+		bg, fg, ring = pal.accentSoft, pal.text, pal.accentBorder
+	case step.Hovered():
+		bg = pal.rowHover
+	}
+	step.Background(step.AnimateColor("bg", bg, quick)).InsetShadow(0, 0, 0, 1, ring).Children(func() {
+		dot, mark := pal.text.Alpha(0.1), pal.muted
+		switch {
+		case done:
+			dot, mark = pal.success, pal.onAccent
+		case here:
+			dot, mark = pal.accent, pal.onAccent
+		}
+		ui.Box(c).Size(20, 20).Radius(10).Center().Shrink(0).Background(dot).Children(func() {
+			switch {
+			case done:
+				ui.Icon(c, iconTick).Size(11, 11).TextColor(mark)
+			case n == 0:
+				ui.Icon(c, info.icon).Size(12, 12).TextColor(mark)
+			default:
+				ui.Text(c, strconv.Itoa(n)).FontSize(11).FontWeight(700).TextColor(mark).SingleLine()
+			}
+		})
+		weight := 500
+		if here {
+			weight = 650
+		}
+		ui.Text(c, title).FontSize(12.5).FontWeight(weight).TextColor(fg).SingleLine()
+	})
+	if step.Clicked() {
+		a.page = id
+	}
 }
 
 // fact is a line of what a step takes from the one before: its name and,

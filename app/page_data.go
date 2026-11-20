@@ -292,6 +292,22 @@ func (a *app) spatialDone() bool {
 	return len(files) > 0
 }
 
+// unwarped counts the images of a project in native space that Spatial
+// Normalisation has not warped, of all it holds: the pages after it leave
+// them out.
+func (a *app) unwarped() (missing, total int) {
+	if a.proj == nil || !a.proj.native {
+		return 0, 0
+	}
+	for _, f := range append(slices.Clone(a.proj.patients.files), a.proj.controls.files...) {
+		total++
+		if a.spatial.warped[f] == "" {
+			missing++
+		}
+	}
+	return missing, total
+}
+
 // source is a card of what a page takes from another page of the project:
 // the facts, and the way to where they are chosen.
 func (a *app) source(c *ui.Context, key, page, label string, facts ...func()) {

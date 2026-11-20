@@ -29,7 +29,9 @@ that version, so write it for the people who use the app.
 - A project says whether its images are in MNI space or still in native
   space. Native images are warped by Spatial Normalisation into the
   `patients` and `controls` folders of the project, and the pages after it
-  read them from there.
+  read them from there. Spatial Normalisation then leads the step bar of the
+  individual analysis, and Intensity Normalisation says how many images it
+  leaves out because they are not warped yet.
 - **Intensity Normalisation normalises the patients and the healthy
   controls of the project together**, the same way, and shows the factors of
   both in one table and one chart, by group. The normalised images are

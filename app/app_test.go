@@ -1124,6 +1124,20 @@ func TestSpatial(t *testing.T) {
 	if !slices.Equal(a.norm.files.files, p.written) || !slices.Equal(a.norm.controls, p.written[1:]) || !slices.Equal(a.ref.files.files, p.written[1:]) || a.spatialDone() || a.done("spatial") {
 		t.Fatalf("the warped images were not handed on: patients %v, controls %v", a.norm.files.files, a.ref.files.files)
 	}
+	// Step 1 says what it leaves out, and its step bar leads back here.
+	a.page = "normalize"
+	tt.Frame()
+	if missing, total := a.unwarped(); missing != 1 || total != 3 || !tt.HasText("Spatial Normalisation") ||
+		!tt.HasText("1 of the 3 images are not in MNI space yet and are left out: warp them first, on the Spatial Normalisation page.") {
+		t.Fatalf("step 1 with an image not warped: %d of %d (shown: %q)", missing, total, tt.Texts())
+	}
+	if err := tt.Click("Before step 1: Spatial Normalisation"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.page != "spatial" || a.stepDone("spatial") {
+		t.Fatalf("the step bar led to %q", a.page)
+	}
 	// The project opened again knows what was warped.
 	again := newApp()
 	if err := again.openProject(a.proj.dir); err != nil {

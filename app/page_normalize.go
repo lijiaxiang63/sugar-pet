@@ -306,6 +306,12 @@ func (a *app) normalizeView(c *ui.Context) {
 				a.source(c, "norm-data", "data", changeInData(),
 					fact(c, T("Patients", "患者"), countText(patients)),
 					fact(c, T("Healthy controls", "健康对照"), countText(p.controls)))
+				// Of images in native space, those not warped yet are left
+				// out; the step bar leads to where they are warped.
+				if missing, total := a.unwarped(); missing > 0 && missing < total {
+					caution(c, Tf("%d of the %d images are not in MNI space yet and are left out: warp them first, on the Spatial Normalisation page.",
+						"%[2]d 幅图像中有 %[1]d 幅还没有配准到 MNI 空间，本步不会处理它们：请先到“空间标准化”页面完成配准。", missing, total))
+				}
 			})
 			section(c, T("Methods", "方法"), T("One method is enough. Several are for comparison only: each writes its own image from the original.", "选一种即可。多选仅用于对比：每种方法都从原图各自输出一幅图像，互不叠加。"), func() {
 				a.methodPicker(c, p.methods, nil)

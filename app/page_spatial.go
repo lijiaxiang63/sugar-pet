@@ -120,6 +120,9 @@ func (a *app) spatialView(c *ui.Context) {
 	a.frame(c, T("Spatial Normalisation", "空间标准化"),
 		T("Warp native-space PET into MNI space with SPM", "用 SPM 把原始空间的 PET 配准到 MNI 空间"),
 		func() {
+			if a.proj.native {
+				a.steps(c)
+			}
 			section(c, T("Images", "图像"), T("The images of the project as they come from the scanner; no MRI is needed. 4D images are averaged over time. What is warped is written into the patients and controls folders of the project, and the pages after this one read it from there.",
 				"项目中扫描得到的原始空间 FDG-PET 图像，不需要 MRI；4D 图像按时间取平均。配准结果写入项目的 patients 和 controls 文件夹，之后的页面都从那里读取。"), func() {
 				if !a.proj.native {

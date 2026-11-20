@@ -5,7 +5,7 @@ They differ only in how that number—the normalisation factor—is estimated.
 
 ## The methods
 
-| In the app | Command line `-m` | How the factor is estimated | Needs the reference |
+| In the app | Command line `-m` | How the factor is estimated | Needs the control statistics |
 | --- | --- | --- | :---: |
 | **Histogram (HN)** | `hn` | Divides the image by the control mean template and takes the *most frequent* ratio | yes |
 | Iterative HN (iHN) | `ihn` | Runs HN, excludes hypometabolic voxels, and re-estimates HN | yes |
@@ -64,15 +64,15 @@ atypical parkinsonism in mind):
 1. **Preprocess patients and controls identically:** use the same scanner and
    reconstruction where possible, run the same spatial normalisation, and
    visually inspect every warped image.
-2. **Build one reference from all controls**, including age and sex, with
-   *Occipital cortex* and *White matter* ticked
-   ([Step 2](../tutorial/build-reference)).
+2. **Give the project its controls and a covariate table**, and tick
+   *Occipital cortex* and *White matter* under *Control statistics of other
+   methods* ([Data](../tutorial/project), [step 1](../tutorial/normalize)).
 3. **Run the primary group comparison with HN**
-   ([Step 6](../tutorial/compare)).
-4. **Generate W-score maps for individual patients**
-   ([Step 4](../tutorial/zmap)), and classification reports where diagnosis is
-   uncertain ([Step 5](../tutorial/classify)).
-5. **Repeat steps 3 and 4 with occipital cortex and white matter** as a
+   ([Compare two groups](../tutorial/compare)).
+4. **Make W-score maps of the patients**
+   ([step 2](../tutorial/zmap)), and classify those whose diagnosis is
+   uncertain ([step 3](../tutorial/classify)).
+5. **Repeat the comparison with occipital cortex and white matter** as a
    sensitivity analysis.
 
 **Common pitfalls to avoid:**

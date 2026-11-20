@@ -31,32 +31,36 @@ app keeps them on distinct pages:
 | What it does | Warps an image from native scanner space into MNI space so each voxel corresponds to the same anatomical location across subjects | Divides an image by its factor so intensity values are comparable across scans |
 | App page | **Spatial Normalisation** | **Intensity Normalisation** and all subsequent pages |
 | Requirements | MATLAB and SPM12 or SPM25 | None |
-| When to run | Only if your images are not yet in MNI space | Every analysis |
+| When to run | Only for images in native space, before step 1 | Every analysis: step 1 |
 
 ::: tip You may not need MATLAB at all
 If your images are already in MNI space (from SPM, ANTs, or any other tool),
-skip the first page. Nothing else in the app requires MATLAB, SPM, or Python.
+say so on the Data page and the Spatial Normalisation page drops out. Nothing
+else in the app requires MATLAB, SPM, or Python.
 :::
 
 ## Overview of the app
 
-The sidebar lists the pages in the order of a typical analysis:
+The app works on one **project** at a time: a folder that holds the patients
+and the healthy controls of a study, and everything the analyses write. The
+sidebar lists its pages in the order of an analysis:
 
-| Page | Purpose | Needs a reference? |
-| --- | --- | :---: |
-| [Spatial Normalisation](../tutorial/spatial) | Warps native-space PET images into MNI space using SPM | no |
-| [Reference](../tutorial/build-reference) | Summarises healthy controls into a single folder (the *reference*) | builds it |
-| [Intensity Normalisation](../tutorial/normalize) | Divides each image by its factor and outputs `factors.tsv` | for HN, iPS, iHN |
-| [Z-score Maps](../tutorial/zmap) | Maps how far each voxel deviates from healthy controls | yes |
-| [Classify Parkinsonism](../tutorial/classify) | Matches a patient's map against typical metabolic patterns and writes a report | yes |
-| [Compare Groups](../tutorial/compare) | Voxel-wise two-sample t-test between two groups with multiple-comparison correction | for HN, iPS, iHN |
-| [Reference Cluster](../tutorial/reference-cluster) | Derives a data-driven reference region from a patient group | yes |
-| [Masks & Atlas](../tutorial/masks) | Inspects and exports the built-in regions and atlas labels | no |
+| Page | Purpose |
+| --- | --- |
+| [Data](../tutorial/project) | The images of the project: patients, at least 3 healthy controls, and their ages and sexes |
+| [Spatial Normalisation](../tutorial/spatial) | Warps native-space images into MNI space using SPM (only for images in native space) |
+| [Intensity Normalisation](../tutorial/normalize) | Step 1: summarises the controls into the *control statistics*, then divides each image by its factor |
+| [Z-score Maps](../tutorial/zmap) | Step 2: maps how far each voxel of a patient deviates from the controls |
+| [Classify Parkinsonism](../tutorial/classify) | Step 3: matches each patient's map against typical metabolic patterns and writes a report |
+| [Compare Groups](../tutorial/compare) | Voxel-wise two-sample t-test of patients against controls, with multiple-comparison correction |
+| [Reference Cluster](../tutorial/reference-cluster) | Derives a data-driven reference region from the patients |
+| [Quick Classification](../tutorial/quick) | Classifies one more patient, outside the project, against its controls |
+| [Masks & Atlas](../tutorial/masks) | Inspects and exports the built-in regions and atlas labels |
 
-The **reference** is central to the workflow: it is a compact folder
-summarising your healthy controls, built once and reused for every patient
-afterwards. Because most pages rely on it, the tutorial starts by building
-one early.
+The **healthy controls** are central: every patient is compared with the
+controls of the same project, and with no others. Step 1 summarises them into
+the *control statistics*, which the maps, the classification and the group
+comparison all read, so they all rest on one set of controls.
 
 ## Where to go next
 

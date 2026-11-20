@@ -13,21 +13,28 @@ either tool are completely interchangeable.
 | --- | --- |
 | `sub-01_space-MNI_pet.nii.gz` | Warped image in MNI space, 2 mm isotropic voxels |
 
-## Reference
+## Intensity Normalisation
 
-A single folder (the *reference*) containing:
+Step 1 writes the control statistics first, then the normalised images.
+
+### Control statistics {#control-statistics}
+
+The folder `hc_reference/` of the project holds the summary of its controls,
+which every later page reads:
 
 | File | Contents |
 | --- | --- |
-| `reference.json` | Control count, smoothing kernel, mask, and each control's factor |
+| `reference.json` | Control count, smoothing kernel, mask, covariates, and each control's factor |
 | `template.nii.gz` | Mean of the controls after proportional scaling |
 | `ps_std.nii.gz` | Standard deviation of the controls after PS |
 | `hn_mean.nii.gz`, `hn_std.nii.gz` | Mean and standard deviation of the controls after HN |
 | `mask.nii.gz` | Voxels used to estimate the factors |
-| `stats-<method>_mean.nii.gz`, `…_std.nii.gz` | Created only for methods ticked under *Z-score maps with other methods* |
-| `model-<method>_beta.nii.gz`, `…_sd.nii.gz` | Created only when a covariate table is provided: regression parameters for uptake vs. covariates |
+| `stats-<method>_mean.nii.gz`, `…_std.nii.gz` | Only for methods ticked under *Control statistics of other methods* |
+| `model-<method>_beta.nii.gz`, `…_sd.nii.gz` | Only with a covariate table: regression parameters for uptake vs. covariates |
 
-## Intensity Normalisation
+### Normalised images
+
+In `normalised/patients/` and `normalised/controls/`:
 
 | File | Description |
 | --- | --- |
@@ -58,9 +65,23 @@ Columns in `factors.tsv`:
 | File | Description |
 | --- | --- |
 | `sub-01_report.html` | Standalone HTML report, printable to PDF |
-| `sub-01_desc-hn_wmap.nii.gz` | Underlying deviation map (`_zmap` when no covariate table is given) |
 | `sub-01_classification.json` | Structured numerical outputs behind the report |
 | `classification.tsv` | Summary table with one row per image: conclusion and pattern scores |
+
+The app reads the maps of Z-score Maps and writes no copy of them here; the
+CLI's `classify` also writes the map it computes, `sub-01_desc-hn_wmap.nii.gz`.
+
+## Quick Classification
+
+In `quick/<name of the image>/`, for each scan classified:
+
+| File | Description |
+| --- | --- |
+| `sub-new01_space-MNI_pet.nii.gz` | The scan warped into MNI space (native scans only) |
+| `sub-new01_space-MNI_desc-hn_pet.nii.gz` | The scan normalised with the primary method |
+| `sub-new01_space-MNI_desc-hn_wmap.nii.gz` | W-score map (`_zmap` without covariates) |
+| `sub-new01_report.html` | Standalone HTML report |
+| `sub-new01_classification.json` | Structured numerical outputs behind the report |
 
 ## Compare Groups
 

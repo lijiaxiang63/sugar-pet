@@ -27,10 +27,10 @@ features:
     details: 涵盖经典参考区法、比例缩放（PS），以及 López-González 等（2020）提出的直方图法（HN、iPS、iHN）。
     link: /zh/reference/methods
     linkText: 查看方法说明
-  - title: 自建健康对照参考库
-    details: 只需将健康对照组汇总一次，后续所有患者都可以直接比对，还支持校正年龄和性别。
-    link: /zh/tutorial/build-reference
-    linkText: 建立参考库
+  - title: 基于本项目的健康对照
+    details: 每个项目汇总自己的健康对照，每例患者、每幅图和每次比较都建立在同一组对照上，还可以校正年龄和性别。
+    link: /zh/tutorial/normalize
+    linkText: 强度归一化
   - title: 个体化 Z 值图与 W 值图
     details: 逐体素评估单个患者的脑代谢相对于健康对照的偏离程度。
     link: /zh/tutorial/zmap
@@ -39,8 +39,12 @@ features:
     details: 将患者的代谢分布与 MSA、PSP、CBD、DLB 和 PD 的典型模式比对，生成可打印的 HTML 报告。
     link: /zh/tutorial/classify
     linkText: 了解分类流程
+  - title: 快速分类
+    details: 用项目的对照为另一例患者分类，可直接从原始空间开始，不会把它加入项目。
+    link: /zh/tutorial/quick
+    linkText: 为一例图像分类
   - title: 组间统计比较
-    details: 自动完成归一化、平滑与双样本 t 检验，支持 GRF 和 FDR 多重比较校正并输出团块报告。
+    details: 患者对对照的逐体素双样本 t 检验，支持 GRF 和 FDR 多重比较校正并输出团块报告。
     link: /zh/tutorial/compare
     linkText: 进行组间比较
   - title: 与命令行完全互通

@@ -1,50 +1,49 @@
-# Step 7: Reference cluster
+# Reference cluster
 
-**Page: Reference Cluster** · advanced · needs the reference
+**Page: Reference Cluster** · advanced · needs step 1
 
-Instead of picking a predefined region from an atlas, you can let a patient
-group's own data reveal which voxels are spared by the disease
+Instead of a predefined region from an atlas, the data of a patient group can
+show which voxels the disease spares
 ([Yakushev et al., 2009](https://doi.org/10.1016/j.neuroimage.2008.07.015)).
 
-The intuition is straightforward: after proportional scaling to the global
-mean, spared regions appear *hyper*metabolic relative to controls because
-hypometabolic lesions pull the global mean down. Those voxels then serve as
-the reference region.
+After proportional scaling to the global mean, spared regions look
+*hyper*metabolic against the controls, because the hypometabolic ones pull
+the global mean down. A t-test of the patients against the controls picks
+those voxels out, and they serve as the reference region.
 
 ::: warning Avoid circular analysis
-The resulting cluster is derived from the patient scans you pass in.
-Comparing those same patients against controls using that cluster is
-circular: derive the cluster from an independent patient sample, or use
-cross-validation.
+The cluster comes from the patients you give. Comparing those same patients
+with the controls by that cluster is circular: derive it from another sample
+of patients, or cross-validate.
 :::
 
-## Fill in the page
+## Run it
 
-<Shot name="cluster" alt="The Reference Cluster page, filled in" :marks="[[1, 177], [2, 548], [3, 604], [4, 664], [5, 'run']]" />
+<Shot name="cluster" alt="The Reference Cluster page" :marks="[[1, 180], [2, 316], [3, 357], [4, 450], [5, 'run']]" />
 
-1. **Add the patient images** (at least 2 scans, all on the same grid).
-2. **Reference:** the healthy controls to compare against; pre-filled after
-   [Step 2](./build-reference).
-3. **Save mask as:** output path for the NIfTI mask, e.g.
-   `study/reference_cluster.nii.gz`.
+1. **Patients:** the patients of the project, at least 2, on the same grid.
+   To change them, **Change in Data**.
+2. **Healthy controls:** the control statistics step 1 summarised, which the
+   patients are tested against.
+3. **Mask saved as:** `reference_cluster.nii.gz` in the project folder.
 4. **Options in effect:** the threshold of the test. **Options…** opens
    **Settings › Reference Cluster**, with two options:
-   * *p-value*: one-sided uncorrected threshold (default `0.001`);
-   * *Smallest cluster (mL)*: connected clusters smaller than this volume
-     are discarded (default `1` mL).
+   * *p-value*: one-sided, uncorrected (`0.001` by default);
+   * *Smallest cluster (mL)*: smaller connected clusters are dropped (`1` mL
+     by default).
 5. Click **Find Cluster**.
 
 ## Check the result
 
-<Shot name="cluster-results" alt="The reference cluster that was found" :marks="[[6, 347], [7, 560], [8, 784]]" />
+<Shot name="cluster-results" alt="The reference cluster found" :marks="[[6, 332], [7, 742], [8, 403, 782]]" />
 
 6. **Result:** the volume of the cluster and where the mask was saved.
 7. **The picture** draws the cluster in orange on axial slices of the
-   template. Check where it lies—a tiny cluster of a few mL in an unexpected
-   spot is not a reliable reference.
-8. **Normalise Intensity with This Region** opens the
-   [Intensity Normalisation](./normalize) page with *Custom region* enabled
-   and this mask pre-selected. Add the scans you want to normalise and run.
+   template. Check where it lies: a cluster of a few mL in an unexpected place
+   is no reliable reference.
+8. **Normalise Intensity with This Region** opens
+   [Intensity Normalisation](./normalize) with *Custom region* ticked and this
+   mask chosen.
 
 ::: details The same from the command line
 ```bash
@@ -55,4 +54,4 @@ sugar-pet normalize others/*.nii.gz -m region --mask reference_cluster.nii.gz -o
 
 ## Next
 
-Browse the built-in [masks and atlas labels](./masks).
+The built-in [masks and atlas labels](./masks).

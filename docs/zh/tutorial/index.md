@@ -1,53 +1,55 @@
 # 教程：从原始图像到分析结果
 
-本教程会按页面顺序带你走一遍完整的分析流程。每一步都会说明具体操作、附上带数字标注的界面截图，并列出最终生成的文件。
+本教程按页面顺序带你走一遍完整的分析流程。每一章说明要怎么操作，附上带数字标注的界面截图，并列出该页面写出的文件。
 
-## 示例研究背景
+## 示例研究
 
-假设研究者 Ada 正在做一项非典型帕金森综合征的研究，手头有以下数据：
+假设 Ada 正在做一项非典型帕金森综合征的研究，手头有：
 
-* **12 例患者**和 **16 例健康对照**的 FDG-PET 图像（每人一幅，均来自同一台扫描仪）；
-* 一份 `participants.tsv`，记录了这 28 名受试者的年龄和性别；
-* 所有文件都按照上一节介绍的[目录结构](../guide/prepare-data#layout)存放在 `study/` 文件夹下。
+* **6 例患者**和 **16 例健康对照**的 FDG-PET 图像，每人一幅，来自同一台扫描仪，还在扫描仪的原始空间；
+* 一份 `participants.tsv`，记录了这 22 名受试者的年龄和性别。
 
-她希望通过这次分析拿到三类结果：每位患者相对于对照的异常代谢脑区图、辅助判断各患者倾向于哪种帕金森综合征的分类报告，以及患者组与对照组在全脑水平上的组间差异。
+她想得到三类结果：每位患者相对于对照的异常代谢脑区图、判断每例患者更像哪种帕金森综合征的分类报告，以及患者组与对照组在全脑水平的差异。之后门诊又来了一位新患者，她想用同一组对照为这例图像分类。
 
-## 流程概览
+## 各章内容
 
 <div class="flow">
-  <a href="./spatial"><span class="n">第 1 步 · 可选</span><span class="t">空间标准化</span><span class="d">仅当图像还在扫描仪原始空间时需要，需配合 MATLAB 和 SPM。</span></a>
-  <a href="./build-reference"><span class="n">第 2 步</span><span class="t">建立参考库</span><span class="d">将健康对照数据汇总一次，供后续大多数分析直接调用。</span></a>
-  <a href="./normalize"><span class="n">第 3 步</span><span class="t">强度归一化</span><span class="d">将每幅图像除以各自因子，输出归一化图像和因子表。</span></a>
-  <a href="./zmap"><span class="n">第 4 步</span><span class="t">Z 值图与 W 值图</span><span class="d">评估单个患者各个体素偏离健康对照的程度。</span></a>
-  <a href="./classify"><span class="n">第 5 步</span><span class="t">帕金森综合征分类</span><span class="d">比对典型代谢模式并生成可打印的 HTML 报告。</span></a>
-  <a href="./compare"><span class="n">第 6 步</span><span class="t">组间比较</span><span class="d">患者组与对照组的逐体素 t 检验及多重比较校正。</span></a>
-  <a href="./reference-cluster"><span class="n">第 7 步 · 进阶</span><span class="t">参考簇</span><span class="d">基于患者组数据自动提取未受累区域，用于敏感性分析。</span></a>
-  <a href="./masks"><span class="n">资源</span><span class="t">掩膜与图谱</span><span class="d">查看或导出软件内置的标准脑区掩膜和图谱标签。</span></a>
+  <a href="./project"><span class="n">1</span><span class="t">建立项目</span><span class="d">一个文件夹存放图像和所有分析结果。添加患者、至少 3 例健康对照以及年龄和性别表。</span></a>
+  <a href="./spatial"><span class="n">2 · 仅限原始空间</span><span class="t">空间标准化</span><span class="d">仅当图像还在扫描仪原始空间时需要，需配合 MATLAB 和 SPM。</span></a>
+  <a href="./normalize"><span class="n">3 · 第 1 步</span><span class="t">强度归一化</span><span class="d">先汇总对照，再把每幅图像除以各自的因子。</span></a>
+  <a href="./zmap"><span class="n">4 · 第 2 步</span><span class="t">Z 值图与 W 值图</span><span class="d">患者每个体素偏离对照多远。</span></a>
+  <a href="./classify"><span class="n">5 · 第 3 步</span><span class="t">帕金森综合征分类</span><span class="d">把每例患者的图与典型综合征比对，并生成报告。</span></a>
+  <a href="./quick"><span class="n">6</span><span class="t">快速分类</span><span class="d">项目之外再来一例患者，用本项目的对照分类，但不加入项目。</span></a>
+  <a href="./compare"><span class="n">7</span><span class="t">组间比较</span><span class="d">患者组与对照组的逐体素双样本 t 检验。</span></a>
+  <a href="./reference-cluster"><span class="n">8 · 进阶</span><span class="t">参考簇</span><span class="d">由数据得出的参考区，用于敏感性分析。</span></a>
+  <a href="./masks"><span class="n">资源</span><span class="t">掩膜与图谱</span><span class="d">内置脑区与图谱标签。</span></a>
 </div>
 
-::: tip 一定要先建参考库吗？
-教程的顺序和左侧边栏一致：**参考库**排在**强度归一化**前面，因为推荐的直方图归一化（HN）依赖参考库。如果只用小脑等经典参考区，并不需要健康对照数据，可以跳过建库这一步。
-:::
+## 第 1、2、3 步
 
-## 按需挑选步骤
+强度归一化、Z 值图和帕金森综合征分类是**个案分析**的三步，软件也这样给它们编号：本教程里说的*第 1 步*、*第 2 步*、*第 3 步*指这三个页面，而不是教程的章节。每一步读取上一步写出的文件，把从上一步沿用的内容展示出来而不再重复询问，并且要等上一步运行完才能开始。
 
-第 3、4、5 步是**个案分析**的连续三步，对应侧边栏里的同一组页面：每一步都沿用前一步的图像和方法，页面上不再重选，前一步没有完成时后一步不能运行。第 6、7 步各自独立。按你的研究需求走到需要的那一步即可：
+组间比较和参考簇同样建立在第 1 步之上：组间比较检验的是第 1 步归一化后的图像，二者也都和第 1 步汇总的对照比较。快速分类则为项目之外的一例患者走完全部三步。
 
-| 如果你需要… | 建议操作 |
+## 每例患者都与本项目的对照比较
+
+每个项目都有自己的健康对照，至少 3 例。第 1 步把它们汇总成**对照统计**，即每个体素的均值和离散程度，此后每例患者都与之比较：Z 值图、分类、组间比较和快速分类都建立在同一组对照上。不需要手动建立或导入任何东西；对照或设置改变后，下一次运行会重新汇总。
+
+## 不一定要做完每一章
+
+| 目标 | 需要的章节 |
 | --- | --- |
-| 导出归一化图像，拿到 SPM 等其他软件里做统计 | 第 2 步，然后[第 3 步](./normalize) |
-| 同上，但只想用小脑等简单参考区（不用对照） | 直接做[第 3 步](./normalize) |
-| 查看单个患者的代谢异常脑区 | 第 2 步，然后[第 3 步](./normalize)、[第 4 步](./zmap) |
-| 生成帕金森综合征分型辅助报告 | 第 2 步，然后[第 3 步](./normalize)、[第 4 步](./zmap)、[第 5 步](./classify) |
-| 比较患者组与对照组的代谢差异 | 第 2 步，然后[第 6 步](./compare) |
+| 得到归一化图像，交给其他统计软件 | [项目](./project)，然后[第 1 步](./normalize) |
+| 看每例患者哪里异常 | [项目](./project)、[第 1 步](./normalize)和[第 2 步](./zmap) |
+| 给患者出分类报告 | [项目](./project)、[第 1 步](./normalize)、[第 2 步](./zmap)和[第 3 步](./classify) |
+| 之后再为一例新患者分类 | 先完成上一行，再对每例新图像做[快速分类](./quick) |
+| 比较患者组与对照组 | [项目](./project)、[第 1 步](./normalize)，然后[组间比较](./compare) |
 
-第 6 步在内部自行完成归一化，不需要先跑第 3 步；它默认沿用第 3 步选定的方法。
+原始空间的图像在以上每一行都要先经过[空间标准化](./spatial)。
 
-## 准备工作
+## 开始之前
 
-在开始前，请确认你已经完成：
+* 已经[安装](../guide/install)好软件，并[认识了界面](../guide/interface)。
+* 已经[准备好数据](../guide/prepare-data)。
 
-* [安装应用](../guide/install)，并大致[熟悉了界面](../guide/interface)；
-* 按照[准备数据](../guide/prepare-data)的要求整理好图像和表格。
-
-准备好之后，就可以从[第 1 步](./spatial)开始了；如果你的图像已经配准到 MNI 空间，可以直接跳到[第 2 步](./build-reference)。
+从[建立项目](./project)开始。

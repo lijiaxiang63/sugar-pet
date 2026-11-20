@@ -10,21 +10,27 @@
 | --- | --- |
 | `sub-01_space-MNI_pet.nii.gz` | 配准到 MNI 空间的 PET 图像，体素大小 2 mm |
 
-## 参考库
+## 强度归一化
 
-参考库是一个包含以下文件的文件夹：
+第 1 步先写出对照统计，再写出归一化图像。
+
+### 对照统计 {#control-statistics}
+
+项目的 `hc_reference/` 文件夹保存对照的汇总结果，之后的每个页面都会读取它：
 
 | 文件 | 说明 |
 | --- | --- |
-| `reference.json` | 记录对照例数、平滑核、掩膜及每例对照的归一化因子 |
-| `template.nii.gz` | 对照组经比例缩放后的均值图 |
-| `ps_std.nii.gz` | 对照组经 PS 归一化后的标准差图 |
-| `hn_mean.nii.gz`、`hn_std.nii.gz` | 对照组经 HN 归一化后的均值与标准差图 |
-| `mask.nii.gz` | 估计因子所用的掩膜 |
-| `stats-<方法>_mean.nii.gz`、`…_std.nii.gz` | 仅当建库时勾选了*其他方法的 Z 值图*才会生成 |
-| `model-<方法>_beta.nii.gz`、`…_sd.nii.gz` | 仅当提供了协变量表时生成，保存摄取与协变量的回归参数 |
+| `reference.json` | 记录对照例数、平滑核、掩膜、协变量及每例对照的归一化因子 |
+| `template.nii.gz` | 对照经比例缩放后的均值图 |
+| `ps_std.nii.gz` | 对照经 PS 归一化后的标准差图 |
+| `hn_mean.nii.gz`、`hn_std.nii.gz` | 对照经 HN 归一化后的均值与标准差图 |
+| `mask.nii.gz` | 估计因子所用的体素 |
+| `stats-<方法>_mean.nii.gz`、`…_std.nii.gz` | 仅限*其他方法的对照统计*中勾选的方法 |
+| `model-<方法>_beta.nii.gz`、`…_sd.nii.gz` | 仅当有协变量表时生成：摄取对协变量的回归参数 |
 
-## 强度归一化
+### 归一化图像
+
+在 `normalised/patients/` 和 `normalised/controls/` 中：
 
 | 文件 | 说明 |
 | --- | --- |
@@ -55,9 +61,22 @@
 | 文件 | 说明 |
 | --- | --- |
 | `sub-01_report.html` | 独立网页报告，可在浏览器中直接打印为 PDF |
-| `sub-01_desc-hn_wmap.nii.gz` | 生成报告所依据的偏离图（无协变量表时为 `_zmap`） |
 | `sub-01_classification.json` | 报告中所有脑区得分、模式匹配度与结论的结构化数据 |
 | `classification.tsv` | 汇总表，每位患者一行，包含结论与各模式得分 |
+
+软件读取“Z 值图”页面生成的图，不在这里另存一份；命令行的 `classify` 会同时写出它计算的图 `sub-01_desc-hn_wmap.nii.gz`。
+
+## 快速分类
+
+每例分类的图像在 `quick/<图像名>/` 中：
+
+| 文件 | 说明 |
+| --- | --- |
+| `sub-new01_space-MNI_pet.nii.gz` | 配准到 MNI 空间的图像（仅原始空间图像） |
+| `sub-new01_space-MNI_desc-hn_pet.nii.gz` | 用主方法归一化的图像 |
+| `sub-new01_space-MNI_desc-hn_wmap.nii.gz` | W 值图（无协变量时为 `_zmap`） |
+| `sub-new01_report.html` | 独立网页报告 |
+| `sub-new01_classification.json` | 报告背后的结构化数值 |
 
 ## 组间比较
 

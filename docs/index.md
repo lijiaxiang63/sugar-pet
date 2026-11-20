@@ -28,9 +28,9 @@ features:
     link: /reference/methods
     linkText: Choosing a method
   - title: Built from your own controls
-    details: Summarise your healthy control group once, then compare every patient against it—optionally adjusting for age and sex.
-    link: /tutorial/build-reference
-    linkText: Build the reference
+    details: Every project summarises its own healthy controls, and every patient, map and comparison rests on them—optionally adjusting for age and sex.
+    link: /tutorial/normalize
+    linkText: Normalise the intensity
   - title: Z-score and W-score maps
     details: Quantify, voxel by voxel, how far a patient's uptake deviates from healthy controls.
     link: /tutorial/zmap
@@ -39,8 +39,12 @@ features:
     details: Compare a patient's metabolic pattern against MSA, PSP, CBD, DLB, and PD, and export a printable report.
     link: /tutorial/classify
     linkText: Classify a patient
+  - title: Quick classification
+    details: Classify one more patient against the controls of a project, straight from native space, without adding the scan to the project.
+    link: /tutorial/quick
+    linkText: Classify one scan
   - title: Group comparisons
-    details: Normalise, smooth, and run voxel-wise two-sample t-tests in one step, with GRF or FDR correction and cluster tables.
+    details: Voxel-wise two-sample t-tests of patients against controls, with GRF or FDR correction and cluster tables.
     link: /tutorial/compare
     linkText: Compare two groups
   - title: Full CLI interoperability

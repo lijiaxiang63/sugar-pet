@@ -2,8 +2,8 @@
 
 The desktop app is a graphical front end for **sugar-pet**, a Python package
 with a command-line interface. Both implement the same methods and read and
-write identical files, so you can mix them freely—build a reference in the
-app and pass it to a script, or vice versa.
+write identical files, so you can mix them freely—pass the control statistics
+of a project (its `hc_reference/` folder) to a script, or vice versa.
 
 Use the CLI for batch processing across studies, running on a remote server,
 or calling methods directly from Python.
@@ -25,12 +25,12 @@ pip install "sugar-pet[stats] @ git+https://github.com/lijiaxiang63/sugar-pet"
 
 | App page | Command |
 | --- | --- |
-| Study Folder | `sugar-pet init` |
+| Data (the folders of a project) | `sugar-pet init` |
 | Spatial Normalisation | `sugar-pet spatial-norm` |
-| Intensity Normalisation | `sugar-pet normalize` |
-| Reference | `sugar-pet build-reference` |
+| Intensity Normalisation | `sugar-pet build-reference` (the control statistics), then `sugar-pet normalize` |
 | Z-score Maps | `sugar-pet zmap` |
 | Classify Parkinsonism | `sugar-pet classify` |
+| Quick Classification | `sugar-pet spatial-norm`, then `sugar-pet classify` on the one scan |
 | Compare Groups | `sugar-pet compare` |
 | Reference Cluster | `sugar-pet reference-cluster` |
 | Masks & Atlas | `sugar-pet masks`, `sugar-pet labels`, `sugar-pet methods` |
@@ -42,31 +42,31 @@ Run `sugar-pet <command> --help` to see all options for a subcommand.
 The full [tutorial](../tutorial/) translates to:
 
 ```bash
-# Before you start: create the study folder, then put your data in it
+# Make the folders of a project, then put your data in it
 sugar-pet init study/
 cd study/
 
-# Step 1 (optional): warp to MNI space
-sugar-pet spatial-norm raw/*_pet.nii.gz -o patients/ --spm-path /path/to/spm12 --jobs 4
+# Before step 1, for images in native space: warp to MNI space
+sugar-pet spatial-norm raw/patients/*_pet.nii.gz -o patients/ --spm-path /path/to/spm12 --jobs 4
+sugar-pet spatial-norm raw/controls/*_pet.nii.gz -o controls/ --spm-path /path/to/spm12 --jobs 4
 
-# Step 2: build the reference
+# Step 1: summarise the controls into control statistics, then normalise every image
 sugar-pet build-reference controls/*.nii.gz -o hc_reference/ \
     --covariates participants.tsv --stats-for occipital,white-matter
+sugar-pet normalize patients/*.nii.gz -m hn -r hc_reference/ -o normalised/patients/
+sugar-pet normalize controls/*.nii.gz -m hn -r hc_reference/ -o normalised/controls/
 
-# Step 3: normalise intensity
-sugar-pet normalize patients/*.nii.gz -m hn,cerebellum -r hc_reference/ -o normalised/
-
-# Step 4: W-score maps
+# Step 2: W-score maps
 sugar-pet zmap patients/*.nii.gz -m hn -r hc_reference/ -o zmaps/ --covariates participants.tsv
 
-# Step 5: classify parkinsonism
+# Step 3: classify parkinsonism
 sugar-pet classify patients/*.nii.gz -r hc_reference/ -o reports/ --covariates participants.tsv
 
-# Step 6: compare groups
+# Compare the groups
 sugar-pet compare --group1 patients/*.nii.gz --group2 controls/*.nii.gz \
     -m hn -r hc_reference/ -o compare/ --covariates participants.tsv --name patients_vs_controls
 
-# Step 7: reference cluster
+# Reference cluster
 sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o reference_cluster.nii.gz
 ```
 
@@ -75,7 +75,7 @@ sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o reference_clus
 | App setting | CLI flag |
 | --- | --- |
 | Ticked methods | `-m hn,cerebellum` (or `-m all`) |
-| Reference | `-r hc_reference/` |
+| Control statistics | `-r hc_reference/` |
 | Output folder | `-o out/` |
 | Covariate table, *Adjust for* | `--covariates participants.tsv`, `--adjust-for age,sex` |
 | Smoothing | `--fwhm 8` |
@@ -87,7 +87,7 @@ sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o reference_clus
 | Save masks | `--save-masks` |
 | Exclusion p-value, Exclude, Re-estimations | `--p-threshold 0.01`, `--exclude hypo`, `--max-iter 1` |
 | Plain mean for iPS | `--literal-ips` |
-| Z-score maps with other methods | `--stats-for occipital,white-matter` |
+| Control statistics of other methods | `--stats-for occipital,white-matter` |
 | Multiple-comparison correction | `--correction grf` (`--voxel-p`, `--cluster-p`), `fdr` (`--q`), `none` |
 | Voxels to test | `--analysis-mask gray-matter` |
 | Keep the images that were tested | `--keep-images` |

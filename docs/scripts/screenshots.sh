@@ -27,26 +27,27 @@ height=900
 # and "settings-<section>" a section of the settings window, which is drawn
 # at its own size (820 x 620, see Shot.vue).
 shots="
-study:study
+welcome:welcome                 welcome-new:new-project
+data:data                       data-end:data-covariates
 spatial:spatial                 spatial-end:spatial-results
-reference:reference             reference-2:reference-controls
-reference-end:reference-settings
-normalize:normalize             normalize-2:normalize-output
-normalize-end:normalize-results
+normalize:normalize             normalize-2:normalize-controls
+normalize-3:normalize-output    normalize-end:normalize-results
 zmap:zmap                       zmap-end:zmap-results
 classify:classify               classify-2:classify-results
 classify-end:classify-figure
-compare:compare                 compare-2:compare-output
-compare-end:compare-results
+quick:quick                     quick-2:quick-results
+quick-end:quick-warp
+compare:compare                 compare-end:compare-results
 cluster:cluster                 cluster-end:cluster-results
 masks:masks                     masks-end:masks-atlas
 normalize-dark:normalize-dark
 settings-general:settings-general
 settings-spatial:settings-spatial
 settings-normalize:settings-normalize
-settings-reference:settings-reference
+settings-reference:settings-controls
 settings-classify:settings-classify
 settings-compare:settings-compare
+settings-cluster:settings-cluster
 "
 
 # The pictures of the READMEs, <snapshot>:<name>: the window as the app first

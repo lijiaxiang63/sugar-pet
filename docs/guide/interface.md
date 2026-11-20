@@ -3,56 +3,58 @@
 Every page in SUGAR-PET shares the same core layout and controls. Once you
 know where things live here, the tutorial will simply tell you what to select.
 
-<Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 112], [2, 222, 830], [3, 140, 874], [4, 217], [5, 546], [6, 257, 862], [7, 707, 845]]" />
+<Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 116], [2, 216, 185], [3, 216, 874], [4, 109], [5, 871, 351], [6, 474, 861], [7, 734, 861], [8, 913, 861]]" />
 
-1. **Navigation sidebar.** Lists the pages in the order of a typical workflow,
-   in groups: preparing the study and its reference, the analyses of single
-   patients, and those of groups. Click any item to switch pages. A tick marks
-   the pages whose last run succeeded, a spinner the one that is running, and
-   a number says how many images are queued on a page that has neither.
-2. **Reference in use.** Displays the active healthy-control reference folder.
-   Click it to switch to a different reference. This selection is shared across
-   all pages. Once a study folder is in use, a card above it names that folder
-   and opens the Study Folder page.
+1. **The project.** The name of the open [project](../tutorial/project) and
+   how many patients and controls it holds. Click it for the Data page.
+2. **Navigation sidebar.** The pages in the order of an analysis, in groups:
+   the project (Data, and Spatial Normalisation for images in native space),
+   the individual analysis, the group analysis, Quick Classification outside
+   the project, and Masks & Atlas. A tick marks the pages whose last run
+   succeeded and still rests on what came before, a spinner the one that is
+   running, and a number how many images a page has still to run on.
 3. **Settings.** Opens the [Settings window](#the-settings-window), which holds
    the language, the updates, and the options of every analysis. The number
    next to it is the version of the app; it turns into an **Update** badge
    when a newer version is available.
-4. **Image list.** Where you load input scans (see [below](#lists-of-images)).
-5. **What the run needs.** Tiles to tick, dropdowns, and path selectors
-   grouped into cards, with brief helper text under each heading. A page asks
-   only for what a run cannot do without: the images, the methods, the
-   reference, and where to write.
-6. **Status bar.** Shows what is still needed before running (e.g., "Choose
-   the output folder."), tracks progress during execution, and reports success
-   or errors when finished.
+4. **The line of steps.** The three pages of the **individual analysis**
+   (Intensity Normalisation, Z-score Maps, Classify Parkinsonism) are steps
+   in a row, with Spatial Normalisation before them for images in native
+   space. A tick marks a step that is done, and a click goes to a step.
+5. **What a page reads.** The images are added on the Data page only; the
+   other pages show them, read-only, with a button that leads to where they
+   are changed, here **Change in Data**. A later step likewise shows the
+   methods of the step before it and does not ask for them again.
+6. **Status bar.** Shows what is still needed before running (for example
+   that the project needs at least 3 controls), tracks progress during
+   execution, and reports success or errors when finished.
 7. **Run button.** Starts the task and turns into **Cancel** while running.
    Only one task can run at a time.
+8. **Next.** Once a step is done, a button beside the run button leads to
+   the next page.
 
-The three pages of the **individual analysis** (Intensity Normalisation,
-Z-score Maps, Classify Parkinsonism) are steps in a row, with a line of steps
-at their top: a tick marks a step that is done, and a click goes to a step.
-A later step shows the images and methods of the step before it, read-only,
-and does not ask for them again; once a step is done, a **Next** button
-appears beside its run button.
+When something a page rests on has changed since it last ran (the images, an
+option, an earlier step), its results are kept but the page says so, its tick
+in the sidebar goes away, and the status bar names the page to run again.
 
 ## Lists of images
 
-Input images must be NIfTI files (`.nii` or `.nii.gz`). You can add them in
-three ways:
+Images are added on the [Data page](../tutorial/project#the-data-page), the
+only one with lists to fill. Input images must be NIfTI files (`.nii` or
+`.nii.gz`). You can add them in three ways:
 
 * **Drag and drop** files or entire folders directly onto the list;
 * Click **Add Files…** to pick individual images;
 * Click **Add Folder…** to import all images in a directory.
 
-Once a [study folder](./prepare-data) is in use, a fourth button, such as
-**Load patients/**, adds the images of the study's own folder in one click.
+When the project's own `patients/` or `controls/` folder holds images, a
+fourth button, such as **Load patients/**, adds them in one click.
 
-The counter next to the heading shows the total number of queued images. Click
-**×** on a row to remove a single image, or **Clear** to empty the list. When
-all images come from one folder, that folder is named once, in the heading;
-otherwise the parent folder is shown next to each filename so you can tell
-identically named files apart.
+The counter next to the heading shows the number of images. Click **×** on a
+row to remove a single image, or **Clear** to empty the list; neither deletes
+a file. When all images come from one folder, that folder is named once, in
+the heading; otherwise the parent folder is shown next to each filename so
+you can tell identically named files apart.
 
 A list of more than 8 images has a **filter** box above it. Filtering changes
 only which rows are shown: the run, the counter and **Clear** still act on the
@@ -71,18 +73,17 @@ are not on the pages: they live in the [Settings window](#the-settings-window),
 and their defaults match the original papers. So that nothing is hidden, a
 line under the cards of each page says which options are in effect.
 
-<Shot name="normalize-output" alt="The line of options under the cards of a page" :marks="[[1, 521], [2, 1016, 521]]" />
+<Shot name="normalize-output" alt="A line of options on a page" :marks="[[1, 500], [2, 880, 500], [3, 961, 500]]" />
 
-1. **Options in effect.** A one-line summary, here *Mean of the region ·
-   target 1 · smoothing automatic*. When an option differs from its default, a
-   badge such as **1 changed** appears at the end of the line; hover over it
-   to see which.
-2. **Options…** opens the Settings window at the section that holds the
-   options of this page.
+1. **Options in effect.** A one-line summary, here that of the control
+   statistics: the mask, the smoothing, and the statistics of further
+   methods kept.
+2. **A badge** such as **1 changed** appears at the end of the line when an
+   option differs from its default; hover over it to see which.
+3. **Options…** opens the Settings window at the section that holds these
+   options.
 
-The Z-score Maps page shows this line only while iPS or iHN is ticked (they
-are the only methods with options there), and Study Folder and Masks & Atlas
-have none.
+The Data page and Masks & Atlas have no options.
 
 ## The Settings window
 
@@ -92,21 +93,21 @@ on macOS or <kbd>Ctrl</kbd> <kbd>,</kbd> on Windows and Linux, or choose
 their own, so you can keep it open next to the main one. A change takes
 effect at once and is saved: there is no OK button.
 
-<Shot name="settings-general" alt="The Settings window, on its General section" :marks="[[1, 197, 134], [2, 170, 202], [3, 152], [4, 266], [5, 327]]" />
+<Shot name="settings-general" alt="The Settings window, on its General section" :marks="[[1, 196, 68], [2, 143], [3, 256], [4, 318]]" />
 
 1. **Sections.** *General*, then one section for each analysis with the
    options its page leaves out: **Spatial Normalisation** (SPM, MATLAB and
    the template), **Intensity Normalisation** (including the options of iPS
-   and iHN, which the Z-score Maps page shares), **Reference**, **Classify
-   Parkinsonism**, **Compare Groups**, and **Reference Cluster**. The
-   tutorial describes each section in the step that uses it.
-2. **A dot** marks a section in which an option differs from its default. The
-   bottom of such a section names the changed options, and **Restore
-   Defaults** puts that section back as it was.
-3. **Language of the app.** English or 中文; the whole app switches at once.
-4. **Version and updates.** The version you are running, when the app last
+   and iHN), **Control Statistics** (how the controls are summarised),
+   **Classify Parkinsonism**, **Compare Groups**, and **Reference Cluster**.
+   The tutorial describes each section in the step that uses it. A dot marks
+   a section in which an option differs from its default; the bottom of such
+   a section names the changed options, and **Restore Defaults** puts that
+   section back as it was.
+2. **Language of the app.** English or 中文; the whole app switches at once.
+3. **Version and updates.** The version you are running, when the app last
    looked for a newer one, and **Check for Updates…** to look right now.
-5. **Automatic updates.** Whether the app checks by itself, and whether it
+4. **Automatic updates.** Whether the app checks by itself, and whether it
    also downloads and installs what it finds.
 
 ### Updates {#updates}
@@ -142,9 +143,11 @@ is noted below the table.
 
 ## What the app remembers
 
-Your chosen language, last visited page, active reference, output folder,
-MATLAB/SPM paths, and every option of the Settings window are saved across
-sessions. Image lists are cleared on exit.
+The app keeps your language, the projects opened recently, and the paths of
+MATLAB and SPM. Everything else belongs to a project and is kept in its file,
+`sugar-pet-project.json`: the images, what you chose on every page, the
+options of the Settings window, and the results of every step. Open a
+project again and it is where you left it.
 
 ## Next
 

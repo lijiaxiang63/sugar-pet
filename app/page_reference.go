@@ -200,11 +200,15 @@ func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []f
 
 // refInfo is what reference.json says about a reference.
 type refInfo struct {
-	N          int      `json:"n_controls"`
-	FWHM       float64  `json:"fwhm_mm"`
-	Mask       string   `json:"mask"`
-	StatsFor   []string `json:"stats_for"`
-	Models     []string `json:"models"`
+	N        int      `json:"n_controls"`
+	FWHM     float64  `json:"fwhm_mm"`
+	Mask     string   `json:"mask"`
+	StatsFor []string `json:"stats_for"`
+	Models   []string `json:"models"`
+	// How the factors of the controls were estimated, where not by the mean
+	// of a region and the default smoothing of each method.
+	Statistic  string   `json:"statistic"`
+	FactorFWHM *float64 `json:"factor_fwhm_mm"`
 	Covariates []struct {
 		Name string `json:"name"`
 	} `json:"covariates"`
@@ -320,14 +324,13 @@ func (a *app) referenceView(c *ui.Context) {
 					a.show(&p.pic, p.current, referencePicture(p.current))
 					a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
 					ui.Row(c).Gap(8).Wrap().GapY(6).Children(func() {
+						// The individual analysis begins at its first step; the
+						// others are reached from there.
 						if button(c.Key("ref-to-norm"), T("Go to Intensity Normalisation", "前往强度归一化"), iconArrowRight, buttonSoft, 26).Clicked() {
 							a.page = "normalize"
 						}
-						if button(c.Key("ref-to-zmap"), T("Go to Z-score Maps", "前往 Z 值图"), iconArrowRight, buttonSoft, 26).Clicked() {
-							a.page = "zmap"
-						}
-						if button(c.Key("ref-to-cls"), T("Go to Classify Parkinsonism", "前往帕金森综合征分类"), iconArrowRight, buttonSoft, 26).Clicked() {
-							a.page = "classify"
+						if button(c.Key("ref-to-cmp"), T("Go to Compare Groups", "前往组间比较"), iconArrowRight, buttonSoft, 26).Clicked() {
+							a.page = "compare"
 						}
 					})
 				})
@@ -365,6 +368,15 @@ func (a *app) runReference() {
 	files := append([]string(nil), p.files.files...)
 	o := a.opt
 	opt := core.BuildOptions{FWHM: o.RefFWHM, Mask: core.MaskSpec{Name: o.RefMask}, StatsFor: o.statsFor()}
+	// The factors of the controls are estimated as Intensity Normalisation
+	// estimates those of an image, so that the two can be compared.
+	if o.Statistic == 1 {
+		opt.Statistic = "median"
+	}
+	if !o.FWHMAuto {
+		fwhm := o.FWHM
+		opt.FactorFWHM = &fwhm
+	}
 	if o.RefMask == "file" {
 		opt.Mask = core.MaskSpec{Name: o.RefMaskFile}
 	}
@@ -395,6 +407,11 @@ func (a *app) runReference() {
 		return func() {
 			a.setReference(out)
 			p.current = ""
+			// Images normalised with the reference that was in this folder
+			// are not normalised with this one.
+			if d := a.norm.done; d != nil && d.reference == out {
+				d.rebuilt = true
+			}
 			p.st.ok = Tf("Reference built from %d controls; it is now the reference in use.", "已用 %d 例对照建立参考库，并设为当前参考库。", len(files))
 		}, nil
 	}, func(err error) { p.st.err = err.Error() })

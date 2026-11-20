@@ -68,8 +68,9 @@ you make them.
 7. **The table** lists each input image and its output file. Click a row to
    draw that image. A row whose output reads **Failed** in red did not work; the
    reason appears below the table.
-8. Click **Use for Intensity Normalisation** to jump to the next page with
-   these images pre-loaded, or **Show in Finder** to inspect the files.
+8. Hand the images on: **Use for Intensity Normalisation** for patients, or
+   **Use to Build a Reference** for controls, jumps to that page with these
+   images pre-loaded. **Show in Finder** shows the files.
 
 ::: tip Warp your controls the same way
 Process your healthy controls identically (Ada saves them to

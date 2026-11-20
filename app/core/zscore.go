@@ -61,65 +61,150 @@ func (p *zmapParts) volume(img *Volume, method string, ref *Reference) *Volume {
 	return out
 }
 
+// designRow is the row of the covariate model for one person, with what is
+// to be minded about it; nil without covariates.
+func designRow(method string, ref *Reference, covariates map[string]string) (row []float64, warnings []string, err error) {
+	if covariates == nil {
+		return nil, nil, nil
+	}
+	if _, err := ref.ControlModel(method); err != nil {
+		return nil, nil, err
+	}
+	return DesignRow(ref.Terms, covariates)
+}
+
 func zmapScores(img *Volume, method string, ref *Reference, opt ZMapOptions) (*zmapParts, error) {
 	if _, err := ref.ControlStats(method); err != nil { // fail before doing any work
 		return nil, err
 	}
-	var row []float64
-	var warnings []string
-	if opt.Covariates != nil {
-		if _, err := ref.ControlModel(method); err != nil {
-			return nil, err
-		}
-		var err error
-		if row, warnings, err = DesignRow(ref.Terms, opt.Covariates); err != nil {
-			return nil, err
-		}
+	row, warnings, err := designRow(method, ref, opt.Covariates)
+	if err != nil {
+		return nil, err
 	}
+	// The factor is estimated the way those of the controls were.
 	normOpt := DefaultNormOptions()
-	normOpt.Reference = ref
+	normOpt.Reference, normOpt.FWHM = ref, ref.FactorFWHM
+	if ref.Statistic != "" {
+		normOpt.Statistic = ref.Statistic
+	}
 	normOpt.PThreshold, normOpt.Exclude, normOpt.MaxIter = opt.PThreshold, opt.Exclude, opt.MaxIter
 	res, err := Normalize(img, method, normOpt)
 	if err != nil {
 		return nil, err
 	}
-	warnings = append(warnings, res.Warnings...)
-	grid := ref.OnGrid(img.Dim, img.Aff)
-	nvox := img.NVox()
-	var mean, std []float32
-	if row == nil {
-		stat, _ := grid.ControlStats(method)
-		mean, std = stat.Mean, stat.Std
-	} else {
-		model, _ := grid.ControlModel(method)
-		std = model.SD
-		mean = make([]float32, nvox)
-		for j, beta := range model.Beta {
-			w := float32(row[j])
-			for v := range mean {
-				mean[v] += float32(w * beta[v])
-			}
-		}
-	}
-	data := res.Image.Data
-	gm, err := GetMask(MaskSpec{Name: "gray-matter"}, img.Dim, img.Aff)
+	parts, err := scoreNormalised(res.Image, method, ref, row)
 	if err != nil {
 		return nil, err
 	}
-	par, err := GetMask(MaskSpec{Name: "parenchyma"}, img.Dim, img.Aff)
+	parts.res, parts.warnings = res, append(warnings, res.Warnings...)
+	return parts, nil
+}
+
+// scoreNormalised compares an image that is intensity-normalised with method
+// (to the target value 1) with the controls normalised the same way: it is
+// smoothed like them and scored voxel by voxel.  row is the person's row of
+// the covariate model, nil for plain z-scores.
+func scoreNormalised(normalised *Volume, method string, ref *Reference, row []float64) (*zmapParts, error) {
+	grid := ref.OnGrid(normalised.Dim, normalised.Aff)
+	nvox := normalised.NVox()
+	std, mean, err := controlsFor(grid, method, row, nvox)
 	if err != nil {
 		return nil, err
 	}
-	valid := validVoxels(data)
-	smoothed := Smooth(data, img.Dim, img.Aff, grid.FWHM)
-	parts := &zmapParts{scores: make([]float32, nvox), brain: make([]bool, nvox), res: res, adjusted: row != nil, warnings: warnings}
+	data := normalised.Data
+	brain, err := scoredVoxels(normalised, std)
+	if err != nil {
+		return nil, err
+	}
+	smoothed := Smooth(data, normalised.Dim, normalised.Aff, grid.FWHM)
+	parts := &zmapParts{scores: make([]float32, nvox), brain: brain, adjusted: row != nil}
 	for v := 0; v < nvox; v++ {
-		if (gm[v] || par[v]) && valid[v] && std[v] > 0 {
-			parts.brain[v] = true
+		if brain[v] {
 			parts.scores[v] = (smoothed[v] - mean[v]) / std[v]
 		}
 	}
 	return parts, nil
+}
+
+// controlsFor is what an image normalised with method is compared with,
+// voxel by voxel: the mean and SD of the controls or, with a row of the
+// covariate model, what they predict for that person and their residual SD.
+func controlsFor(grid *Reference, method string, row []float64, nvox int) (std, mean []float32, err error) {
+	if row == nil {
+		stat, err := grid.ControlStats(method)
+		if err != nil {
+			return nil, nil, err
+		}
+		return stat.Std, stat.Mean, nil
+	}
+	model, err := grid.ControlModel(method)
+	if err != nil {
+		return nil, nil, err
+	}
+	mean = make([]float32, nvox)
+	for j, beta := range model.Beta {
+		w := float32(row[j])
+		for v := range mean {
+			mean[v] += float32(w * beta[v])
+		}
+	}
+	return model.SD, mean, nil
+}
+
+// scoredVoxels are the voxels of a normalised image that get a score: brain
+// tissue that holds signal, where the controls vary.
+func scoredVoxels(normalised *Volume, std []float32) ([]bool, error) {
+	gm, err := GetMask(MaskSpec{Name: "gray-matter"}, normalised.Dim, normalised.Aff)
+	if err != nil {
+		return nil, err
+	}
+	par, err := GetMask(MaskSpec{Name: "parenchyma"}, normalised.Dim, normalised.Aff)
+	if err != nil {
+		return nil, err
+	}
+	valid := validVoxels(normalised.Data)
+	brain := make([]bool, normalised.NVox())
+	for v := range brain {
+		brain[v] = (gm[v] || par[v]) && valid[v] && std[v] > 0
+	}
+	return brain, nil
+}
+
+// atTarget1 is a normalised image as Normalize makes it with the target
+// value 1, which the controls of a reference were scaled to: the image
+// itself if that was its target.
+func atTarget1(normalised *Volume, target float64) *Volume {
+	if target == 1 || target <= 0 {
+		return normalised
+	}
+	out := NewVolume(normalised.Dim, normalised.Aff)
+	scale := float32(1 / target)
+	for i, v := range normalised.Data[:normalised.NVox()] {
+		out.Data[i] = v * scale
+	}
+	return out
+}
+
+// ZMapOf makes the map ZMap makes, of an image that is intensity-normalised
+// already: normalised is what Normalize wrote of it with method, the default
+// region and smoothing of that method, and the target value target; factor
+// is the factor it was divided by.  Nothing is estimated again: the image is
+// smoothed like the controls and compared with them.
+func ZMapOf(normalised *Volume, method string, factor, target float64, ref *Reference, covariates map[string]string) (*Volume, []string, error) {
+	if _, err := ref.ControlStats(method); err != nil {
+		return nil, nil, err
+	}
+	row, warnings, err := designRow(method, ref, covariates)
+	if err != nil {
+		return nil, nil, err
+	}
+	image := atTarget1(normalised, target)
+	parts, err := scoreNormalised(image, method, ref, row)
+	if err != nil {
+		return nil, nil, err
+	}
+	parts.res = &NormResult{Method: method, Factor: factor, Image: image, Target: 1}
+	return parts.volume(normalised, method, ref), warnings, nil
 }
 
 // ClusterOptions are the settings of ReferenceCluster.
@@ -168,7 +253,14 @@ func ReferenceCluster(ctx context.Context, patients []string, reference *Referen
 			}
 		}
 		// Same proportional scaling as the controls of the reference.
-		ps, err := regionMean(img.Data, region)
+		estimate, statistic := img.Data, ref.Statistic
+		if ref.FactorFWHM != nil {
+			estimate = Smooth(img.Data, img.Dim, img.Aff, *ref.FactorFWHM)
+		}
+		if statistic == "" {
+			statistic = "mean"
+		}
+		ps, err := regionStat(estimate, region, statistic)
 		if err != nil {
 			return nil, err
 		}

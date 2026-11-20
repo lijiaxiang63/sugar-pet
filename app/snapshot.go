@@ -99,7 +99,6 @@ func (a *app) demo() {
 	control := func(i int) string { return fmt.Sprintf("/Users/ada/study/controls/sub-hc%02d_space-MNI_pet.nii.gz", i) }
 	for i := 1; i <= 6; i++ {
 		a.norm.files.files = append(a.norm.files.files, patient(i))
-		a.zmap.files.files = append(a.zmap.files.files, patient(i))
 	}
 	for i := 1; i <= 12; i++ {
 		a.cmp.g1.files = append(a.cmp.g1.files, patient(i))
@@ -139,46 +138,64 @@ func (a *app) demo() {
 			normRow{image: image, method: "cerebellum", factor: f[1], voxels: "22750", value: cerebellum})
 	}
 	a.norm.st.ok = Tf("%d image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅图像 × %d 种方法。", 6, 2)
+	// The steps of the individual analysis, each done on what is before it.
+	patients := a.norm.files.files
+	a.norm.done = &normDone{asked: patients, files: patients, methods: a.norm.chosen(), reference: a.norm.reference,
+		settings: a.opt.normSettings(a.norm.chosen())}
 
-	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"occipital", "white-matter"}}
+	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"cerebellum", "white-matter"}}
 	info.Covariates = []struct {
 		Name string `json:"name"`
 	}{{"age"}, {"sex"}}
 	a.ref.current, a.ref.info = a.norm.reference, info
 	a.ref.output = "/Users/ada/study/hc_reference"
-	a.opt.RefStatsFor["occipital"], a.opt.RefStatsFor["white-matter"] = true, true
+	a.opt.RefStatsFor["cerebellum"], a.opt.RefStatsFor["white-matter"] = true, true
 	a.ref.cov.path = "/Users/ada/study/participants.tsv"
 	a.ref.cov.table = &core.Table{Path: a.ref.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 28)}
 	a.ref.cov.adjust = map[string]bool{"age": true, "sex": true}
 	a.ref.cov.stamp = stampOf(a.ref.cov.path) // the table is made up: nothing is to be read
+	// Compare Groups takes the table of the reference, as it does when shown.
+	a.cmp.cov, a.cmp.covFrom = a.ref.cov, a.ref.cov.path
+	a.cmp.cov.columns = a.ref.cov.table.Columns()
 	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
 	a.zmap.covTable = "/Users/ada/study/participants.tsv"
 	a.zmap.output = "/Users/ada/study/zmaps"
 	a.zmap.outDir = a.zmap.output
-	for i, r := range [][2]string{{"-6.41", "9.8%"}, {"-5.07", "6.3%"}, {"-3.12", "2.6%"}, {"-7.85", "12.4%"}, {"-4.66", "5.1%"}, {"-5.93", "8.7%"}} {
+	// A map of each image by each method of step 1, the first of them HN's.
+	for i, r := range [][4]string{{"-6.41", "9.8%", "-6.02", "8.9%"}, {"-5.07", "6.3%", "-4.71", "5.6%"}, {"-3.12", "2.6%", "-2.95", "2.4%"},
+		{"-7.85", "12.4%", "-7.36", "11.2%"}, {"-4.66", "5.1%", "-4.38", "4.7%"}, {"-5.93", "8.7%", "-5.60", "7.9%"}} {
 		image := filepath.Base(patient(i + 1))
-		file := core.OutputName(image, "hn", "wmap")
-		a.zmap.rows = append(a.zmap.rows, zmapRow{image: image, method: "hn", file: file, lowest: r[0], share: r[1],
-			source: patient(i + 1), path: filepath.Join(a.zmap.output, file), wscore: true})
+		for n, method := range []string{"hn", "cerebellum"} {
+			file := core.OutputName(image, method, "wmap")
+			a.zmap.rows = append(a.zmap.rows, zmapRow{image: image, method: method, file: file, lowest: r[2*n], share: r[2*n+1],
+				source: patient(i + 1), path: filepath.Join(a.zmap.output, file), wscore: true})
+		}
 	}
-	a.zmap.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", 6)
+	a.zmap.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", 12)
+	a.zmap.done = &zmapDone{from: a.norm.done, files: patients, methods: a.norm.chosen(), table: a.zmap.covTable}
 
 	cl := &a.classify
-	cl.files.files = a.zmap.files.files[:3]
 	cl.loadedFrom, cl.info = cl.reference, info
-	cl.covTable, cl.output, cl.outDir = a.zmap.covTable, "/Users/ada/study/reports", "/Users/ada/study/reports"
-	scores := [][]int{{84, 31, 22, 18, 12, 9}, {24, 12, 62, 55, 20, 14}, {11, 8, 14, 10, 16, 58}}
-	leading := []string{"msa-p", "psp", ""}
-	cats := [][2]string{{"pattern", "high"}, {"indeterminate", ""}, {"none", ""}}
+	cl.output, cl.outDir = "/Users/ada/study/reports", "/Users/ada/study/reports"
+	cl.from, cl.method = a.zmap.done, "hn"
+	// A reading for each image of step 2.
+	scores := [][]int{{84, 31, 22, 18, 12, 9}, {24, 12, 62, 55, 20, 14}, {11, 8, 14, 10, 16, 58}, {15, 10, 21, 26, 73, 12}, {19, 47, 16, 11, 9, 22}, {9, 12, 10, 14, 13, 61}}
+	leading := []string{"msa-p", "psp", "", "dlb", "msa-c", ""}
+	cats := [][2]string{{"pattern", "high"}, {"indeterminate", ""}, {"none", ""}, {"pattern", "moderate"}, {"possible", ""}, {"none", ""}}
+	none := [2]string{T("No pattern of atypical parkinsonism", "未见非典型帕金森综合征的模式"), T("Favours Parkinson's disease in a patient with parkinsonism", "对帕金森综合征患者而言更倾向于帕金森病")}
 	for i, r := range [][2]string{
 		{core.ReportText("name-msa-p", uiLang()), Tf("Pattern match %d/100", "模式匹配度 %d/100", 84)},
 		{Tf("%s or %s", "%s 或 %s", core.ReportText("name-psp", uiLang()), core.ReportText("name-cbd", uiLang())),
 			Tf("Cannot be told apart: %d/100 and %d/100", "无法可靠区分：%d/100 与 %d/100", 62, 55)},
-		{T("No pattern of atypical parkinsonism", "未见非典型帕金森综合征的模式"), T("Favours Parkinson's disease in a patient with parkinsonism", "对帕金森综合征患者而言更倾向于帕金森病")},
+		none,
+		{core.ReportText("name-dlb", uiLang()), Tf("Pattern match %d/100", "模式匹配度 %d/100", 73)},
+		{Tf("Partial features of %s", "%s的部分特征", core.ReportText("name-msa-c", uiLang())),
+			Tf("Pattern match %d/100: not enough to assign a pattern", "模式匹配度 %d/100：不足以判定", 47)},
+		none,
 	} {
-		image := filepath.Base(cl.files.files[i])
+		image := filepath.Base(patients[i])
 		row := classifyRow{image: image, reading: r[0], detail: r[1], report: filepath.Join(cl.output, core.ReportStem(image)+"_report.html"),
-			source: cl.files.files[i], zmap: filepath.Join(cl.output, core.OutputName(image, "hn", "wmap")), wscore: true, leading: leading[i],
+			source: patients[i], zmap: filepath.Join(cl.output, core.OutputName(image, "hn", "wmap")), wscore: true, leading: leading[i],
 			category: cats[i][0], confidence: cats[i][1]}
 		row.badge, _ = classifyBadge(row.category, row.confidence, &lightPalette)
 		for n, id := range core.Patterns {
@@ -186,7 +203,7 @@ func (a *app) demo() {
 		}
 		cl.rows = append(cl.rows, row)
 	}
-	cl.st.ok = Tf("%d report(s) written.", "已生成 %d 份报告。", 3)
+	cl.st.ok = Tf("%d report(s) written.", "已生成 %d 份报告。", len(cl.rows))
 
 	a.cmp.output = "/Users/ada/study/compare"
 	a.cmp.name = "patients_vs_controls"

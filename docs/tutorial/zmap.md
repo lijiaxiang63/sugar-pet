@@ -1,6 +1,6 @@
 # Step 4: Z-score and W-score maps
 
-**Page: Z-score Maps** · needs the reference
+**Page: Z-score Maps** · step 2 of the individual analysis · needs the reference
 
 A Z-score map shows, voxel by voxel, how far a single scan deviates from
 healthy controls: negative values indicate lower uptake (hypometabolism), and
@@ -21,30 +21,31 @@ Z-scores conflate normal aging effects with disease.
 
 ## Fill in the page
 
-<Shot name="zmap" alt="The Z-score Maps page: images, reference and methods" :marks="[[1, 177], [2, 494], [3, 558], [4, 724]]" />
+Z-score Maps is step 2 of the individual analysis: it takes the images and
+the methods chosen on [Intensity Normalisation](./normalize) (its step 1) and
+does not ask for them again. It reads the normalised images step 1 wrote and
+does not normalise a second time. While Intensity Normalisation has not run,
+or its images, methods, reference or [settings](./normalize#options) were
+changed after it ran, the page says so and **Make Maps** stays disabled.
 
-1. **Add the patient images** (in MNI space).
-2. **Reference:** pre-filled from Step 2. The line below shows the control
-   count and smoothing kernel.
-3. **Covariate table** (optional): select `participants.tsv` to compute
+<Shot name="zmap" alt="The Z-score Maps page: what it takes from step 1, the covariate table and the output" :marks="[[1, 109], [2, 276], [3, 358], [4, 466], [5, 584], [6, 682, 845], [7, 867, 845]]" />
+
+1. **The line of steps:** the three steps of the individual analysis. A tick
+   means the step is done and still rests on the steps before it; click a
+   step to go there.
+2. **From step 1:** the images, methods and reference that Intensity
+   Normalisation ran with, read-only. If one of the methods cannot make maps
+   (a custom region, or a method not ticked when the reference was built;
+   Step 2, item 4), a note under the card says that it is left out here.
+3. To use other images or methods, click **Change in Step 1**, run Intensity
+   Normalisation again, and come back.
+4. **Covariate table** (optional): select `participants.tsv` to compute
    W-scores. The table must include these patients and the same covariate
    columns used when building the reference (`age` and `sex` here). Leave it
    empty for plain Z-scores.
-4. **Tick the method.** Keep **Histogram (HN)**. Custom regions are not
-   supported for Z-score maps.
-
-Scroll down.
-
-<Shot name="zmap-output" alt="The reference regions, the output folder and the start of the results" :marks="[[5, 292], [6, 393], [7, 'run']]" />
-
-5. **Reference regions** are folded away: click **Reference regions: 7 more
-   methods** to show them. Grayed-out methods require a reference built with
-   them ticked (Step 2, item 4).
-6. **Output folder:** Ada selects `study/zmaps/`. If **iPS** or **iHN** is
-   ticked, a line under the folder says how they leave voxels out, and its
-   **Options…** opens **Settings › Intensity Normalisation**, where the
-   [*Iterative methods*](./normalize#options) are set for both pages.
-7. Click **Make Maps**.
+5. **Output folder:** Ada selects `study/zmaps/`.
+6. Click **Make Maps**.
+7. Once it is done, **Next: Classify Parkinsonism** appears beside it.
 
 ## Check the results
 
@@ -68,8 +69,18 @@ One map per image and method in the output folder:
 `sub-pt01_space-MNI_desc-hn_wmap.nii.gz` (or `_zmap.nii.gz` without a
 covariate table).
 
-Before computing the map, each image is normalised and smoothed to match the
-controls, so the resulting map is smooth even if your input scans are not.
+Each map is made of the normalised image step 1 wrote with the same method:
+it is smoothed to match the controls and compared with them voxel by voxel,
+so the map is smooth even if your input scans are not.
+
+A normalised image can be compared with the controls only if it was scaled
+the way they were. A *Target value* set in step 1 does no harm (it is divided
+out first), but *Region statistic* and *Smoothing before estimating* must be
+what they were [when the reference was built](./build-reference#options).
+If they are not, the page says what each side used and offers both ways
+out: **Open Settings…**, to make the settings agree with the reference and
+run step 1 again, or **Go to Reference**, to build the reference again with
+the settings as they are.
 
 ## Reading a map
 

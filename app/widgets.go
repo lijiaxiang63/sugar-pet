@@ -570,11 +570,15 @@ func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string,
 
 // remedy is where the problem a page reports is mended, when a button of
 // its run bar can lead there: "reference" for the Reference page, "spm" for
-// the settings of SPM and MATLAB, or "".  The problem is known by being the
-// very one the page gives for that lack, not by its wording.
+// the settings of SPM and MATLAB, the step of the individual analysis that
+// the page waits for, or "".  The problem is known by being the very one the
+// page gives for that lack, not by its wording.
 func (a *app) remedy(page, problem string) string {
 	if problem == "" {
 		return ""
+	}
+	if step, why := a.lock(page); step != "" && problem == why {
+		return step
 	}
 	lack := ""
 	switch page {
@@ -589,6 +593,10 @@ func (a *app) remedy(page, problem string) string {
 	case "zmap":
 		if a.zmap.reference == "" {
 			lack = needReference()
+		} else if n := a.normCurrent(); n != nil {
+			if yes, _ := a.zmap.usable(n.methods); n.unfit(yes, a.zmap.info) == problem {
+				return "factors"
+			}
 		}
 	case "classify":
 		if a.classify.reference == "" {
@@ -646,6 +654,18 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 		case "spm":
 			if button(c.Key("fix-spm"), T("Set Up SPM…", "设置 SPM…"), iconGear, buttonSoft, 28).Clicked() {
 				a.openSettings("spatial")
+			}
+		case "factors": // either side can be made to agree with the other
+			if button(c.Key("fix-settings"), T("Open Settings…", "打开设置…"), iconGear, buttonSoft, 28).Clicked() {
+				a.openSettings("normalize")
+			}
+			if button(c.Key("fix-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 28).Clicked() {
+				a.page = "reference"
+			}
+		case "normalize", "zmap":
+			step := a.remedy(page, problem)
+			if button(c.Key("fix-step"), Tf("Go to Step %d", "前往第 %d 步", stepNumber(step)), iconArrowRight, buttonSoft, 28).Clicked() {
+				a.page = step
 			}
 		}
 	}

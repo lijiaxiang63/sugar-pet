@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -44,12 +45,13 @@ func classifyBadge(category, confidence string, pal *palette) (string, ui.Color)
 }
 
 type classifyPage struct {
-	files      fileList
 	reference  string
 	loadedFrom string
 	info       *refInfo
-	covTable   string
 	output     string
+	// main is the method the classification rests on, chosen here when
+	// step 2 made maps with several; "" for the one the app takes.
+	main string
 
 	st     status
 	rows   []classifyRow
@@ -57,6 +59,10 @@ type classifyPage struct {
 	outDir string
 	shown  int // the row the picture is of
 	pic    picture
+	// from is the run of step 2 the last run that went well took, and
+	// method the one it rested on.
+	from   *zmapDone
+	method string
 }
 
 func (p *classifyPage) init() {}
@@ -71,19 +77,13 @@ func (p *classifyPage) load() {
 	}
 }
 
-// methods are the normalisations the reference can make maps with.
-func (p *classifyPage) methods() []string {
-	out := []string{"hn", "ihn", "ps", "ips"}
-	if p.info != nil {
-		for _, m := range core.Methods {
-			for _, stored := range p.info.StatsFor {
-				if m.Name == stored {
-					out = append(out, m.Name)
-				}
-			}
-		}
+// leading is the method the classification rests on: the one chosen here
+// if step 2 made a map with it, or else HN, or the first of step 2.
+func (p *classifyPage) leading(z *zmapDone) string {
+	if slices.Contains(z.methods, p.main) {
+		return p.main
 	}
-	return out
+	return leadingMethod(z.methods)
 }
 
 // checks are the other normalisations the findings are checked with.
@@ -110,10 +110,15 @@ func (o *options) reportLang() string {
 	}
 	return "en"
 }
-func (p *classifyPage) problem() string {
+
+// classifyProblem is what keeps step 3 from running, or "".
+func (a *app) classifyProblem() string {
+	p := &a.classify
+	if _, why := a.lock("classify"); why != "" {
+		return why
+	}
+	z := a.zmapCurrent()
 	switch {
-	case len(p.files.files) == 0:
-		return T("Add the images of the patients.", "请添加患者的图像。")
 	case p.reference == "":
 		return needReference()
 	case p.info != nil && p.info.err != "":
@@ -122,7 +127,7 @@ func (p *classifyPage) problem() string {
 		return T("Choose the output folder.", "请选择输出文件夹。")
 	}
 	// Two reports under one name: the second patient's would replace the first's.
-	if first, second, stem, found := core.SharedReportStem(p.files.files); found {
+	if first, second, stem, found := core.SharedReportStem(z.files); found {
 		short := func(path string) string { return filepath.Join(filepath.Base(filepath.Dir(path)), filepath.Base(path)) }
 		return Tf("%s and %s would both be written as %s: rename one, or run them separately.",
 			"%s 与 %s 的报告都会写为 %s：请重命名其中一个，或分开运行。",
@@ -164,64 +169,58 @@ func (a *app) classifyView(c *ui.Context) {
 	t := c.Theme()
 	pal := paletteFor(c)
 	p.load()
-	if !contains(p.methods(), a.opt.ClassMethod) {
-		a.opt.ClassMethod = "hn"
-	}
-	hasModels := p.info != nil && len(p.info.Covariates) > 0
+	z := a.zmapCurrent()
 	a.frame(c, T("Classify Parkinsonism", "帕金森综合征分类"),
 		T("Which pattern a patient's scan matches, with a report", "判断患者图像符合哪种代谢模式，并生成报告"),
 		func() {
-			section(c, T("Patients", "患者"), T("Each image is compared with the healthy controls. The map of decreased and increased uptake is read region by region and matched against the patterns of MSA, PSP, CBD, DLB and PD.",
-				"每幅图像与健康对照比较，得到代谢减低和增高的分布图；再按脑区读取，并与 MSA、PSP、CBD、DLB 和 PD 的代谢模式逐一匹配。"), func() {
-				a.filesCardFromStudy(c, "cls-files", &p.files, T("Patient images", "患者图像"), T("FDG-PET images in MNI space, one per patient", "MNI 空间的 FDG-PET 图像，每位患者一幅"), "patients")
-			})
-			section(c, T("Reference", "参考库"), "", func() {
-				desc := T("The healthy controls the patients are compared with: same scanner and reconstruction, 30 or more if possible.", "与患者比较的健康对照：应来自同一扫描仪和重建方式，尽量不少于 30 例。")
-				if p.info != nil && p.info.err == "" {
-					desc = Tf("%d controls, smoothed %g mm.", "%d 例对照，平滑 %g mm。", p.info.N, p.info.FWHM)
-					if p.info.N < 30 {
-						desc += T(" At least 30 are recommended.", "建议至少 30 例。")
-					}
+			a.steps(c)
+			section(c, T("From steps 1 and 2", "来自前两步"), T("The map of decreased and increased uptake that step 2 made of each patient is read region by region and matched against the patterns of MSA, PSP, CBD, DLB and PD.",
+				"直接读取第 2 步为每位患者写出的代谢减低和增高的分布图：按脑区读取，并与 MSA、PSP、CBD、DLB 和 PD 的代谢模式逐一匹配。"), func() {
+				if z == nil {
+					a.taken(c, "classify")
+					return
 				}
-				covDesc := T("This reference was built without covariates, so the scores are not adjusted for age and sex.", "该参考库建立时未提供协变量，评分不校正年龄和性别。")
-				if hasModels {
-					covDesc = Tf("Recommended. With the %s of the patients, each is compared with what the controls predict for such a person.",
-						"建议提供。给出患者的 %s 后，每位患者将与对照对同样条件的人的预测值比较。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
+				method := p.leading(z)
+				shown := methodName(method)
+				if checks := p.checks(method); len(checks) > 0 {
+					shown += Tf(" · checked with %s", " · 另以%s复核", methodNames(checks))
 				}
-				var covRow, studyCovRow func()
-				if hasModels {
-					covRow = func() {
-						a.pathSetting(c, "cls-cov", T("Covariate table", "协变量表"), covDesc, &p.covTable, pathFile, tableFilter, nil)
-					}
-					if p.covTable == "" {
-						if sp := a.studyParticipants(); sp != "" {
-							studyCovRow = func() {
-								setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
-									if button(c.Key("cls-cov-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() && a.stillInStudy("participants.tsv", false) {
-										p.covTable = sp
-									}
-								})
-							}
-						}
-					}
-				} else if p.reference != "" {
-					covRow = func() { setting(c, T("Covariate table", "协变量表"), covDesc, nil) }
+				reference := referenceText(p.reference, p.info)
+				if p.info != nil && p.info.err == "" && p.info.N < 30 {
+					reference += T(" (30 or more are recommended)", "（建议至少 30 例）")
 				}
-				rows(c,
-					func() {
-						a.pathSetting(c, "cls-ref", T("Reference", "参考库"), desc, &p.reference, pathFolder, nil,
-							func() { a.setReference(p.reference) })
-					},
-					covRow,
-					studyCovRow,
+				table := T("None: the scores are not adjusted for age and sex", "未提供：评分不校正年龄和性别")
+				if z.table != "" {
+					table = filepath.Base(z.table)
+				}
+				a.taken(c, "classify",
+					fact(c, T("Images", "图像"), imagesText(z.files, len(z.from.files)-len(z.files))),
+					fact(c, T("Method", "方法"), shown),
+					fact(c, T("Reference", "参考库"), reference),
+					fact(c, T("Covariate table", "协变量表"), table),
 				)
 			})
 			section(c, T("Output", "输出"), "", func() {
+				var mainRow func()
+				if z != nil && len(z.methods) > 1 {
+					mainRow = func() {
+						setting(c, T("Map to classify by", "分类所依据的图"), T("Step 2 made maps with several methods; the classification rests on one. HN needs no region that the disease spares, which is unknown for a new patient.",
+							"第 2 步用多种方法各出了一幅图，分类以其中一种为准。HN 不需要预先指定未受累的区域，适合诊断未明的患者。"), func() {
+							labels := make([]string, len(z.methods))
+							for i, m := range z.methods {
+								labels[i] = methodName(m)
+							}
+							method := p.leading(z)
+							selectOf(c.Key("cls-main"), &method, z.methods, labels).Width(200)
+							p.main = method
+						})
+					}
+				}
 				rows(c, func() {
 					a.pathSetting(c, "cls-out", T("Output folder", "输出文件夹"), T("For each patient a report (HTML, prints to PDF), the map, and the numbers; for all, classification.tsv.",
 						"每位患者输出一份报告（HTML，可打印为 PDF）、一幅图和一份数据文件；另有汇总表 classification.tsv。"),
 						&p.output, pathFolder, nil, nil)
-				})
+				}, mainRow)
 				a.optionsLine(c, "classify", "classify", groupClassify)
 			})
 			caution(c, T("Decision support, not a diagnosis. The patterns are matched by fixed rules from the literature that were not validated on your patients. Read the result with the clinical findings, MRI and dopamine-transporter imaging.",
@@ -284,18 +283,22 @@ func (a *app) classifyView(c *ui.Context) {
 				})
 			}
 		},
-		func() { a.runBar(c, "classify", p.problem(), T("Classify", "开始分类"), &p.st, a.runClassify) },
+		func() {
+			a.runBar(c, "classify", a.classifyProblem(), T("Classify", "开始分类"), &p.st, a.runClassify)
+		},
 	)
 }
 
 func (a *app) runClassify() {
 	p := &a.classify
-	files := append([]string(nil), p.files.files...)
-	reference, out, table, method, lang := p.reference, p.output, p.covTable, a.opt.ClassMethod, a.opt.reportLang()
-	if p.info == nil || len(p.info.Covariates) == 0 {
-		table = ""
+	from := a.zmapCurrent()
+	if from == nil { // the button is disabled while step 2 is not done
+		return
 	}
-	p.rows, p.notes, p.shown = nil, nil, 0
+	files := append([]string(nil), from.files...)
+	norm := from.from
+	reference, out, table, method, lang := p.reference, p.output, from.table, p.leading(from), a.opt.reportLang()
+	p.rows, p.notes, p.shown, p.from = nil, nil, 0, nil
 	a.start("classify", T("Classifying", "正在分类"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		ref, err := core.LoadReference(reference)
 		if err != nil {
@@ -321,19 +324,32 @@ func (a *app) runClassify() {
 			}
 			name := filepath.Base(path)
 			opt := core.DefaultClassifyOptions()
-			img, err := core.LoadImage(path)
-			if err == nil && covariates != nil {
+			var err error
+			if covariates != nil {
 				var found []map[string]string
 				if found, err = covariates.Lookup([]string{path}, ref.Covariates()); err == nil {
 					opt.Covariates = found[0]
 				}
 			}
+			// What the steps before made of the image: the image normalised
+			// with the method, and the maps.  Only the maps the cross-checks
+			// need and step 2 did not make are computed here.
+			in := core.Scored{Target: norm.target, Factors: norm.factors[path], Maps: map[string]*core.Volume{}}
+			if err == nil {
+				in.Normalised, err = core.LoadImage(norm.images[path][method])
+			}
+			for _, m := range from.methods {
+				if err == nil {
+					in.Maps[m], err = core.LoadImage(from.maps[path][m])
+				}
+			}
 			var res *core.Classification
 			if err == nil {
-				res, err = core.Classify(img, name, method, ref, opt)
+				res, err = core.ClassifyScored(in, name, method, ref, opt)
 			}
 			var saved core.ClassFiles
 			if err == nil {
+				res.MapFile = from.maps[path][method] // the map is step 2's: no copy of it is written
 				saved, err = res.Save(out, core.ReportStem(path), lang)
 			}
 			if err != nil {
@@ -369,6 +385,9 @@ func (a *app) runClassify() {
 		}
 		return func() {
 			p.rows, p.notes, p.outDir = rows, notes, out
+			if len(rows) > 0 {
+				p.from, p.method = from, method
+			}
 			if failed > 0 {
 				p.st.err = Tf("%d of %d failed; see the notes under the results.", "%d / %d 项失败，详见结果下方的说明。", failed, len(files))
 			} else {

@@ -28,6 +28,10 @@ type comparePage struct {
 	// swapped is whether the groups were swapped: the study's controls are
 	// then offered to group 1 and its patients to group 2.
 	swapped bool
+	// The method and the covariate table last taken from the pages before
+	// (follow): they are taken again when chosen anew there, until the user
+	// chooses others here.
+	methodFrom, covFrom string
 
 	st     status
 	result *core.GroupComparison
@@ -45,8 +49,35 @@ func (p *comparePage) swap() {
 	p.result, p.how, p.st = nil, "", status{}
 }
 
+// follow takes the method of the individual analysis and the covariate
+// table of the reference, so that they are not chosen again here.  Tables
+// that list the controls and the patients apart are both taken.
+func (a *app) followCompare() {
+	p := &a.cmp
+	if m := leadingMethod(a.norm.chosen()); m != "" && m != p.methodFrom {
+		if p.method == p.methodFrom {
+			p.method = m
+		}
+		p.methodFrom = m
+	}
+	table, extra := a.ref.cov.path, a.zmap.covTable
+	if table == "" {
+		table, extra = extra, ""
+	}
+	if table != p.covFrom {
+		if p.cov.path == p.covFrom {
+			p.cov.path = table
+			p.cov.load()
+			if p.covExtra == "" && extra != table {
+				p.covExtra = extra
+			}
+		}
+		p.covFrom = table
+	}
+}
+
 func (p *comparePage) init() {
-	p.method, p.name = "hn", "group1_vs_group2"
+	p.method, p.methodFrom, p.name = "hn", "hn", "group1_vs_group2"
 	p.region.mask = "brainstem"
 	p.cov.adjust = map[string]bool{}
 }
@@ -115,6 +146,7 @@ func (p *comparePage) problem(o *options) string {
 
 func (a *app) compareView(c *ui.Context) {
 	p := &a.cmp
+	a.followCompare()
 	t := c.Theme()
 	a.frame(c, T("Compare Groups", "组间比较"),
 		T("Voxel-wise two-sample t-test after intensity normalisation", "强度归一化后逐体素双样本 t 检验"),

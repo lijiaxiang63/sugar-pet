@@ -29,6 +29,8 @@ type normPage struct {
 	table  ui.ListState
 	notes  []string
 	outDir string
+	// done is what the last run that went well did: what step 2 takes.
+	done *normDone
 }
 
 // regionChoice is a region of the user's: a built-in mask, a mask file or
@@ -263,6 +265,7 @@ func (a *app) normalizeView(c *ui.Context) {
 	a.frame(c, T("Intensity Normalisation", "强度归一化"),
 		T("Divide each image by its normalisation factor", "每幅图像除以各自的归一化因子"),
 		func() {
+			a.steps(c)
 			section(c, T("Images", "图像"), T("FDG-PET images that are already in MNI space. If yours are not, warp them on the Spatial Normalisation page first.", "已在 MNI 空间的 FDG-PET 图像。尚未配准的，请先到“空间标准化”页面处理。"), func() {
 				a.filesCardFromStudy(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
 					T(".nii and .nii.gz files, or whole folders", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹"), "patients")
@@ -311,9 +314,6 @@ func (a *app) normalizeView(c *ui.Context) {
 							if b := smallButton(c, T("Open factors.tsv", "打开 factors.tsv")); b.Clicked() {
 								openPath(filepath.Join(p.outDir, "factors.tsv"))
 							}
-							if button(c.Key("norm-to-zmap"), T("Go to Z-score Maps", "前往 Z 值图"), iconArrowRight, buttonSoft, 26).Clicked() {
-								a.page = "zmap"
-							}
 						})
 					}
 					notesCard(c, p.notes)
@@ -322,6 +322,7 @@ func (a *app) normalizeView(c *ui.Context) {
 		},
 		func() {
 			a.runBar(c, "normalize", p.problem(), T("Normalise Intensity", "开始强度归一化"), &p.st, a.runNormalize)
+			a.nextStep(c, "normalize")
 		},
 	)
 }
@@ -353,8 +354,12 @@ func (a *app) runNormalize() {
 			regionLabel = p.region.mask // name the files after the mask
 		}
 	}
-	reference, out, images, saveMasks := p.reference, p.output, o.Images, o.SaveMasks
-	p.rows, p.notes = nil, nil
+	reference, out, saveMasks := p.reference, p.output, o.SaveMasks
+	// What the steps after this one take of it.
+	record := &normDone{asked: files, methods: methods, reference: reference, settings: o.normSettings(methods),
+		images: map[string]map[string]string{}, factors: map[string]map[string]float64{},
+		target: opt.Target, median: opt.Statistic == "median", fwhm: opt.FWHM}
+	p.rows, p.notes, p.done = nil, nil, nil
 	a.start("normalize", T("Normalising intensity", "正在做强度归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		if reference != "" {
 			ref, err := core.LoadReference(reference)
@@ -374,6 +379,7 @@ func (a *app) runNormalize() {
 		for _, path := range files {
 			name := filepath.Base(path)
 			img, loadErr := core.LoadImage(path)
+			missed := loadErr != nil
 			for _, method := range methods {
 				if err := ctx.Err(); err != nil {
 					return nil, err
@@ -393,6 +399,7 @@ func (a *app) runNormalize() {
 				res, err := core.Normalize(img, method, run)
 				if err != nil { // keep going with the other images
 					failed++
+					missed = true
 					notes = append(notes, name+" ["+method+"]: "+err.Error())
 					step(done, total)
 					continue
@@ -401,11 +408,13 @@ func (a *app) runNormalize() {
 					notes = append(notes, name+" ["+method+"]: "+w)
 				}
 				file := core.OutputName(path, label, "pet")
-				if images {
-					if err := core.SaveNifti(filepath.Join(out, file), res.Image, false); err != nil {
-						return nil, err
-					}
+				if err := core.SaveNifti(filepath.Join(out, file), res.Image, false); err != nil {
+					return nil, err
 				}
+				if record.images[path] == nil {
+					record.images[path], record.factors[path] = map[string]string{}, map[string]float64{}
+				}
+				record.images[path][method], record.factors[path][method] = filepath.Join(out, file), res.Factor
 				if saveMasks && res.Mask != nil {
 					maskFile := strings.Replace(file, ".nii.gz", "_mask.nii.gz", 1)
 					if err := core.SaveMask(filepath.Join(out, maskFile), res.Mask, img.Dim, img.Aff, ""); err != nil {
@@ -429,12 +438,18 @@ func (a *app) runNormalize() {
 				rows = append(rows, row)
 				step(done, total)
 			}
+			if !missed { // every method normalised it
+				record.files = append(record.files, path)
+			}
 		}
 		if err := os.WriteFile(filepath.Join(out, "factors.tsv"), []byte(table), 0o644); err != nil {
 			return nil, err
 		}
 		return func() {
 			p.rows, p.notes, p.outDir = rows, notes, out
+			if len(record.files) > 0 {
+				p.done = record
+			}
 			if failed > 0 {
 				p.st.err = Tf("%d of %d failed; see the notes under the results.", "%d / %d 项失败，详见结果下方的说明。", failed, total)
 			} else {

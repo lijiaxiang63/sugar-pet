@@ -191,6 +191,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Building reference from %d controls ...\n", len(a.pos))
 		opt := core.BuildOptions{FWHM: a.num("--fwhm", 8), Progress: progress,
 			Mask: core.MaskSpec{Name: a.str("--mask", "gray-matter")}}
+		opt.Statistic, opt.FactorFWHM = a.str("--statistic", "mean"), a.optNum("--factor-fwhm")
 		opt.StatsFor = split(a.values["--stats-for"])
 		if len(opt.StatsFor) == 1 && opt.StatsFor[0] == "all" {
 			opt.StatsFor = core.StatsMethods()

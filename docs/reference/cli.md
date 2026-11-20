@@ -81,9 +81,9 @@ sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o reference_clus
 | Smoothing | `--fwhm 8` |
 | Custom region: built-in mask or file | `-m region --mask brainstem`, `--mask my_mask.nii.gz` |
 | Custom region: atlas labels | `-m region --labels 34,85` |
-| Region statistic | `--statistic median` |
+| Region statistic | `--statistic median` (`normalize` and `build-reference`) |
+| Smoothing before estimating | `--fwhm 6` (`normalize`), `--factor-fwhm 6` (`build-reference`) |
 | Target value | `--target 50` |
-| Write normalised images (off) | `--factors-only` |
 | Save masks | `--save-masks` |
 | Exclusion p-value, Exclude, Re-estimations | `--p-threshold 0.01`, `--exclude hypo`, `--max-iter 1` |
 | Plain mean for iPS | `--literal-ips` |

@@ -1,6 +1,6 @@
 # Step 5: Classify parkinsonism
 
-**Page: Classify Parkinsonism** · needs the reference
+**Page: Classify Parkinsonism** · step 3 of the individual analysis · needs the reference
 
 For a patient with an uncertain diagnosis, this page identifies brain regions
 where uptake is lower or higher than in healthy controls, evaluates how closely
@@ -16,6 +16,8 @@ dopamine-transporter imaging.
 
 ## Before you start
 
+* [Step 3](./normalize) and [Step 4](./zmap): the classification takes their
+  images, methods and covariate table.
 * The reference from [Step 2](./build-reference). For single-patient
   classification, 30 or more controls are recommended, acquired under the same
   conditions (eyes open or closed) as the patients.
@@ -27,50 +29,65 @@ dopamine-transporter imaging.
 
 ## Fill in the page
 
-<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 177], [2, 404], [3, 468], [4, 594], [5, 662], [6, 'run']]" />
+Classify Parkinsonism is step 3 of the individual analysis: it reads the
+deviation map that [Z-score Maps](./zmap) (its step 2) made of each patient,
+and asks for no images, method, reference or covariate table again; nothing
+is normalised or mapped a second time. The step computes only the maps its
+cross-checks need (PS, and deep white matter when the reference holds it),
+and takes those too from step 2 where it made them. While
+Z-score Maps has not run, or something before it was changed after it ran,
+the page says so and **Classify** stays disabled.
 
-1. **Add the patient images** (in MNI space, one per patient).
-2. **Reference:** already filled in. The status line beneath it warns if
-   fewer than 30 controls are available.
-3. **Covariate table:** select `participants.tsv` so each patient is compared
-   against controls of the same age and sex.
+<Shot name="classify" alt="The Classify Parkinsonism page, filled in" :marks="[[1, 109], [2, 296], [3, 399], [4, 507], [5, 580], [6, 642], [7, 'run']]" />
+
+1. **The line of steps:** the three steps of the individual analysis; a tick
+   means the step is done.
+2. **From steps 1 and 2:** read-only. *Method* names the method the
+   classification rests on and those it is checked with (always PS, plus
+   white matter if the reference holds its statistics); *Reference* warns if
+   fewer than 30 controls are available; *Covariate table* says whether the
+   scores are adjusted for age and sex.
+3. To change any of these, click **Change in Step 2**.
 4. **Output folder:** Ada selects `study/reports/`.
-5. **Options in effect:** which normalisation the maps are made with and the
-   language of the report. The defaults (*Normalised with Histogram (HN) ·
-   report in the app's language*) suit most cases; **Options…** opens
+5. **Map to classify by:** shown only when step 2 made maps with several
+   methods; the classification rests on one of them. Keep **Histogram (HN)**:
+   it requires no prior assumption about which regions are spared, making it
+   well suited to undiagnosed cases.
+6. **Options in effect:** the language of the report. **Options…** opens
    **Settings › Classify Parkinsonism** (below).
-6. Click **Classify**.
+7. Click **Classify**.
 
 ### The options of the classification {#options}
 
 <Shot name="settings-classify" alt="Settings › Classify Parkinsonism" />
 
-* **Intensity normalisation:** keep **Histogram (HN)**. It requires no prior
-  assumption about which regions are spared, making it well suited to
-  undiagnosed cases. Other methods are listed once the reference in use
-  holds their statistics.
-* **Checked with:** read-only reminder of the secondary normalisations used
-  for cross-checking—always PS, plus white matter if included in the
-  reference.
 * **Language of the report:** as the app, English, or Chinese.
+
+The normalisation is not set here: the classification uses the method chosen
+in the first two steps of the individual analysis.
 
 ## Check the results
 
-<Shot name="classify-results" alt="The results of the classification" :marks="[[7, 163], [8, 751, 121], [9, 1012, 153], [10, 560], [11, 784]]" />
+<Shot name="classify-results" alt="The results of the classification" :marks="[[8, 294], [9, 751, 258], [10, 1012, 294]]" />
 
-7. **Results:** one row per patient, showing the conclusion in bold (with its
+8. **Results:** one row per patient, showing the conclusion in bold (with its
    confidence beside it when it names a pattern) and, under it, the image and
    how the conclusion was reached.
-8. **Pattern bars:** how well the patient matches each of the six patterns
+9. **Pattern bars:** how well the patient matches each of the six patterns
    (MSA-P, MSA-C, PSP, CBD, DLB, PD), from 0 to 100. The leading pattern is
    in colour; hover over a bar to read its score. Two bars of similar height,
    as for the second patient, mean the two syndromes cannot be told apart.
-9. **Open Report** shows that patient's report in your browser.
-10. **The picture** draws the deviation map of one patient on axial slices of
+10. **Open Report** shows that patient's report in your browser.
+
+Scroll down to the end of the page.
+
+<Shot name="classify-figure" alt="The deviation map of one patient" :marks="[[11, 560], [12, 784]]" />
+
+11. **The picture** draws the deviation map of one patient on axial slices of
     their image: blue to cyan where uptake is lower than in the controls
     (−2 down to −5), red to yellow where it is higher. Click a row to draw
     that patient.
-11. **Show in Finder** opens the output folder.
+12. **Show in Finder** opens the output folder.
 
 ## Reading the conclusion
 
@@ -96,16 +113,20 @@ In the output folder, named after each input image:
 | File | Description |
 | --- | --- |
 | `sub-pt01_space-MNI_report.html` | Standalone HTML report |
-| `sub-pt01_space-MNI_desc-hn_wmap.nii.gz` | Underlying deviation map (`_zmap` when no covariate table is given) |
 | `sub-pt01_space-MNI_classification.json` | All numerical outputs from the report (regions, patterns, conclusion) |
 | `classification.tsv` | Summary table with one row per image: conclusion and pattern scores |
+
+The deviation map under the report is the one in the output folder of step 2
+(`sub-pt01_space-MNI_desc-hn_wmap.nii.gz`, or `_zmap` without a covariate
+table): no second copy is written here.
 
 ## How the conclusion is reached
 
 ![How the classification gets from one image to a conclusion](../classify-flow-en.svg)
 
-1. **Compute a deviation map.** The image is converted into a W-score map (or
-   Z-score map without covariates) using HN.
+1. **Compute a deviation map.** With the method of the first two steps (HN
+   by default), the image is converted into a W-score map (or a Z-score map
+   without covariates).
 2. **Score each region.** Mean map values are extracted across 17 regions
    separately for left and right hemispheres. Scores ≤ −2 count as reduced;
    scores ≥ 2 count as increased.

@@ -68,7 +68,13 @@ func (a *app) openSettings(section string) {
 		AutoHideMenuBar: true,
 		Content:         ui.View(a.settingsView),
 	})
-	a.settingsWin.OnClosed(func() { a.settingsWin = nil })
+	a.settingsWin.OnClosed(func() {
+		a.settingsWin = nil
+		a.tellNormSettings()
+	})
+	// Changed settings are told of once the user leaves the window: not
+	// in the middle of typing a number.
+	a.settingsWin.OnBlur(a.tellNormSettings)
 }
 
 // redraw draws the windows anew, after a change that was not made in them.
@@ -214,6 +220,27 @@ func (a *app) settingsView(c *ui.Context) {
 	// What changed here shows in the main window, and is kept.
 	if a.saveSettings() && a.win != nil {
 		a.win.Invalidate()
+	}
+}
+
+// tellNormSettings says, once for a run of step 1, that the settings it ran
+// with were changed: the steps after it wait until it is run again.  It is
+// called when the settings window is left or closed.
+func (a *app) tellNormSettings() {
+	d := a.norm.done
+	if d == nil || d.settings == a.opt.normSettings(d.methods) {
+		a.normTold = nil // changed back, or run anew: a later change is told again
+		return
+	}
+	if a.normTold == d {
+		return
+	}
+	a.normTold = d
+	if a.win != nil {
+		a.dialogs = a.win // the steps are in the main window
+		a.alert(T("Run Intensity Normalisation again", "需要重新运行强度归一化"),
+			T("These settings were changed after step 1 ran. Z-score Maps and Classify Parkinsonism use what step 1 wrote, so they cannot go on until Intensity Normalisation is run again with the new settings.",
+				"这些设置在第 1 步运行之后被改动了。Z 值图和帕金森综合征分类沿用第 1 步写出的结果，所以在按新设置重新运行强度归一化之前，它们无法继续。"))
 	}
 }
 
@@ -425,7 +452,14 @@ func (a *app) settingsSpatial(c *ui.Context) {
 
 func (a *app) settingsNormalize(c *ui.Context) {
 	o := &a.opt
-	section(c, T("Factors", "因子"), "", func() {
+	// Step 1 of the individual analysis ran with other settings than these:
+	// the steps after it wait until it is run again.
+	if d := a.norm.done; d != nil && d.settings != o.normSettings(d.methods) {
+		caution(c, T("These are no longer the settings Intensity Normalisation last ran with. Run it again: until then Z-score Maps and Classify Parkinsonism cannot go on.",
+			"这些设置已与上次运行强度归一化时不同。请重新运行强度归一化：在此之前，Z 值图和帕金森综合征分类无法继续。"))
+	}
+	section(c, T("Factors", "因子"), T("The factors of the controls are estimated the same way when a reference is built: step 1 and the reference must agree for Z-score maps.",
+		"建立参考库时，对照的因子也按这里的方式估计：要做 Z 值图，第 1 步与参考库须保持一致。"), func() {
 		rows(c,
 			func() {
 				setting(c, lblStatistic.String(), T("For the reference regions and PS.", "用于参考区法和 PS。"), func() {
@@ -449,16 +483,12 @@ func (a *app) settingsNormalize(c *ui.Context) {
 	section(c, T("Output", "输出"), "", func() {
 		rows(c,
 			func() {
-				setting(c, lblImages.String(), T("Turn off to write only the table of factors.", "关闭后只输出因子表。"),
-					func() { toggle(c.Key("images"), &o.Images, lblImages.String()) })
-			},
-			func() {
 				setting(c, lblSaveMasks.String(), T("Also save the voxels each factor came from.", "同时保存估计每个因子所用的体素。"),
 					func() { toggle(c.Key("masks"), &o.SaveMasks, lblSaveMasks.String()) })
 			},
 		)
 	})
-	section(c, T("Iterative methods", "迭代方法"), T("For iPS and iHN, here and on the Z-score Maps page.", "用于 iPS 与 iHN，对本页和“Z 值图”页面同时生效。"), func() {
+	section(c, T("Iterative methods", "迭代方法"), T("For iPS and iHN.", "用于 iPS 与 iHN。"), func() {
 		rows(c,
 			func() {
 				setting(c, lblIterP.String(),
@@ -536,42 +566,8 @@ func (a *app) settingsReference(c *ui.Context) {
 
 func (a *app) settingsClassify(c *ui.Context) {
 	o := &a.opt
-	pal := paletteFor(c)
-	p := &a.classify
-	p.load()
-	methods := p.methods()
-	if !contains(methods, o.ClassMethod) {
-		o.ClassMethod = "hn"
-	}
-	section(c, T("Maps", "分布图"), "", func() {
-		labels := make([]string, len(methods))
-		for i, m := range methods {
-			labels[i] = methodName(m)
-		}
-		checks := p.checks(o.ClassMethod)
-		names := make([]string, len(checks))
-		for i, m := range checks {
-			names[i] = methodName(m)
-		}
-		checked := T("A finding that the other normalisations do not show is marked in the report.", "其他归一化方式下未出现的发现会在报告中标出。")
-		shown := strings.Join(names, T(", ", "、"))
-		if len(checks) == 0 {
-			shown = T("None", "无")
-		}
-		if o.ClassMethod != "white-matter" && !contains(checks, "white-matter") {
-			checked += T(" Tick White matter under Reference to add a check that does not rest on gray matter.", "在“参考库”设置中勾选“深部白质”，可增加一种不依赖灰质的核对方式。")
-		}
-		rows(c,
-			func() {
-				setting(c, lblClsMethod.String(), T("The classification rests on this one. HN needs no region that the disease spares, which is unknown for a new patient. Others appear once the reference in use holds their statistics.",
-					"分类以此为准。HN 不需要预先指定未受累的区域，适合诊断未明的患者。当前参考库包含其统计量的方法也会列出。"),
-					func() { selectOf(c.Key("cls-method"), &o.ClassMethod, methods, labels).Width(200) })
-			},
-			func() {
-				setting(c, T("Checked with", "交叉核对"), checked, func() { ui.Text(c, shown).FontSize(12.5).TextColor(pal.muted) })
-			},
-		)
-	})
+	// The method is not chosen here: the classification rests on the maps
+	// of the step before it.
 	section(c, T("Report", "报告"), "", func() {
 		rows(c, func() {
 			setting(c, lblClsLang.String(), "", func() {

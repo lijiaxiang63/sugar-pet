@@ -3,7 +3,7 @@
 Every page in SUGAR-PET shares the same core layout and controls. Once you
 know where things live here, the tutorial will simply tell you what to select.
 
-<Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 112], [2, 222, 830], [3, 140, 874], [4, 163], [5, 492], [6, 257, 862], [7, 'run']]" />
+<Shot name="normalize" alt="The parts of the window" :marks="[[1, 216, 112], [2, 222, 830], [3, 140, 874], [4, 217], [5, 546], [6, 257, 862], [7, 707, 845]]" />
 
 1. **Navigation sidebar.** Lists the pages in the order of a typical workflow,
    in groups: preparing the study and its reference, the analyses of single
@@ -28,6 +28,13 @@ know where things live here, the tutorial will simply tell you what to select.
    or errors when finished.
 7. **Run button.** Starts the task and turns into **Cancel** while running.
    Only one task can run at a time.
+
+The three pages of the **individual analysis** (Intensity Normalisation,
+Z-score Maps, Classify Parkinsonism) are steps in a row, with a line of steps
+at their top: a tick marks a step that is done, and a click goes to a step.
+A later step shows the images and methods of the step before it, read-only,
+and does not ask for them again; once a step is done, a **Next** button
+appears beside its run button.
 
 ## Lists of images
 
@@ -64,7 +71,7 @@ are not on the pages: they live in the [Settings window](#the-settings-window),
 and their defaults match the original papers. So that nothing is hidden, a
 line under the cards of each page says which options are in effect.
 
-<Shot name="normalize-output" alt="The line of options under the cards of a page" :marks="[[1, 467], [2, 1016, 467]]" />
+<Shot name="normalize-output" alt="The line of options under the cards of a page" :marks="[[1, 521], [2, 1016, 521]]" />
 
 1. **Options in effect.** A one-line summary, here *Mean of the region ·
    target 1 · smoothing automatic*. When an option differs from its default, a

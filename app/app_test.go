@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +20,134 @@ import (
 
 	"sugarpet/core"
 )
+
+// jsonApart says where two JSON texts differ by more than tol in a number, or
+// at all in anything else; "" when they say the same.
+func jsonApart(a, b []byte, tol float64) string {
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		return err.Error()
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		return err.Error()
+	}
+	var apart func(at string, x, y any) string
+	apart = func(at string, x, y any) string {
+		switch x := x.(type) {
+		case map[string]any:
+			y, ok := y.(map[string]any)
+			if !ok || len(x) != len(y) {
+				return at
+			}
+			for k, v := range x {
+				if where := apart(at+"."+k, v, y[k]); where != "" {
+					return where
+				}
+			}
+		case []any:
+			y, ok := y.([]any)
+			if !ok || len(x) != len(y) {
+				return at
+			}
+			for i, v := range x {
+				if where := apart(at+"["+strconv.Itoa(i)+"]", v, y[i]); where != "" {
+					return where
+				}
+			}
+		case float64:
+			if y, ok := y.(float64); !ok || math.Abs(x-y) > tol {
+				return fmt.Sprint(at, ": ", x, " and ", y)
+			}
+		default:
+			if !reflect.DeepEqual(x, y) {
+				return fmt.Sprint(at, ": ", x, " and ", y)
+			}
+		}
+		return ""
+	}
+	return apart("", x, y)
+}
+
+// TestReferenceFactors builds a reference with the factors of its controls
+// estimated another way than the usual one, and checks that it is the way
+// Normalize estimates the factor of an image with the same settings: only
+// then is a map of that image one against these controls.
+func TestReferenceFactors(t *testing.T) {
+	dir := t.TempDir()
+	hc, pt, _ := makeImages(t, filepath.Join(dir, "data"), 6, 1)
+	six := 6.0
+	build := core.BuildOptions{FWHM: 8, StatsFor: []string{"cerebellum"}, Statistic: "median", FactorFWHM: &six}
+	built, err := core.BuildReference(context.Background(), hc, build)
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(dir, "ref")
+	if err := built.Save(folder); err != nil {
+		t.Fatal(err)
+	}
+	ref, err := core.LoadReference(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := readRefInfo(folder)
+	if ref.Statistic != "median" || ref.FactorFWHM == nil || *ref.FactorFWHM != 6 || info.Statistic != "median" || info.FactorFWHM == nil {
+		t.Fatalf("the reference does not say how its factors were estimated: %+v, %+v", ref.Statistic, info)
+	}
+	opt := core.DefaultNormOptions()
+	opt.Reference, opt.Statistic, opt.FWHM = ref, "median", &six
+	for _, factors := range ref.ControlFactors {
+		for i, path := range hc[:2] {
+			res, err := core.NormalizeFile(path, factors.Method, opt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := factors.Factors[i]; math.Abs(res.Factor-want) > 1e-4*want {
+				t.Errorf("%s of control %d: Normalize gives %g, the reference has %g", factors.Method, i, res.Factor, want)
+			}
+		}
+	}
+	// A map of an image normalised so is the map the reference makes itself.
+	raw, err := core.LoadImage(pt[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{"hn", "ps", "cerebellum"} {
+		want, _, err := core.ZMap(raw, method, ref, core.DefaultZMapOptions())
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := core.Normalize(raw, method, opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _, err := core.ZMapOf(res.Image, method, res.Factor, 1, ref, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		worst := 0.0
+		for i, v := range want.Data {
+			worst = math.Max(worst, math.Abs(float64(v-got.Data[i])))
+		}
+		if worst > 1e-3 {
+			t.Errorf("%s: the map of the normalised image is up to %g from the reference's own", method, worst)
+		}
+	}
+	// The usual way is not written down: the file stays what it was.
+	build.Statistic, build.FactorFWHM = "", nil
+	if built, err = core.BuildReference(context.Background(), hc, build); err != nil {
+		t.Fatal(err)
+	}
+	if err := built.Save(folder); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(filepath.Join(folder, "reference.json"))
+	if strings.Contains(string(text), "statistic") || strings.Contains(string(text), "factor_fwhm_mm") {
+		t.Fatalf("a reference built the usual way says how: %s", text)
+	}
+	if ref, err = core.LoadReference(folder); err != nil || ref.Statistic != "mean" || ref.FactorFWHM != nil {
+		t.Fatalf("read back: %v, %+v", err, ref.Statistic)
+	}
+}
 
 // makeImages writes made-up FDG-PET images in MNI space: controls, and
 // patients whose cortex takes up 15% less than their cerebellum.  It returns
@@ -162,7 +294,17 @@ func TestWorkflow(t *testing.T) {
 	}
 	drawn(&a.ref.pic)
 
-	// Normalisation by two methods.
+	// The steps after the first wait for it, and say so.
+	a.zmap.output, a.classify.output = filepath.Join(dir, "zmaps"), filepath.Join(dir, "reports")
+	for _, page := range []string{"zmap", "classify"} {
+		a.page = page
+		tt.Frame()
+		if step, why := a.lock(page); step != "normalize" || !tt.HasText(why) || !tt.HasText("前往第 1 步") {
+			t.Fatalf("%s before step 1: waits for %q (shown: %q)", page, step, tt.Texts())
+		}
+	}
+
+	// Step 1: normalisation by two methods.
 	out := filepath.Join(dir, "normalised")
 	a.norm.files.files, a.norm.output = pt, out
 	a.norm.methods = map[string]bool{"hn": true, "cerebellum": true}
@@ -173,25 +315,148 @@ func TestWorkflow(t *testing.T) {
 	exists(filepath.Join(out, "factors.tsv"))
 	exists(filepath.Join(out, core.OutputName(pt[0], "hn", "pet")))
 
-	// Z-score and W-score maps.
+	if !a.stepDone("normalize") || a.stepDone("zmap") {
+		t.Fatal("step 1 is not marked as done, or step 2 is")
+	}
+	// A setting of the normalisation changed after the run: the images are
+	// not what it would write now, and the steps after it wait for another
+	// run, of which the user is told once.
+	target := a.opt.Target
+	a.opt.Target = 50
+	if step, why := a.lock("zmap"); a.stepDone("normalize") || step != "normalize" || !strings.Contains(why, "设置") {
+		t.Fatalf("with the target changed step 2 waits for %q: %q", step, why)
+	}
+	if a.tellNormSettings(); a.normTold != a.norm.done {
+		t.Fatal("the changed settings were not told of")
+	}
+	a.opt.Target = target
+	if a.tellNormSettings(); a.normTold != nil || !a.stepDone("normalize") {
+		t.Fatal("with the settings as they were step 1 is not done again")
+	}
+	// The iterative settings are no part of a run without iPS or iHN.
+	a.opt.PThreshold /= 2
+	if !a.stepDone("normalize") {
+		t.Fatal("a setting of the iterative methods undid a run without them")
+	}
+	a.opt.PThreshold *= 2
+	// Factors estimated unlike those of the controls give no map.
+	a.norm.done.median = true
+	if why := a.zmapProblem(); !strings.Contains(why, "区域中位数") || !strings.Contains(why, "区域均值") || a.remedy("zmap", why) != "factors" {
+		t.Fatalf("with factors from the median: %q, remedy %q", why, a.remedy("zmap", why))
+	}
+	// A reference whose controls were scaled by the median is one to
+	// compare them with; of HN alone the statistic is no part.
+	a.zmap.info.Statistic = "median"
+	if why := a.zmapProblem(); why != "" {
+		t.Fatalf("step 1 and the reference both by the median: %q", why)
+	}
+	a.zmap.info.Statistic = "mean"
+	if why := a.norm.done.unfit([]string{"hn"}, a.zmap.info); why != "" {
+		t.Fatalf("HN with another statistic than the reference: %q", why)
+	}
+	a.norm.done.median = false
+	six := 6.0
+	a.norm.done.fwhm = &six
+	if why := a.norm.done.unfit([]string{"hn"}, a.zmap.info); !strings.Contains(why, "6 mm") || !strings.Contains(why, "自动平滑") {
+		t.Fatalf("with a smoothing of its own: %q", why)
+	}
+	a.zmap.info.FactorFWHM = &six
+	if why := a.zmapProblem(); why != "" {
+		t.Fatalf("step 1 and the reference both after 6 mm: %q", why)
+	}
+	a.norm.done.fwhm, a.zmap.info.FactorFWHM = nil, nil
+	// The reference built anew in its folder is not the one step 1 used.
+	a.norm.done.rebuilt = true
+	if _, why := a.lock("zmap"); a.stepDone("normalize") || !strings.Contains(why, "参考库") {
+		t.Fatalf("with the reference rebuilt: %q", why)
+	}
+	a.norm.done.rebuilt = false
+
+	// The button beside the run leads to the next step.
+	if err := tt.Click("下一步：Z 值图"); err != nil {
+		t.Fatalf("%v (shown: %q)", err, tt.Texts())
+	}
+	tt.Frame()
+	if a.page != "zmap" {
+		t.Fatalf("the next step led to %q", a.page)
+	}
+
+	// Step 2: W-score maps of the images of step 1, by its methods, which
+	// are shown and not asked for again.
 	zdir := filepath.Join(dir, "zmaps")
-	a.zmap.files.files, a.zmap.output, a.zmap.covTable = pt[:3], zdir, table
-	a.zmap.methods = map[string]bool{"hn": true, "cerebellum": true}
+	a.zmap.covTable = table
+	tt.Frame()
+	if !tt.HasText("来自第 1 步") || !tt.HasText("返回第 1 步修改") || tt.HasText("添加文件…") {
+		t.Fatalf("step 2 does not show what it takes from step 1: %q", tt.Texts())
+	}
 	press("zmap", "生成 Z 值图", &a.zmap.st)
-	if len(a.zmap.rows) != 6 {
-		t.Fatalf("%d z-score maps, want 6", len(a.zmap.rows))
+	if len(a.zmap.rows) != 2*len(pt) {
+		t.Fatalf("%d z-score maps, want %d", len(a.zmap.rows), 2*len(pt))
 	}
 	maps, _ := filepath.Glob(filepath.Join(zdir, "*.nii.gz"))
-	if len(maps) != 6 {
-		t.Fatalf("%d files in %s, want 6", len(maps), zdir)
+	if len(maps) != 2*len(pt) {
+		t.Fatalf("%d files in %s, want %d", len(maps), zdir, 2*len(pt))
 	}
 	drawn(&a.zmap.pic)
+	// The maps were made of the images step 1 wrote, and are those the
+	// original images give.
+	ref0, err := core.LoadReference(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cov, err := core.LoadTable(table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values, err := cov.Lookup([]string{pt[0]}, ref0.Covariates())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := core.LoadImage(pt[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{"hn", "cerebellum"} {
+		zopt := core.DefaultZMapOptions()
+		zopt.Covariates = values[0]
+		want, _, err := core.ZMap(raw, method, ref0, zopt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := core.LoadImage(a.zmap.done.maps[pt[0]][method])
+		if err != nil {
+			t.Fatal(err)
+		}
+		worst := 0.0
+		for i, v := range want.Data {
+			worst = math.Max(worst, math.Abs(float64(v-got.Data[i])))
+		}
+		if worst > 1e-3 {
+			t.Fatalf("the %s map of step 2 is up to %g from the one of the original image", method, worst)
+		}
+	}
+	// Another covariate table is not what the maps were made with.
+	a.zmap.covTable = ""
+	if a.stepDone("zmap") {
+		t.Fatal("step 2 is done though its covariate table was taken away")
+	}
+	if step, _ := a.lock("classify"); step != "zmap" {
+		t.Fatalf("step 3 waits for %q", step)
+	}
+	a.zmap.covTable = table
+	if !a.stepDone("zmap") {
+		t.Fatal("step 2 is not marked as done")
+	}
 
-	// A report for each of two patients, in the language of the app.
+	// Step 3: a report for each patient, in the language of the app.
 	reports := filepath.Join(dir, "reports")
-	a.classify.files.files, a.classify.output, a.classify.covTable = pt[:2], reports, table
+	a.page = "classify"
+	tt.Frame()
+	if !tt.HasText("来自前两步") || !tt.HasText("分类所依据的图") || tt.HasText("添加文件…") {
+		t.Fatalf("step 3 does not show what it takes from the steps before: %q", tt.Texts())
+	}
 	press("classify", "开始分类", &a.classify.st)
-	if len(a.classify.rows) != 2 || a.classify.rows[0].reading == "" {
+	if len(a.classify.rows) != len(pt) || a.classify.rows[0].reading == "" || !a.stepDone("classify") {
 		t.Fatalf("classified %+v, notes %v", a.classify.rows, a.classify.notes)
 	}
 	page, err := os.ReadFile(a.classify.rows[1].report)
@@ -204,11 +469,33 @@ func TestWorkflow(t *testing.T) {
 		}
 	}
 	summary, err := os.ReadFile(filepath.Join(reports, "classification.tsv"))
-	if err != nil || len(strings.Split(strings.TrimSpace(string(summary)), "\n")) != 3 {
+	if err != nil || len(strings.Split(strings.TrimSpace(string(summary)), "\n")) != len(pt)+1 {
 		t.Fatalf("classification.tsv: %v, %q", err, summary)
 	}
 	exists(filepath.Join(reports, "sub-pt00_classification.json"))
-	exists(filepath.Join(reports, "sub-pt00_desc-hn_wmap.nii.gz"))
+	// The classification read the maps of step 2 and made only the one of
+	// its cross-check: it says what one from the original image says.
+	copt := core.DefaultClassifyOptions()
+	copt.Covariates = values[0]
+	whole, err := core.Classify(raw, filepath.Base(pt[0]), "hn", ref0, copt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, _ := whole.JSON()
+	gotJSON, err := os.ReadFile(filepath.Join(reports, "sub-pt00_classification.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if where := jsonApart(wantJSON, gotJSON, 2e-3); where != "" {
+		t.Fatalf("the classification from the maps of step 2 is not the one from the image: %s", where)
+	}
+	// The map is the one of step 2: no second copy lies with the reports.
+	if again, _ := filepath.Glob(filepath.Join(reports, "*.nii.gz")); len(again) != 0 {
+		t.Fatalf("classification wrote maps of its own: %v", again)
+	}
+	if got, want := a.classify.rows[0].zmap, filepath.Join(zdir, core.OutputName(pt[0], "hn", "wmap")); got != want {
+		t.Fatalf("the classification shows the map %q, want %q", got, want)
+	}
 	if !tt.HasText("打开报告") {
 		t.Fatalf("no button opens the report: %q", tt.Texts())
 	}
@@ -216,10 +503,17 @@ func TestWorkflow(t *testing.T) {
 	if got := a.classify.rows[0].scores; len(got) != len(core.Patterns) {
 		t.Fatalf("pattern scores %v", got)
 	}
-	// The cerebellum's statistics are in the reference, so the map can rest on it.
-	if got := a.classify.methods(); got[len(got)-1] != "cerebellum" || len(a.classify.checks("hn")) != 1 {
-		t.Fatalf("methods %v, checks %v", got, a.classify.checks("hn"))
+	// The classification rests on HN of the two methods of step 2; the
+	// cerebellum's statistics are in the reference, so it can rest on that.
+	z := a.zmapCurrent()
+	if got := a.classify.leading(z); got != "hn" || a.classify.method != "hn" || len(a.classify.checks("hn")) != 1 {
+		t.Fatalf("classified by %q (%q), checks %v", got, a.classify.method, a.classify.checks("hn"))
 	}
+	a.classify.main = "cerebellum"
+	if got := a.classify.leading(z); got != "cerebellum" || a.stepDone("classify") {
+		t.Fatalf("with the cerebellum chosen the classification rests on %q", got)
+	}
+	a.classify.main = ""
 
 	// The patients against the controls: the cortex takes up less.
 	cmp := filepath.Join(dir, "compare")
@@ -270,9 +564,19 @@ func TestWorkflow(t *testing.T) {
 	if a.page != "normalize" || a.norm.region.file != mask || !a.norm.methods["region"] {
 		t.Fatal("the cluster was not handed to the Intensity Normalisation page")
 	}
+	// The method of step 1 was changed: the steps after it wait for a new run.
+	if step, _ := a.lock("classify"); step != "normalize" || a.stepDone("zmap") {
+		t.Fatalf("after another method was chosen in step 1, step 3 waits for %q", step)
+	}
 	press("normalize", "开始强度归一化", &a.norm.st)
 	if len(a.norm.rows) != len(pt) || a.norm.rows[0].voxels == "" || a.norm.rows[0].mask != "custom" {
 		t.Fatalf("normalising by the cluster gave %+v", a.norm.rows)
+	}
+	// No map can be made with a custom region: step 2 says so.
+	a.page = "zmap"
+	tt.Frame()
+	if got := a.zmapProblem(); got != noMethod([]string{"region"}) || !tt.HasText(got) {
+		t.Fatalf("step 2 after a custom region: %q", got)
 	}
 
 	// The built-in masks.
@@ -620,6 +924,17 @@ func TestSpatial(t *testing.T) {
 	if a.page != "normalize" || len(a.norm.files.files) != 2 || a.norm.files.files[0] != p.written[0] {
 		t.Fatalf("the warped images were not handed on: page %s, files %v", a.page, a.norm.files.files)
 	}
+	// Controls go on to the reference, in place of what its list held.
+	a.page = "spatial"
+	a.ref.files.files = []string{"/elsewhere/sub-old_pet.nii.gz"}
+	tt.Frame()
+	if err := tt.Click("Use to Build a Reference"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.page != "reference" || !slices.Equal(a.ref.files.files, p.written) {
+		t.Fatalf("the warped controls were not handed on: page %s, files %v", a.page, a.ref.files.files)
+	}
 
 	// Two images that would be written under one name.
 	a.page = "spatial"
@@ -783,18 +1098,19 @@ func TestOptionsKept(t *testing.T) {
 	// A file written before the options were kept, and one with nonsense.
 	opt = defaultOptions()
 	s = settings{Options: &opt}
-	if err := json.Unmarshal([]byte(`{"language": "zh", "options": {"target": -3, "reference_mask": "nowhere", "voxel_p": 0, "classify_method": "x"}}`), &s); err != nil {
+	if err := json.Unmarshal([]byte(`{"language": "zh", "options": {"target": -3, "reference_mask": "nowhere", "voxel_p": 0}}`), &s); err != nil {
 		t.Fatal(err)
 	}
 	opt.sound()
 	d := defaultOptions()
-	if opt.Target != d.Target || opt.RefMask != d.RefMask || opt.VoxelP != d.VoxelP || opt.ClassMethod != d.ClassMethod || opt.FWHM != d.FWHM || !opt.Images {
+	if opt.Target != d.Target || opt.RefMask != d.RefMask || opt.VoxelP != d.VoxelP || opt.FWHM != d.FWHM {
 		t.Fatalf("unsound options were taken: %+v", opt)
 	}
 
 	// Every page that has options says which are in effect.
 	for _, p := range pages {
-		if p.id == "study" || p.id == "masks" {
+		// Z-score Maps has none of its own: it takes what step 1 normalised.
+		if p.id == "study" || p.id == "masks" || p.id == "zmap" {
 			continue
 		}
 		if d.summary(p.id) == "" {
@@ -996,10 +1312,10 @@ func TestStudy(t *testing.T) {
 	mine, theirs := filepath.Join(one, "controls", "sub-hc01_pet.nii.gz"), filepath.Join(dir, "elsewhere", "sub-x_pet.nii.gz")
 	covTable := filepath.Join(one, "participants.tsv")
 	fill := func() {
-		for _, list := range []*fileList{&c.spatial.files, &c.norm.files, &c.ref.files, &c.zmap.files, &c.classify.files, &c.cmp.g1, &c.cmp.g2, &c.cluster.files} {
+		for _, list := range []*fileList{&c.spatial.files, &c.norm.files, &c.ref.files, &c.cmp.g1, &c.cmp.g2, &c.cluster.files} {
 			list.files = []string{mine, theirs}
 		}
-		c.zmap.covTable, c.classify.covTable, c.cmp.covExtra, c.ref.cov.path, c.cmp.cov.path = covTable, covTable, covTable, covTable, covTable
+		c.zmap.covTable, c.cmp.covExtra, c.ref.cov.path, c.cmp.cov.path = covTable, covTable, covTable, covTable
 		c.norm.region.kind, c.norm.region.file = 1, filepath.Join(one, "reference_cluster.nii.gz")
 		c.cmp.region.kind, c.cmp.region.file = 1, filepath.Join(dir, "elsewhere", "mask.nii.gz")
 		c.spatial.output = filepath.Join(one, "patients")
@@ -1014,6 +1330,11 @@ func TestStudy(t *testing.T) {
 		c.spatial.rows, c.spatial.written = []spatialRow{{image: "sub-pt01_pet.nii.gz"}}, []string{mine}
 		c.spatial.outDir, c.spatial.st.ok = out("patients"), "warped"
 		c.norm.rows, c.norm.outDir, c.norm.st.ok = []normRow{{image: "sub-pt01_pet.nii.gz"}}, out("normalised"), "normalised"
+		// The steps of the individual analysis, each done on the one before.
+		c.norm.done = &normDone{asked: c.norm.files.files, files: c.norm.files.files, methods: c.norm.chosen(), reference: c.norm.reference,
+			settings: c.opt.normSettings(c.norm.chosen())}
+		c.zmap.done = &zmapDone{from: c.norm.done, files: c.norm.files.files, methods: []string{"hn"}, table: c.zmap.covariates()}
+		c.classify.from, c.classify.method = c.zmap.done, "hn"
 		c.ref.built, c.ref.st.ok = out("hc_reference"), "built"
 		c.masks.outDir, c.masks.st.ok = out("masks"), "exported"
 		c.zmap.rows, c.zmap.outDir, c.zmap.st.ok = []zmapRow{{image: "sub-pt01_pet.nii.gz"}}, out("zmaps"), "mapped"
@@ -1022,6 +1343,15 @@ func TestStudy(t *testing.T) {
 		c.cluster.saved, c.cluster.volume, c.cluster.st.ok = out("reference_cluster.nii.gz"), 58, "found"
 	}
 	done := func() (pages []string) {
+		// The steps that are still on the pages stand on what the pages hold
+		// now: this test is of what leaving a study takes off them, not of a
+		// reference chosen after a step ran.
+		if d := c.norm.done; d != nil {
+			d.asked, d.files, d.methods, d.reference = c.norm.files.files, c.norm.files.files, c.norm.chosen(), c.norm.reference
+		}
+		if d := c.zmap.done; d != nil {
+			d.table = c.zmap.covariates()
+		}
 		for _, p := range pages0 {
 			if c.done(p) {
 				pages = append(pages, p)
@@ -1036,7 +1366,7 @@ func TestStudy(t *testing.T) {
 		t.Errorf("using the same study again took its images, tables or results off the pages (done: %q)", done())
 	}
 	c.useStudy(two)
-	if got := done(); len(got) != 0 {
+	if got := done(); len(got) != 0 || c.norm.done != nil || c.zmap.done != nil || c.classify.from != nil {
 		t.Errorf("pages still marked as done after their study was left: %q", got)
 	}
 	if len(c.spatial.rows)+len(c.spatial.written)+len(c.norm.rows)+len(c.zmap.rows)+len(c.classify.rows) != 0 || c.cmp.result != nil || c.cmp.how != "" || c.cluster.saved != "" {
@@ -1064,13 +1394,13 @@ func TestStudy(t *testing.T) {
 	fill()
 	c.useStudy(one)
 	c.useStudy(two)
-	for name, list := range map[string]*fileList{"spatial": &c.spatial.files, "normalize": &c.norm.files, "reference": &c.ref.files, "zmap": &c.zmap.files,
-		"classify": &c.classify.files, "group 1": &c.cmp.g1, "group 2": &c.cmp.g2, "cluster": &c.cluster.files} {
+	for name, list := range map[string]*fileList{"spatial": &c.spatial.files, "normalize": &c.norm.files, "reference": &c.ref.files,
+		"group 1": &c.cmp.g1, "group 2": &c.cmp.g2, "cluster": &c.cluster.files} {
 		if len(list.files) != 1 || list.files[0] != theirs {
 			t.Errorf("%s still holds %q after its study was left", name, list.files)
 		}
 	}
-	if c.zmap.covTable != "" || c.classify.covTable != "" || c.cmp.covExtra != "" || c.ref.cov.path != "" || c.cmp.cov.path != "" || c.spatial.output != "" {
+	if c.zmap.covTable != "" || c.cmp.covExtra != "" || c.ref.cov.path != "" || c.cmp.cov.path != "" || c.spatial.output != "" {
 		t.Error("a table or an output of the study left behind is still chosen")
 	}
 	if c.norm.region.file != "" || c.cmp.region.file == "" {
@@ -1219,7 +1549,7 @@ func TestStudyChosen(t *testing.T) {
 	if a.study.inUse != old {
 		t.Fatalf("the study in use is %q", a.study.inUse)
 	}
-	a.zmap.files.files = []string{filepath.Join(old, "patients", "sub-01_pet.nii.gz")}
+	a.norm.files.files = []string{filepath.Join(old, "patients", "sub-01_pet.nii.gz")}
 	a.study.choose(other)
 	if a.study.target() != other {
 		t.Errorf("the folder chosen is %q", a.study.target())
@@ -1227,8 +1557,8 @@ func TestStudyChosen(t *testing.T) {
 	if entries, _ := os.ReadDir(other); len(entries) != 1 {
 		t.Errorf("choosing the folder wrote into it: %d entries", len(entries))
 	}
-	if a.study.inUse != old || a.zmap.output != filepath.Join(old, "zmaps") || len(a.zmap.files.files) != 1 {
-		t.Errorf("choosing the folder went over to it: in use %q, output %q, %d images", a.study.inUse, a.zmap.output, len(a.zmap.files.files))
+	if a.study.inUse != old || a.zmap.output != filepath.Join(old, "zmaps") || len(a.norm.files.files) != 1 {
+		t.Errorf("choosing the folder went over to it: in use %q, output %q, %d images", a.study.inUse, a.zmap.output, len(a.norm.files.files))
 	}
 	// The page says so, and what going over takes off the pages, before
 	// Create Folders does it.
@@ -1241,8 +1571,8 @@ func TestStudyChosen(t *testing.T) {
 	if err := tt.Click("Create Folders"); err != nil {
 		t.Fatal(err)
 	}
-	if a.study.inUse != other || len(a.zmap.files.files) != 0 {
-		t.Errorf("after creating: in use %q, %d images of the study left", a.study.inUse, len(a.zmap.files.files))
+	if a.study.inUse != other || len(a.norm.files.files) != 0 {
+		t.Errorf("after creating: in use %q, %d images of the study left", a.study.inUse, len(a.norm.files.files))
 	}
 }
 
@@ -1258,10 +1588,26 @@ func TestRemedy(t *testing.T) {
 			t.Errorf("normalize without images: remedy %q for %q", got, a.norm.problem())
 		}
 		file := []string{"/study/patients/sub-01_pet.nii.gz"}
-		a.norm.files.files, a.zmap.files.files, a.classify.files.files = file, file, file
+		a.norm.files.files = file
 		a.cluster.files.files = append(file, "/study/patients/sub-02_pet.nii.gz")
 		a.cmp.g1.files, a.cmp.g2.files, a.cmp.method = a.cluster.files.files, a.cluster.files.files, "hn"
-		problems := map[string]string{"normalize": a.norm.problem(), "zmap": a.zmap.problem(), "classify": a.classify.problem(),
+		// The steps after the first wait for the one before them, and lead there.
+		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize"} {
+			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem()}[page]
+			if got := a.remedy(page, problem); got != step {
+				t.Errorf("%s before step 1 is done: remedy %q for %q", page, got, problem)
+			}
+		}
+		a.norm.methods = map[string]bool{"cerebellum": true}
+		a.norm.done = &normDone{asked: file, files: file, methods: a.norm.chosen(), settings: a.opt.normSettings(a.norm.chosen())}
+		if got := a.remedy("classify", a.classifyProblem()); got != "zmap" {
+			t.Errorf("classify before step 2 is done: remedy %q for %q", got, a.classifyProblem())
+		}
+		a.zmap.done = &zmapDone{from: a.norm.done, files: file, methods: []string{"hn"}}
+		// With the steps before them done, they lack a reference.
+		a.norm.methods["hn"] = true
+		a.norm.done.methods = a.norm.chosen()
+		problems := map[string]string{"normalize": a.norm.problem(), "zmap": a.zmapProblem(), "classify": a.classifyProblem(),
 			"cluster": a.cluster.problem(), "compare": a.cmp.problem(&a.opt)}
 		for page, problem := range problems {
 			if got := a.remedy(page, problem); got != "reference" {
@@ -1270,12 +1616,18 @@ func TestRemedy(t *testing.T) {
 		}
 		// A method that needs none, and a page that has one.
 		a.norm.methods = map[string]bool{"cerebellum": true}
+		a.norm.done.methods = a.norm.chosen()
 		a.zmap.reference = "/study/hc_reference"
 		if got := a.remedy("normalize", a.norm.problem()); got != "" {
 			t.Errorf("normalize by the cerebellum: remedy %q for %q", got, a.norm.problem())
 		}
-		if got := a.remedy("zmap", a.zmap.problem()); got != "" {
-			t.Errorf("zmap with a reference: remedy %q for %q", got, a.zmap.problem())
+		if got := a.remedy("zmap", a.zmapProblem()); got != "" {
+			t.Errorf("zmap with a reference: remedy %q for %q", got, a.zmapProblem())
+		}
+		// What step 1 ran with was changed since: the steps after it wait again.
+		a.norm.files.files = append(file, "/study/patients/sub-03_pet.nii.gz")
+		if got := a.remedy("zmap", a.zmapProblem()); got != "normalize" || a.stepDone("normalize") {
+			t.Errorf("zmap after step 1 was changed: remedy %q for %q", got, a.zmapProblem())
 		}
 		// Spatial Normalisation: the settings mend SPM, not the output folder.
 		a.spatial.files.files = file
@@ -1287,6 +1639,64 @@ func TestRemedy(t *testing.T) {
 		if got := a.remedy("spatial", "Choose the output folder."); got != "" {
 			t.Errorf("spatial without an output folder: remedy %q", got)
 		}
+	}
+}
+
+// TestFollowCompare checks that Compare Groups takes the method of the
+// individual analysis and the covariate tables chosen before, until others
+// are chosen on its page.
+func TestFollowCompare(t *testing.T) {
+	dir := t.TempDir()
+	controls, patients := filepath.Join(dir, "controls.tsv"), filepath.Join(dir, "patients.tsv")
+	for _, table := range []string{controls, patients} {
+		if err := os.WriteFile(table, []byte("participant_id\tage\tsex\nsub-01\t60\tF\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := newApp()
+	a.followCompare()
+	if a.cmp.method != "hn" || a.cmp.cov.path != "" {
+		t.Fatalf("with nothing chosen before: method %q, table %q", a.cmp.method, a.cmp.cov.path)
+	}
+	// The method of step 1, HN before the others, and never a custom region.
+	a.norm.methods = map[string]bool{"cerebellum": true}
+	a.followCompare()
+	if a.cmp.method != "cerebellum" {
+		t.Errorf("the method of step 1 was not taken: %q", a.cmp.method)
+	}
+	a.norm.methods = map[string]bool{"region": true}
+	a.followCompare()
+	if a.cmp.method != "cerebellum" {
+		t.Errorf("a custom region of step 1 was taken: %q", a.cmp.method)
+	}
+	a.cmp.method = "ps" // chosen on the page
+	a.norm.methods = map[string]bool{"hn": true, "pons": true}
+	a.followCompare()
+	if a.cmp.method != "ps" {
+		t.Errorf("the method chosen on the page was replaced by %q", a.cmp.method)
+	}
+	// The table of the reference, and that of the patients beside it when
+	// they are listed apart.
+	a.ref.cov.path, a.zmap.covTable = controls, patients
+	a.followCompare()
+	if a.cmp.cov.path != controls || a.cmp.covExtra != patients || !slices.Equal(a.cmp.cov.names(), []string{"age", "sex"}) {
+		t.Errorf("the tables chosen before were not taken: %q and %q, adjusting for %q", a.cmp.cov.path, a.cmp.covExtra, a.cmp.cov.names())
+	}
+	// One table for both is taken once.
+	b := newApp()
+	b.ref.cov.path, b.zmap.covTable = controls, controls
+	b.followCompare()
+	if b.cmp.cov.path != controls || b.cmp.covExtra != "" {
+		t.Errorf("one table for all: %q and %q", b.cmp.cov.path, b.cmp.covExtra)
+	}
+	// A table taken off the page stays off.
+	b.cmp.cov.path = ""
+	b.cmp.cov.load()
+	b.followCompare()
+	b.ref.cov.path = patients
+	b.followCompare()
+	if b.cmp.cov.path != "" {
+		t.Errorf("a table was chosen again after it was taken off the page: %q", b.cmp.cov.path)
 	}
 }
 
@@ -1362,7 +1772,7 @@ func TestStudyShortcuts(t *testing.T) {
 		t.Errorf("files apart, or none, share the folder %q", got)
 	}
 	a := newApp()
-	a.page = "zmap"
+	a.page = "normalize"
 	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
 	tt.Frame()
 	if tt.HasText("Load patients/") {
@@ -1377,8 +1787,8 @@ func TestStudyShortcuts(t *testing.T) {
 		t.Fatalf("%v (shown: %q)", err, tt.Texts())
 	}
 	tt.Frame()
-	if !slices.Equal(a.zmap.files.files, pt) {
-		t.Errorf("loaded %q, not %q", a.zmap.files.files, pt)
+	if !slices.Equal(a.norm.files.files, pt) {
+		t.Errorf("loaded %q, not %q", a.norm.files.files, pt)
 	}
 	// What is there is asked of the file system once, and again after a
 	// second: until then a folder that has gone is still seen.

@@ -40,19 +40,21 @@ controls: with those you can skip building one.
 
 ## You don't need every step
 
-Steps 3 to 7 are independent of one another—pick only the ones your study
-needs:
+Steps 3, 4 and 5 are the three steps of the **individual analysis**, one group
+of pages in the sidebar: each takes the images and the methods of the step
+before it without asking for them again, and cannot run until that step is
+done. Steps 6 and 7 stand on their own. Go as far as your study needs:
 
 | Goal | Workflow |
 | --- | --- |
 | Normalised images for external statistics software | Step 2, then [Step 3](./normalize) |
 | Same, using a simple reference region with no controls | [Step 3](./normalize) alone |
-| Map where a single patient is abnormal | Step 2, then [Step 4](./zmap) |
-| Generate a parkinsonism classification report | Step 2, then [Step 5](./classify) |
+| Map where a single patient is abnormal | Step 2, then [Step 3](./normalize) and [Step 4](./zmap) |
+| Generate a parkinsonism classification report | Step 2, then [Step 3](./normalize), [Step 4](./zmap) and [Step 5](./classify) |
 | Compare a patient group against controls | Step 2, then [Step 6](./compare) |
 
-Steps 4, 5, and 6 handle normalisation internally, so you do not need to run
-Step 3 beforehand.
+Step 6 handles normalisation internally, so it does not need Step 3; it starts
+with the method chosen there.
 
 ## Before you start
 

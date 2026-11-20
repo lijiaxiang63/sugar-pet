@@ -76,9 +76,9 @@ sugar-pet reference-cluster patients/*.nii.gz -r hc_reference/ -o reference_clus
 | 平滑 | `--fwhm 8` |
 | 自选区域：内置掩膜或掩膜文件 | `-m region --mask brainstem`、`--mask my_mask.nii.gz` |
 | 自选区域：图谱标签 | `-m region --labels 34,85` |
-| 区域统计量 | `--statistic median` |
+| 区域统计量 | `--statistic median`（`normalize` 和 `build-reference`） |
+| 估计因子前的平滑 | `--fwhm 6`（`normalize`）、`--factor-fwhm 6`（`build-reference`） |
 | 目标值 | `--target 50` |
-| 输出归一化图像（关闭） | `--factors-only` |
 | 保存掩膜 | `--save-masks` |
 | 剔除体素的 p 值、剔除范围、重新估计次数 | `--p-threshold 0.01`、`--exclude hypo`、`--max-iter 1` |
 | iPS 用普通均值 | `--literal-ips` |

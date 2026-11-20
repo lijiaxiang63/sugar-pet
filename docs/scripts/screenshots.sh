@@ -33,9 +33,9 @@ reference:reference             reference-2:reference-controls
 reference-end:reference-settings
 normalize:normalize             normalize-2:normalize-output
 normalize-end:normalize-results
-zmap:zmap                       zmap-2:zmap-output
-zmap-end:zmap-results
-classify:classify               classify-end:classify-results
+zmap:zmap                       zmap-end:zmap-results
+classify:classify               classify-2:classify-results
+classify-end:classify-figure
 compare:compare                 compare-2:compare-output
 compare-end:compare-results
 cluster:cluster                 cluster-end:cluster-results

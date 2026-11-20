@@ -54,6 +54,8 @@ type app struct {
 	// dialogs is the window that file dialogs and alerts belong to: the one
 	// whose view was built last.
 	dialogs *mygo.Window
+	// normTold is the run of step 1 whose changed settings were told of.
+	normTold *normDone
 	// allMethods is whether the pages list every method, the reference
 	// regions too.
 	allMethods bool
@@ -235,10 +237,14 @@ func (a *app) pageCount(id string) int {
 		return len(a.ref.files.files)
 	case "normalize":
 		return len(a.norm.files.files)
-	case "zmap":
-		return len(a.zmap.files.files)
+	case "zmap": // the steps after the first take their images from the one before
+		if n := a.normCurrent(); n != nil {
+			return len(n.files)
+		}
 	case "classify":
-		return len(a.classify.files.files)
+		if z := a.zmapCurrent(); z != nil {
+			return len(z.files)
+		}
 	case "compare":
 		return len(a.cmp.g1.files) + len(a.cmp.g2.files)
 	case "cluster":
@@ -296,7 +302,8 @@ func (a *app) view(c *ui.Context) {
 }
 
 // done reports whether the last run of a page went well, which the
-// sidebar marks.
+// sidebar marks.  A step of the individual analysis is done only while it
+// still stands on what is before it, as the line of steps on its page says.
 func (a *app) done(page string) bool {
 	switch page {
 	case "study":
@@ -304,13 +311,13 @@ func (a *app) done(page string) bool {
 	case "spatial":
 		return a.spatial.st.ok != ""
 	case "normalize":
-		return a.norm.st.ok != ""
+		return a.norm.st.ok != "" && a.stepDone(page)
 	case "reference":
 		return a.ref.st.ok != ""
 	case "zmap":
-		return a.zmap.st.ok != ""
+		return a.zmap.st.ok != "" && a.stepDone(page)
 	case "classify":
-		return a.classify.st.ok != ""
+		return a.classify.st.ok != "" && a.stepDone(page)
 	case "compare":
 		return a.cmp.st.ok != ""
 	case "cluster":

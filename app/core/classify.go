@@ -346,6 +346,9 @@ type Classification struct {
 
 	ZMap       *Volume `json:"-"` // the z-score or W-score map under the main normalisation
 	Normalised *Volume `json:"-"` // the intensity-normalised image
+	// MapFile is the file the map was read from, when it was made before
+	// the classification (ClassifyScored): Save then writes none.
+	MapFile string `json:"-"`
 }
 
 // ClassifyOptions are the settings of Classify.
@@ -705,26 +708,9 @@ func round4p(v *float64) {
 // that only one normalisation shows is reported as such, and an increase
 // counts for PD only if all of them show it.
 func Classify(img *Volume, name, method string, ref *Reference, opt ClassifyOptions) (*Classification, error) {
-	checks := []string{}
-	if opt.Checks == nil {
-		checks = DefaultChecks(ref, method)
-	} else {
-		for _, m := range opt.Checks {
-			if m != method && !contains(checks, m) {
-				checks = append(checks, m)
-			}
-		}
-	}
-	methods := append([]string{method}, checks...)
-	for _, m := range methods { // fail before doing any work
-		if _, err := ref.ControlStats(m); err != nil {
-			return nil, err
-		}
-		if opt.Covariates != nil {
-			if _, err := ref.ControlModel(m); err != nil {
-				return nil, err
-			}
-		}
+	checks, methods, err := checkMethods(method, ref, opt)
+	if err != nil {
+		return nil, err
 	}
 	zopt := ZMapOptions{Covariates: opt.Covariates, PThreshold: opt.PThreshold, Exclude: opt.Exclude, MaxIter: opt.MaxIter}
 	maps := map[string]*zmapParts{}
@@ -741,6 +727,111 @@ func Classify(img *Volume, name, method string, ref *Reference, opt ClassifyOpti
 			}
 		}
 	}
+	return classifyMaps(img, name, method, ref, checks, maps, warnings, opt)
+}
+
+// checkMethods are the normalisations a classification by method is checked
+// with, and all it needs maps of, the method first.  It fails if the
+// reference cannot serve one of them.
+func checkMethods(method string, ref *Reference, opt ClassifyOptions) (checks, methods []string, err error) {
+	checks = []string{}
+	if opt.Checks == nil {
+		checks = DefaultChecks(ref, method)
+	} else {
+		for _, m := range opt.Checks {
+			if m != method && !contains(checks, m) {
+				checks = append(checks, m)
+			}
+		}
+	}
+	methods = append([]string{method}, checks...)
+	for _, m := range methods { // fail before doing any work
+		if _, err := ref.ControlStats(m); err != nil {
+			return nil, nil, err
+		}
+		if opt.Covariates != nil {
+			if _, err := ref.ControlModel(m); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	return checks, methods, nil
+}
+
+// Scored is what the steps before a classification made of one image: the
+// image as it was intensity-normalised with the method the classification
+// rests on, and the maps made of it.
+type Scored struct {
+	Normalised *Volume            // as Normalize wrote it with the method
+	Target     float64            // the target value it was written with
+	Factors    map[string]float64 // the normalisation factors found so far, by method
+	Maps       map[string]*Volume // the z-score or W-score maps made so far, by method
+}
+
+// ClassifyScored classifies an image as Classify does, from what was made of
+// it already.  The map the classification rests on is read, not made again;
+// the only maps made here are those of the checks that are not among Maps,
+// from the normalised image.
+func ClassifyScored(in Scored, name, method string, ref *Reference, opt ClassifyOptions) (*Classification, error) {
+	checks, methods, err := checkMethods(method, ref, opt)
+	if err != nil {
+		return nil, err
+	}
+	if in.Normalised == nil || in.Maps[method] == nil {
+		return nil, errorf("the image normalised with '%s' and its map are needed", method)
+	}
+	image := atTarget1(in.Normalised, in.Target)
+	nvox := image.NVox()
+	grid := ref.OnGrid(image.Dim, image.Aff)
+	row, warnings, err := designRow(method, ref, opt.Covariates)
+	if err != nil {
+		return nil, err
+	}
+	if warnings == nil {
+		warnings = []string{}
+	}
+	zopt := ZMapOptions{Covariates: opt.Covariates, PThreshold: opt.PThreshold, Exclude: opt.Exclude, MaxIter: opt.MaxIter}
+	maps := map[string]*zmapParts{}
+	for _, m := range methods {
+		made := in.Maps[m]
+		if made == nil {
+			// A check no map was made with yet.  The image is scaled by a
+			// constant, which a normalisation takes out again: the factor it
+			// finds is the one of the original image over the one applied.
+			parts, err := zmapScores(image, m, ref, zopt)
+			if err != nil {
+				return nil, err
+			}
+			parts.res.Factor *= in.Factors[method]
+			maps[m] = parts
+			for _, w := range parts.warnings {
+				if !contains(warnings, w) {
+					warnings = append(warnings, w)
+				}
+			}
+			continue
+		}
+		if made.Dim != image.Dim {
+			return nil, errorf("the map made with '%s' is not on the grid of the image", m)
+		}
+		std, _, err := controlsFor(grid, m, row, nvox)
+		if err != nil {
+			return nil, err
+		}
+		brain, err := scoredVoxels(image, std)
+		if err != nil {
+			return nil, err
+		}
+		maps[m] = &zmapParts{scores: made.Data[:nvox], brain: brain, adjusted: row != nil,
+			res: &NormResult{Method: m, Factor: in.Factors[m], Image: image, Target: 1}}
+	}
+	return classifyMaps(image, name, method, ref, checks, maps, warnings, opt)
+}
+
+// classifyMaps reads the maps of an image, by the method the classification
+// rests on and by its checks, and concludes.
+func classifyMaps(img *Volume, name, method string, ref *Reference, checks []string, maps map[string]*zmapParts, warnings []string, opt ClassifyOptions) (*Classification, error) {
+	methods := append([]string{method}, checks...)
 	main := maps[method]
 
 	a := atlasOnce()
@@ -968,7 +1059,8 @@ func SharedReportStem(paths []string) (first, second, stem string, found bool) {
 type ClassFiles struct{ Map, JSON, Report string }
 
 // Save writes the map, the report (in English, "en", or Chinese, "zh") and
-// the numbers into a folder.
+// the numbers into a folder.  A map that is a file already (MapFile) is not
+// written again: that file is the one named.
 func (c *Classification) Save(folder, stem, lang string) (ClassFiles, error) {
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		return ClassFiles{}, err
@@ -990,7 +1082,9 @@ func (c *Classification) Save(folder, stem, lang string) (ClassFiles, error) {
 	if err != nil {
 		return files, err
 	}
-	if err := SaveNifti(files.Map, c.ZMap, false); err != nil {
+	if c.MapFile != "" {
+		files.Map = c.MapFile
+	} else if err := SaveNifti(files.Map, c.ZMap, false); err != nil {
 		return files, err
 	}
 	if err := os.WriteFile(files.JSON, data, 0o644); err != nil {

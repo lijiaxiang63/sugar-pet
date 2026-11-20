@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -27,7 +28,6 @@ type options struct {
 	Target    float64 `json:"target"`
 	FWHMAuto  bool    `json:"smoothing_automatic"`
 	FWHM      float64 `json:"smoothing_mm"`
-	Images    bool    `json:"write_images"`
 	SaveMasks bool    `json:"save_masks"`
 
 	// The iterative methods, iPS and iHN, wherever they are used
@@ -43,8 +43,7 @@ type options struct {
 	RefStatsFor map[string]bool `json:"reference_stats_for"`
 
 	// Classification
-	ClassMethod    string `json:"classify_method"`
-	ReportLanguage int    `json:"report_language"` // 0 as the app, 1 English, 2 Chinese
+	ReportLanguage int `json:"report_language"` // 0 as the app, 1 English, 2 Chinese
 
 	// Group comparison
 	Correction   int     `json:"correction"` // 0 GRF, 1 FDR, 2 none
@@ -65,11 +64,10 @@ type options struct {
 func defaultOptions() options {
 	return options{
 		Jobs:   float64(min(max(runtime.NumCPU()/2, 1), 4)),
-		Target: 1, FWHMAuto: true, FWHM: 8, Images: true,
+		Target: 1, FWHMAuto: true, FWHM: 8,
 		PThreshold: 0.01, MaxIter: 1,
 		RefMask: "gray-matter", RefFWHM: 8, RefStatsFor: map[string]bool{},
-		ClassMethod: "hn",
-		VoxelP:      0.001, ClusterP: 0.05, Q: 0.05, Analysis: "gray-matter", CmpFWHMAuto: true, CmpFWHM: 8,
+		VoxelP: 0.001, ClusterP: 0.05, Q: 0.05, Analysis: "gray-matter", CmpFWHMAuto: true, CmpFWHM: 8,
 		ClusterThreshold: 0.001, MinCluster: 1,
 	}
 }
@@ -104,9 +102,6 @@ func (o *options) sound() {
 	}
 	mask(&o.RefMask, o.RefMaskFile, d.RefMask)
 	mask(&o.Analysis, o.AnalysisFile, d.Analysis)
-	if !core.IsMethod(o.ClassMethod) {
-		o.ClassMethod = d.ClassMethod
-	}
 	if o.RefStatsFor == nil {
 		o.RefStatsFor = map[string]bool{}
 	}
@@ -122,6 +117,20 @@ func (o *options) statsFor() []string {
 		}
 	}
 	return out
+}
+
+// normSettings says which of the options a run of Intensity Normalisation by
+// these methods depends on, and how they are set: two runs with the same
+// text give the same images.
+func (o *options) normSettings(methods []string) string {
+	text := fmt.Sprint(o.Statistic, o.Target, o.FWHMAuto)
+	if !o.FWHMAuto {
+		text += fmt.Sprint(" ", o.FWHM)
+	}
+	if slices.Contains(methods, "ips") || slices.Contains(methods, "ihn") {
+		text += fmt.Sprint(" ", o.PThreshold, o.Exclude, o.MaxIter, o.LiteralIPS)
+	}
+	return text
 }
 
 // The groups of options, as the sections of the settings window that hold
@@ -143,7 +152,6 @@ var (
 	lblStatistic  = label{"Region statistic", "区域统计量"}
 	lblTarget     = label{"Target value", "目标值"}
 	lblSmoothing  = label{"Smoothing before estimating", "估计因子前的平滑"}
-	lblImages     = label{"Write normalised images", "输出归一化图像"}
 	lblSaveMasks  = label{"Save masks", "保存掩膜"}
 	lblIterP      = label{"Exclusion p-value", "剔除体素的 p 值"}
 	lblIterSide   = label{"Exclude", "剔除范围"}
@@ -152,7 +160,6 @@ var (
 	lblRefMask    = label{"Mask", "掩膜"}
 	lblRefFWHM    = label{"Smoothing (FWHM, mm)", "平滑 (FWHM, mm)"}
 	lblRefStats   = label{"Z-score maps with other methods", "其他方法的 Z 值图"}
-	lblClsMethod  = label{"Intensity normalisation", "强度归一化"}
 	lblClsLang    = label{"Language of the report", "报告语言"}
 	lblCorrection = label{"Multiple-comparison correction", "多重比较校正"}
 	lblVoxelP     = label{"Voxel-level p", "体素水平 p 值"}
@@ -180,7 +187,6 @@ func (o *options) changed(groups ...string) []string {
 	add(groupNormalize, o.Statistic != d.Statistic, lblStatistic)
 	add(groupNormalize, o.Target != d.Target, lblTarget)
 	add(groupNormalize, !o.FWHMAuto, lblSmoothing)
-	add(groupNormalize, o.Images != d.Images, lblImages)
 	add(groupNormalize, o.SaveMasks != d.SaveMasks, lblSaveMasks)
 	add(groupIterative, o.PThreshold != d.PThreshold, lblIterP)
 	add(groupIterative, o.Exclude != d.Exclude, lblIterSide)
@@ -189,7 +195,6 @@ func (o *options) changed(groups ...string) []string {
 	add(groupReference, o.RefMask != d.RefMask, lblRefMask)
 	add(groupReference, o.RefFWHM != d.RefFWHM, lblRefFWHM)
 	add(groupReference, len(o.statsFor()) > 0, lblRefStats)
-	add(groupClassify, o.ClassMethod != d.ClassMethod, lblClsMethod)
 	add(groupClassify, o.ReportLanguage != d.ReportLanguage, lblClsLang)
 	add(groupCompare, o.Correction != d.Correction, lblCorrection)
 	add(groupCompare, o.Correction == 0 && o.VoxelP != d.VoxelP, lblVoxelP)
@@ -212,13 +217,13 @@ func (o *options) restore(groups ...string) {
 			o.Template, o.Jobs = d.Template, d.Jobs
 		case groupNormalize:
 			o.Statistic, o.Target, o.FWHMAuto, o.FWHM = d.Statistic, d.Target, d.FWHMAuto, d.FWHM
-			o.Images, o.SaveMasks = d.Images, d.SaveMasks
+			o.SaveMasks = d.SaveMasks
 		case groupIterative:
 			o.PThreshold, o.Exclude, o.MaxIter, o.LiteralIPS = d.PThreshold, d.Exclude, d.MaxIter, d.LiteralIPS
 		case groupReference:
 			o.RefMask, o.RefMaskFile, o.RefFWHM, o.RefStatsFor = d.RefMask, d.RefMaskFile, d.RefFWHM, d.RefStatsFor
 		case groupClassify:
-			o.ClassMethod, o.ReportLanguage = d.ClassMethod, d.ReportLanguage
+			o.ReportLanguage = d.ReportLanguage
 		case groupCompare:
 			o.Correction, o.VoxelP, o.ClusterP, o.Q = d.Correction, d.VoxelP, d.ClusterP, d.Q
 			o.Analysis, o.AnalysisFile, o.CmpFWHMAuto, o.CmpFWHM, o.KeepImages = d.Analysis, d.AnalysisFile, d.CmpFWHMAuto, d.CmpFWHM, d.KeepImages
@@ -282,15 +287,10 @@ func (o *options) summary(page string) string {
 			statistic = T("Median of the region", "区域中位数")
 		}
 		written := ""
-		switch {
-		case !o.Images:
-			written = T("only the table of factors is written", "仅输出因子表")
-		case o.SaveMasks:
+		if o.SaveMasks {
 			written = T("masks saved", "保存掩膜")
 		}
 		return join(statistic, Tf("target %s", "目标值 %s", num(o.Target)), smoothingText(o.FWHMAuto, o.FWHM), written)
-	case "zmap":
-		return o.iterativeText()
 	case "reference":
 		also := ""
 		if names := o.statsFor(); len(names) > 0 {
@@ -300,10 +300,18 @@ func (o *options) summary(page string) string {
 			sort.Strings(names)
 			also = T("z-score maps also with ", "另可用以下方法制作 Z 值图：") + strings.Join(names, T(", ", "、"))
 		}
-		return join(Tf("%s mask", "%s掩膜", maskOf(o.RefMask, o.RefMaskFile)), Tf("smoothing %s mm", "平滑 %s mm", num(o.RefFWHM)), also)
+		// The factors of the controls follow Intensity Normalisation.
+		factors := ""
+		if o.Statistic == 1 {
+			factors = T("factors by the median", "因子取中位数")
+		}
+		if !o.FWHMAuto {
+			factors = join(factors, Tf("factors after %s mm", "估计因子前平滑 %s mm", num(o.FWHM)))
+		}
+		return join(Tf("%s mask", "%s掩膜", maskOf(o.RefMask, o.RefMaskFile)), Tf("smoothing %s mm", "平滑 %s mm", num(o.RefFWHM)), factors, also)
 	case "classify":
-		language := [...]string{T("report in the app's language", "报告语言与界面一致"), T("report in English", "英文报告"), T("report in Chinese", "中文报告")}[o.ReportLanguage]
-		return join(Tf("Normalised with %s", "以 %s 做强度归一化", methodName(o.ClassMethod)), language)
+		language := [...]string{T("Report in the app's language", "报告语言与界面一致"), T("Report in English", "英文报告"), T("Report in Chinese", "中文报告")}[o.ReportLanguage]
+		return language
 	case "compare":
 		correction := T("No correction", "不校正")
 		switch o.Correction {

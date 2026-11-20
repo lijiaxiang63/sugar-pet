@@ -16,17 +16,22 @@ and outputs the surviving clusters with anatomical labels.
    minus group 2*, so with patients in Group 1, **negative T-values indicate
    hypometabolism**. Make sure each subject appears only once. **Swap
    Groups**, under the two lists, exchanges them.
-3. **Method:** keep **Histogram (HN)** for the primary analysis.
+3. **Method:** starts as the method chosen in step 1 of the individual
+   analysis ([Intensity Normalisation](./normalize)); once you choose another
+   here, this page keeps its own. **Histogram (HN)** is recommended for the
+   primary analysis.
 4. **Reference:** pre-filled automatically; required for HN, iPS, and iHN.
    Both groups share the same reference.
-5. **Covariate table** (recommended): select `participants.tsv` and tick
-   **age** and **sex** to include them as covariates. The table must cover
+5. **Covariate table** (recommended): the table chosen when the reference
+   was built is filled in for you (Ada's `participants.tsv`); check that
+   **age** and **sex** are ticked, or remove the table with the × beside its
+   name to leave the covariates out. If none is filled in, choose one. The table must cover
    every scan in both groups. If patients and controls live in separate
    tables, a **Second table** field appears for the other file.
 
 Scroll down.
 
-<Shot name="compare-output" alt="The output, the options and the start of the results" :marks="[[6, 315], [7, 364], [8, 420], [9, 'run']]" />
+<Shot name="compare-output" alt="The output, the options and the start of the results" :marks="[[6, 457], [7, 506], [8, 562], [9, 'run']]" />
 
 6. **Output folder:** Ada selects `study/compare/`.
 7. **Name of the result files:** filename prefix for all outputs (here

@@ -4,6 +4,57 @@ What changed in SUGAR-PET, the desktop app, from version to version. The
 section of a version is what the app's update window shows when it offers
 that version, so write it for the people who use the app.
 
+## [Unreleased]
+
+### Changed
+
+- The individual analysis is three steps in a row: Intensity Normalisation,
+  then Z-score Maps, then Classify Parkinsonism. A line of steps at the top
+  of the three pages shows where you are and which steps are done, and a
+  **Next** button beside the run button leads on.
+- A later step takes its images, methods, reference and covariate table from
+  the step before it: they are shown, not asked for again, and are changed
+  where they were chosen. A step waits until the one before it has run, and
+  again when what that one ran with was changed.
+- Nothing is computed twice along the three steps. Z-score Maps reads the
+  normalised images that Intensity Normalisation wrote and no longer
+  normalises the original images again; Classify Parkinsonism reads the maps
+  that Z-score Maps wrote and computes only the maps of its cross-checks.
+  The results are the same as before.
+- Z-score Maps makes a map with each method of Intensity Normalisation that
+  the reference holds control statistics for, and says which it leaves out.
+- A reference is built with the *Region statistic* and the *Smoothing before
+  estimating* of Settings › Intensity Normalisation, and records them: the
+  factors of its controls are estimated the way those of your images are.
+  Z-score Maps asks that step 1 and the reference agree in the two, and
+  when they do not it offers both ways out: change the settings and run
+  step 1 again, or build the reference again. References built before were
+  all built with the mean and automatic smoothing, and are read so.
+- When a setting of Intensity Normalisation is changed after the step ran,
+  a note in the settings says so, the app tells you when you leave the
+  settings window, and Z-score Maps and Classify Parkinsonism wait until
+  the step is run again with the new settings. The same holds when the
+  reference is built again in its folder.
+- Classify Parkinsonism rests on the maps of Z-score Maps and writes no
+  second copy of the map into its own folder. Its method is no longer an
+  option in the settings; when the maps were made with several methods, the
+  page asks which one to classify by (HN unless you say otherwise). A
+  `classify_method` kept in the settings is no longer used.
+- Compare Groups starts with the method chosen in Intensity Normalisation and
+  with the covariate table the reference was built with, until others are
+  chosen on its page.
+
+### Removed
+
+- The option **Write normalised images** of Intensity Normalisation: the
+  images are always written, as the steps after it read them. A
+  `write_images` kept in the settings is no longer used.
+
+### Added
+
+- Spatial Normalisation hands its images on to the Reference page as well:
+  **Use to Build a Reference**, for controls.
+
 ## [0.8.0] - 2026-11
 
 ### Added

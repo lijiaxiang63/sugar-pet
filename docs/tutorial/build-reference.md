@@ -64,6 +64,17 @@ Scroll down.
 These options apply to the next reference you build; a reference that is
 already built keeps the ones it was built with.
 
+::: tip How the factors of the controls are estimated
+The factors of the controls are estimated as the *Factors* of **Settings ›
+Intensity Normalisation** say
+([region statistic and smoothing before estimating](./normalize#options)):
+the settings that later normalise the images of your patients. The reference
+records them. With the defaults (mean, automatic smoothing) there is nothing
+to do; to use the median or a smoothing of your own, change the settings
+first and build the reference then, so that patients and controls are scaled
+the same way, as [Z-score maps](./zmap) need.
+:::
+
 ## Check the result
 
 Once the reference is built, scroll back to the top of the page.
@@ -77,8 +88,9 @@ Once the reference is built, scroll back to the top of the page.
 7. **Mean of the controls:** axial slices of the average of your controls
    after smoothing. It should look like a clean, symmetric brain; a blurred
    edge or a doubled outline means some controls are not well aligned in MNI
-   space. The buttons under the picture go straight to the pages that use
-   the reference.
+   space. The buttons under the picture lead to what comes next: **Go to
+   Intensity Normalisation** starts the individual analysis, **Go to Compare
+   Groups** the group statistics.
 
 ::: tip Opening an existing reference
 Click **Open Another…** on this page—or click the active reference at the

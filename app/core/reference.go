@@ -37,6 +37,11 @@ type Reference struct {
 	Aff      Affine
 	N        int     // number of controls
 	FWHM     float64 // smoothing (mm) applied to the controls
+	// How the factors of the controls were estimated, as in NormOptions: an
+	// image is to be compared with the controls only when its own factor
+	// was estimated the same way.
+	Statistic  string   // "mean" or "median" of a region
+	FactorFWHM *float64 // smoothing (mm) before a factor is estimated; nil = the default of each method
 
 	MaskName       string
 	SugarVersion   string
@@ -82,6 +87,9 @@ type BuildOptions struct {
 	FWHM       float64  // smoothing in mm before computing statistics (0 = already smoothed)
 	StatsFor   []string // also store control statistics for these methods
 	Covariates []Covariate
+	// How the factors of the controls are estimated, as in NormOptions.
+	Statistic  string   // "mean" or "median" of a region ["mean"]
+	FactorFWHM *float64 // smoothing (mm) before a factor is estimated; nil = the default of each method
 	Progress   func(done, total int)
 }
 
@@ -166,6 +174,13 @@ func BuildReference(ctx context.Context, controls []string, opt BuildOptions) (*
 	if len(controls) < 3 {
 		return nil, errorf("at least 3 control images are needed to build a reference")
 	}
+	statistic := opt.Statistic
+	if statistic == "" {
+		statistic = "mean"
+	}
+	if statistic != "mean" && statistic != "median" {
+		return nil, errorf("statistic must be 'mean' or 'median'")
+	}
 	var statsFor []string
 	for _, m := range opt.StatsFor {
 		if !contains(statsFor, m) {
@@ -221,7 +236,9 @@ func BuildReference(ctx context.Context, controls []string, opt BuildOptions) (*
 		}
 	}
 	scaled := make([][]float32, n)
-	unsmoothed := make([][]float32, n)
+	// estimate holds, of each control, the voxels of the mask as the factors
+	// are estimated from them: as given, or smoothed when a smoothing is set.
+	estimate := make([][]float32, n)
 	inFOV := make([]int32, nvox)
 	for i, path := range controls {
 		if err := ctx.Err(); err != nil {
@@ -242,20 +259,24 @@ func BuildReference(ctx context.Context, controls []string, opt BuildOptions) (*
 				inFOV[v]++
 			}
 		}
-		unsmoothed[i] = make([]float32, len(maskIdx))
+		data := img.Data
+		if opt.FactorFWHM != nil {
+			data = Smooth(img.Data, img.Dim, img.Aff, *opt.FactorFWHM)
+		}
+		estimate[i] = make([]float32, len(maskIdx))
 		for k, v := range maskIdx {
-			unsmoothed[i][k] = img.Data[v]
+			estimate[i][k] = data[v]
 		}
 		for _, m := range statsFor {
 			var f float64
 			if m == "spm-global" {
-				f = spmGlobal(img.Data)
+				f = spmGlobal(data)
 			} else {
 				region := make([]bool, nvox)
 				for v := range region {
 					region[v] = regions[m][v] && valid[v]
 				}
-				if f, err = regionMean(img.Data, region); err != nil {
+				if f, err = regionStat(data, region, statistic); err != nil {
 					return nil, err
 				}
 			}
@@ -283,17 +304,27 @@ func BuildReference(ctx context.Context, controls []string, opt BuildOptions) (*
 		return nil, errorf("the mask barely overlaps the controls; are they in MNI space?")
 	}
 	// Proportional scaling is defined on the images as given (before
-	// smoothing), so that all data-driven methods share one scale.
+	// smoothing, unless one is set for the factors), so that all data-driven
+	// methods share one scale.
 	ps := make([]float64, n)
 	for i := range controls {
-		var sum float64
+		inside := make([]float32, 0, kept)
 		for k, v := range maskIdx {
 			if final[v] {
-				sum += float64(unsmoothed[i][k])
+				inside = append(inside, estimate[i][k])
 			}
 		}
-		ps[i] = sum / float64(kept)
-		unsmoothed[i] = nil
+		estimate[i] = inside
+		all := make([]bool, len(inside))
+		for k := range all {
+			all[k] = true
+		}
+		if ps[i], err = regionStat(inside, all, statistic); err != nil {
+			return nil, err
+		}
+		if opt.FactorFWHM == nil {
+			estimate[i] = nil // the HN factor is of the controls as smoothed for the statistics
+		}
 	}
 	mask0 = final
 	for i := range scaled {
@@ -305,6 +336,7 @@ func BuildReference(ctx context.Context, controls []string, opt BuildOptions) (*
 		})
 	}
 	ref := &Reference{Mask: mask0, Dim: first.Dim, Aff: first.Aff, N: n, FWHM: opt.FWHM,
+		Statistic: statistic, FactorFWHM: opt.FactorFWHM,
 		SugarVersion: Version, Terms: terms, Stats: map[string]Stat{}, Models: map[string]Model{}}
 	ref.Template, ref.PSStd = meanStd(scaled)
 	if design != nil {
@@ -324,11 +356,21 @@ func BuildReference(ctx context.Context, controls []string, opt BuildOptions) (*
 			return nil, err
 		}
 		ratioBuf = ratioBuf[:0]
+		k := 0
 		for v, m := range mask0 {
-			if m {
-				ratioBuf = append(ratioBuf, scaled[i][v]/ref.Template[v])
+			if !m {
+				continue
 			}
+			if estimate[i] == nil {
+				ratioBuf = append(ratioBuf, scaled[i][v]/ref.Template[v])
+			} else if ref.Template[v] > 0 {
+				// With a smoothing set for the factors the control is taken as
+				// Normalize takes an image: smoothed so, against the template.
+				ratioBuf = append(ratioBuf, estimate[i][k]/float32(ps[i])/ref.Template[v])
+			}
+			k++
 		}
+		estimate[i] = nil
 		mode, err := histogramMode(ratioBuf)
 		if err != nil {
 			return nil, err
@@ -501,8 +543,12 @@ func (f *factorsJSON) UnmarshalJSON(data []byte) error {
 }
 
 type referenceJSON struct {
-	NControls      int         `json:"n_controls"`
-	FWHM           float64     `json:"fwhm_mm"`
+	NControls int     `json:"n_controls"`
+	FWHM      float64 `json:"fwhm_mm"`
+	// Only when the factors of the controls were not estimated the default
+	// way, which is all the Python package knows.
+	Statistic      string      `json:"statistic,omitempty"`
+	FactorFWHM     *float64    `json:"factor_fwhm_mm,omitempty"`
 	Version        string      `json:"sugar_pet_version"`
 	Mask           string      `json:"mask"`
 	ControlFactors factorsJSON `json:"control_factors"`
@@ -555,7 +601,11 @@ func (r *Reference) Save(folder string) error {
 			return err
 		}
 	}
-	info := referenceJSON{r.N, r.FWHM, r.SugarVersion, r.MaskName, r.ControlFactors, r.Terms, r.StatsFor, r.ModelNames}
+	info := referenceJSON{NControls: r.N, FWHM: r.FWHM, FactorFWHM: r.FactorFWHM, Version: r.SugarVersion, Mask: r.MaskName,
+		ControlFactors: r.ControlFactors, Covariates: r.Terms, StatsFor: r.StatsFor, Models: r.ModelNames}
+	if r.Statistic == "median" {
+		info.Statistic = r.Statistic
+	}
 	if info.StatsFor == nil {
 		info.StatsFor = []string{}
 	}
@@ -585,7 +635,11 @@ func LoadReference(folder string) (*Reference, error) {
 	if err := json.Unmarshal(raw, &info); err != nil {
 		return nil, errorf("%s: reference.json cannot be read (%v)", folder, err)
 	}
-	r := &Reference{N: info.NControls, FWHM: info.FWHM, SugarVersion: info.Version, MaskName: info.Mask,
+	if info.Statistic == "" {
+		info.Statistic = "mean"
+	}
+	r := &Reference{N: info.NControls, FWHM: info.FWHM, Statistic: info.Statistic, FactorFWHM: info.FactorFWHM,
+		SugarVersion: info.Version, MaskName: info.Mask,
 		ControlFactors: info.ControlFactors, Terms: info.Covariates,
 		Stats: map[string]Stat{}, StatsFor: info.StatsFor, Models: map[string]Model{}, ModelNames: info.Models}
 	first := true
@@ -658,7 +712,8 @@ func (r *Reference) OnGrid(dim [3]int, aff Affine) *Reference {
 		return r.grid
 	}
 	move := func(data []float32) []float32 { return resampleLinear(data, r.Dim, r.Aff, dim, aff, false) }
-	out := &Reference{Dim: dim, Aff: aff, N: r.N, FWHM: r.FWHM, MaskName: r.MaskName, SugarVersion: r.SugarVersion,
+	out := &Reference{Dim: dim, Aff: aff, N: r.N, FWHM: r.FWHM, Statistic: r.Statistic, FactorFWHM: r.FactorFWHM,
+		MaskName: r.MaskName, SugarVersion: r.SugarVersion,
 		ControlFactors: r.ControlFactors, Terms: r.Terms, StatsFor: r.StatsFor, ModelNames: r.ModelNames,
 		Stats: map[string]Stat{}, Models: map[string]Model{}}
 	out.Template, out.PSStd, out.HNMean, out.HNStd = move(r.Template), move(r.PSStd), move(r.HNMean), move(r.HNStd)

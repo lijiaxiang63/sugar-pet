@@ -394,7 +394,7 @@ func (a *app) leaveStudy(left string) {
 		return yes
 	}
 	sp := &a.spatial
-	for _, list := range []*fileList{&sp.files, &a.norm.files, &a.ref.files, &a.zmap.files, &a.classify.files, &a.cmp.g1, &a.cmp.g2, &a.cluster.files} {
+	for _, list := range []*fileList{&sp.files, &a.norm.files, &a.ref.files, &a.cmp.g1, &a.cmp.g2, &a.cluster.files} {
 		var kept []string
 		for _, f := range list.files {
 			if !in(f) {
@@ -406,7 +406,7 @@ func (a *app) leaveStudy(left string) {
 	// The mask of a custom region too: the reference cluster of a study is
 	// made from its patients.  And the files chosen in the settings: a
 	// template or a mask of one study would be used on the next unseen.
-	for _, path := range []*string{&a.zmap.covTable, &a.classify.covTable, &a.cmp.covExtra, &a.norm.region.file, &a.cmp.region.file,
+	for _, path := range []*string{&a.zmap.covTable, &a.cmp.covExtra, &a.norm.region.file, &a.cmp.region.file,
 		&a.opt.Template, &a.opt.RefMaskFile, &a.opt.AnalysisFile} {
 		if in(*path) {
 			*path = ""
@@ -442,17 +442,17 @@ func (a *app) forgetResults(left string) {
 		p.pic.forget()
 	}
 	if p := &a.norm; wrote(p.outDir, p.output) {
-		p.rows, p.notes, p.outDir, p.st = nil, nil, "", status{}
+		p.rows, p.notes, p.outDir, p.st, p.done = nil, nil, "", status{}, nil
 	}
 	if p := &a.ref; wrote(p.built, p.output) {
 		p.built, p.st = "", status{}
 	}
 	if p := &a.zmap; wrote(p.outDir, p.output) {
-		p.rows, p.notes, p.outDir, p.shown, p.st = nil, nil, "", 0, status{}
+		p.rows, p.notes, p.outDir, p.shown, p.st, p.done = nil, nil, "", 0, status{}, nil
 		p.pic.forget()
 	}
 	if p := &a.classify; wrote(p.outDir, p.output) {
-		p.rows, p.notes, p.outDir, p.shown, p.st = nil, nil, "", 0, status{}
+		p.rows, p.notes, p.outDir, p.shown, p.st, p.from = nil, nil, "", 0, status{}, nil
 		p.pic.forget()
 	}
 	if p := &a.cmp; p.result != nil && insideDir(p.result.TMap, left) || p.result == nil && insideDir(p.output, left) {

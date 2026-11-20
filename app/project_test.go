@@ -178,7 +178,7 @@ func TestProject(t *testing.T) {
 	a.cmp.name, a.cmp.swapped, a.opt.Target, a.page = "pd_vs_hc", true, 50, "compare"
 	mapOf := writeFile(t, filepath.Join(dir, "normalised", "sub-pt01_desc-cerebellum_pet.nii.gz"), "normalised")
 	a.norm.done = &normDone{asked: slices.Clone(a.norm.files.files), files: pt[:1], controls: slices.Clone(a.norm.controls),
-		methods: a.norm.chosen(), refSig: a.refSignature(), settings: a.opt.normSettings(a.norm.chosen()),
+		methods: a.norm.chosen(), refSig: a.refFactorSignature(), settings: a.opt.normSettings(a.norm.chosen()),
 		images: map[string]map[string]string{pt[0]: {"cerebellum": mapOf}}, factors: map[string]map[string]float64{pt[0]: {"cerebellum": 5.5}}, target: 50}
 	a.norm.done.stamp()
 	a.norm.st.ok, a.norm.outDir = "normalised", filepath.Join(dir, "normalised")

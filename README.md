@@ -74,7 +74,9 @@ The pages of a project follow the workflow below, one step after the other:
    together, the same way, and shows the factors of both groups in one
    table. It begins by building the reference from the controls of the
    project: there is no step to build it, and it is built anew only after
-   the controls, the covariates or its settings have changed.
+   the controls or its settings have changed. Where only the covariates
+   have changed, the images normalised still stand: Z-score Maps builds the
+   reference anew instead.
 4. **Z-score Maps** of the patients, from the images step 3 wrote.
 5. **Classify Parkinsonism**, from the maps step 4 wrote.
 6. **Compare Groups**, the patients against the controls, on the images

@@ -183,19 +183,20 @@ type zmapDoneJSON struct {
 	Files   []string                     `json:"files"`
 	Methods []string                     `json:"methods"`
 	Table   string                       `json:"covariate_table,omitempty"`
+	RefSig  string                       `json:"reference_built_with,omitempty"`
 	Maps    map[string]map[string]string `json:"maps"`
 }
 
 // The run of step 1 a run of step 2 took (from) is not written with it: the
 // file says whether it is the one step 1 holds (zmapRun.Current).
 func (d zmapDone) MarshalJSON() ([]byte, error) {
-	return json.Marshal(zmapDoneJSON{d.files, d.methods, d.table, d.maps})
+	return json.Marshal(zmapDoneJSON{d.files, d.methods, d.table, d.refSig, d.maps})
 }
 
 func (d *zmapDone) UnmarshalJSON(raw []byte) error {
 	var j zmapDoneJSON
 	err := json.Unmarshal(raw, &j)
-	*d = zmapDone{files: j.Files, methods: j.Methods, table: j.Table, maps: j.Maps}
+	*d = zmapDone{files: j.Files, methods: j.Methods, table: j.Table, refSig: j.RefSig, maps: j.Maps}
 	return err
 }
 

@@ -609,6 +609,42 @@ func TestWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Sex is no longer adjusted for.  No factor rests on the covariates:
+	// step 1 still stands, and step 2, which rests on the model of the
+	// reference, waits for a run that builds the reference anew.
+	a.cov.adjust["sex"] = false
+	if !a.stepDone("normalize") || a.stepDone("zmap") || !a.refStale() || a.refBuilder() != "zmap" {
+		t.Fatalf("with sex left out: step 1 done %v, step 2 done %v, stale %v (step 1 changed: %q)",
+			a.stepDone("normalize"), a.stepDone("zmap"), a.refStale(), a.normChanged())
+	}
+	if step, why := a.lock("classify"); step != "zmap" || !strings.Contains(why, "协变量") {
+		t.Fatalf("with sex left out step 3 waits for %q: %q", step, why)
+	}
+	if step, _ := a.lock("compare"); step != "" {
+		t.Fatalf("with sex left out the comparison waits for %q", step)
+	}
+	a.page = "reference"
+	tt.Frame()
+	if !tt.HasText("下次运行Z 值图时会重新建立") {
+		t.Fatalf("the Reference page does not say that step 2 builds it: %q", tt.Texts())
+	}
+	normalised := a.norm.done
+	press("zmap", "生成 Z 值图", &a.zmap.st)
+	if got := readRefInfo(ref).covariateNames(); fmt.Sprint(got) != "[age]" || a.refStale() || !strings.HasPrefix(a.zmap.st.ok, "已用 12 例对照重新建立参考库") {
+		t.Fatalf("step 2 did not build the reference anew: %v, %q", got, a.zmap.st.ok)
+	}
+	if a.norm.done != normalised || !a.stepDone("normalize") || !a.stepDone("zmap") {
+		t.Fatalf("after step 2 built the reference anew: step 1 done %v (changed %q), step 2 done %v",
+			a.stepDone("normalize"), a.normChanged(), a.stepDone("zmap"))
+	}
+	// Opened again, step 1 still rests on the reference built anew.
+	tt.Frame()
+	if again := newApp(); again.openProject(dir) != nil || !again.stepDone("normalize") || !again.stepDone("zmap") {
+		t.Fatal("in the project opened again the reference built by step 2 undid a step")
+	}
+	a.cov.adjust["sex"] = true
+	press("zmap", "生成 Z 值图", &a.zmap.st)
+
 	// The patients against the controls: the cortex takes up less.
 	a.cmp.method = "cerebellum"
 	press("compare", "开始比较", &a.cmp.st)
@@ -908,13 +944,18 @@ func TestCovariateTable(t *testing.T) {
 	ticks(cv, map[string]bool{"age": true, "sex": true})
 	tt.Scroll(640, 400, 0, 900)
 	click("sex")
-	// The covariates are not those the reference was built with: the
-	// comparison waits for step 1, which builds it anew from the controls.
-	a.norm.methods = map[string]bool{"cerebellum": true}
+	// The covariates are not those the reference was built with: it is to
+	// be built anew, but no factor rests on them, so step 1 still stands and
+	// the comparison, which adjusts by the table itself, waits for nothing.
 	a.page = "compare"
 	tt.Frame()
-	if step, why := a.lock("compare"); step != "normalize" || !strings.Contains(why, "协变量") || !a.refStale() {
-		t.Fatalf("with other covariates the comparison waits for %q: %q", step, why)
+	if step, why := a.lock("compare"); step != "" || !a.refStale() || !a.stepDone("normalize") || a.refBuilder() != "zmap" {
+		t.Fatalf("with other covariates the comparison waits for %q: %q (step 1 changed: %q)", step, why, a.normChanged())
+	}
+	// Another method for step 1: its run builds the reference anew.
+	a.norm.methods = map[string]bool{"cerebellum": true}
+	if a.refBuilder() != "normalize" {
+		t.Fatal("with step 1 to be run again, Z-score Maps would build the reference")
 	}
 	a.page = "normalize"
 	run("开始强度归一化", &a.norm.st)

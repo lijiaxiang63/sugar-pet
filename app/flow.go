@@ -30,8 +30,9 @@ type normDone struct {
 	controls  []string
 	methods   []string
 	reference string
-	// refSig is app.refSignature as the run found it: what the reference of
-	// the project was built with ("" with an imported one, or with none).
+	// refSig is app.refFactorSignature as the run found it: what of the
+	// settings the reference of the project was built with the factors rest
+	// on ("" with an imported one, or with none).
 	refSig   string
 	settings string // options.normSettings as the run had them
 	// What the run wrote of each image, by image and method: the normalised
@@ -61,6 +62,10 @@ type zmapDone struct {
 	files   []string  // the images that every method made a map of
 	methods []string
 	table   string // the covariate table; "" for plain z-scores
+	// refSig is app.refSignature as the run found it: the model of the
+	// covariates and the statistics of the reference of the project, which
+	// the maps rest on and the factors of step 1 do not.
+	refSig string
 	// The maps the run wrote, by image and method, which step 3 reads.
 	maps map[string]map[string]string
 }
@@ -104,9 +109,10 @@ func (a *app) normChanged() string {
 	}
 	if d.reference != p.reference || d.rebuilt {
 		what = append(what, T("reference", "参考库"))
-	} else if d.refSig != a.refSignature() {
-		// The reference of the project would be built anew.
-		what = append(what, T("covariates or reference settings", "协变量或参考库设置"))
+	} else if d.refSig != a.refFactorSignature() {
+		// The reference of the project would be built anew, and the factors
+		// estimated otherwise.
+		what = append(what, T("reference settings", "参考库设置"))
 	}
 	if d.settings != a.opt.normSettings(d.methods) {
 		what = append(what, T("settings", "设置"))
@@ -190,11 +196,11 @@ func (p *zmapPage) usable(methods []string) (yes, no []string) {
 	return yes, no
 }
 
-// zmapCurrent is what step 2 did, while it still rests on what step 1 did
-// and on the covariate table it ran with.
+// zmapCurrent is what step 2 did, while it still rests on what step 1 did,
+// on the covariate table it ran with and on the reference as it was built.
 func (a *app) zmapCurrent() *zmapDone {
 	d, n := a.zmap.done, a.normCurrent()
-	if d == nil || n == nil || d.from != n || d.table != a.zmap.covariates() {
+	if d == nil || n == nil || d.from != n || d.table != a.zmap.covariates() || d.refSig != a.refSignature() {
 		return nil
 	}
 	return d
@@ -234,7 +240,11 @@ func (a *app) lock(page string) (step, why string) {
 		return "normalize", T("Finish step 1 first: Intensity Normalisation.", "请先完成第 1 步：强度归一化。")
 	}
 	if page == "classify" && a.zmapCurrent() == nil {
-		if a.zmap.done != nil {
+		if d := a.zmap.done; d != nil {
+			if d.from == a.normCurrent() && d.refSig != a.refSignature() {
+				return "zmap", T("The covariates or the reference settings changed after step 2 ran: run Z-score Maps again, which builds the reference anew.",
+					"第 2 步运行之后改了协变量或参考库设置：请重新运行 Z 值图，它会先重新建立参考库。")
+			}
 			return "zmap", T("Step 2 no longer rests on what is before it: run Z-score Maps again.", "第 2 步与它之前的内容已不一致：请重新运行 Z 值图。")
 		}
 		return "zmap", T("Finish step 2 first: Z-score Maps.", "请先完成第 2 步：Z 值图。")

@@ -97,6 +97,12 @@ func (a *app) zmapProblem() string {
 	if len(yes) == 0 {
 		return noMethod(no)
 	}
+	// The run begins by building the reference anew.
+	if a.refStale() {
+		if msg := a.buildProblem(); msg != "" {
+			return msg
+		}
+	}
 	if why := n.unfit(yes, p.info); why != "" {
 		return why
 	}
@@ -129,7 +135,7 @@ func (a *app) zmapView(c *ui.Context) {
 				a.taken(c, "zmap",
 					fact(c, T("Patients", "患者"), imagesText(n.of(false))),
 					fact(c, T("Methods", "方法"), shown),
-					fact(c, T("Reference", "参考库"), referenceText(p.reference, p.info)),
+					fact(c, T("Reference", "参考库"), a.referenceLine()),
 				)
 				if len(skipped) > 0 && len(methods) > 0 {
 					caution(c, Tf("No map is made with %s: the reference in use holds no control statistics for it.",
@@ -208,9 +214,45 @@ func (a *app) runZMap() {
 	files, _ := from.of(false) // the patients: the controls are the reference
 	methods, _ := p.usable(from.methods)
 	reference, out, table := p.reference, p.output, p.covariates()
-	record := &zmapDone{from: from, methods: methods, table: table, maps: map[string]map[string]string{}}
+	// Where the covariates, or the statistics the reference keeps, have
+	// changed since it was built, the run begins by building it anew.  The
+	// controls and what the factors rest on are as step 1 found them: the
+	// images it normalised still stand.
+	build, problem := a.referenceBuild()
+	if problem != "" {
+		p.st.err = problem
+		return
+	}
+	if build != nil {
+		reference, table = build.out, ""
+		if len(build.opt.Covariates) > 0 {
+			table = a.cov.path
+		}
+	}
+	record := &zmapDone{from: from, methods: methods, table: table, refSig: a.refSignature(), maps: map[string]map[string]string{}}
 	p.rows, p.notes, p.shown, p.done = nil, nil, 0, nil
-	a.start("zmap", T("Making maps", "正在生成 Z 值图"), func(ctx context.Context, step func(int, int)) (func(), error) {
+	label := T("Making maps", "正在生成 Z 值图")
+	first := label
+	if build != nil {
+		first = T("Building the reference from the controls", "正在用对照建立参考库")
+	}
+	a.start("zmap", first, func(ctx context.Context, step func(int, int)) (func(), error) {
+		if build != nil {
+			built, err := build.run(ctx, step)
+			if err != nil {
+				return nil, err
+			}
+			// The reference stands, however the rest of the run ends; step 1
+			// still rests on it, as on the one it replaces.
+			a.update(func() {
+				a.ref.built = built
+				a.setReference(build.out)
+				from.refStamp = built.stamp
+				if a.job != nil {
+					a.job.label, a.job.done, a.job.total = label, 0, 0
+				}
+			})
+		}
 		ref, err := core.LoadReference(reference)
 		if err != nil {
 			return nil, err
@@ -325,6 +367,9 @@ func (a *app) runZMap() {
 				p.st.err = Tf("%d of %d failed; see the notes under the results.", "%d / %d 项失败，详见结果下方的说明。", failed, total)
 			} else {
 				p.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", len(rows))
+				if build != nil {
+					p.st.ok = Tf("Reference built anew from %d controls. ", "已用 %d 例对照重新建立参考库。", len(build.files)) + p.st.ok
+				}
 			}
 		}, nil
 	}, func(err error) { p.st.err = err.Error() })

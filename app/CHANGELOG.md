@@ -37,8 +37,10 @@ that version, so write it for the people who use the app.
   `factors.tsv` has a `group` column.
 - **The reference is no step of its own any more.** It is the controls of
   the project, summarised: Intensity Normalisation builds it from them
-  before it normalises the images, and builds it anew after the controls,
-  the covariates or the settings of the reference change. It always keeps
+  before it normalises the images, and builds it anew after the controls
+  or the settings of the reference change. Where only the covariates
+  changed, no factor rests on them: the images normalised still stand, and
+  Z-score Maps builds the reference anew before it makes the maps. It always keeps
   the control statistics of the methods chosen, so a z-score map can be made
   with each of them. The Reference page shows the reference in use and has
   nothing to run.

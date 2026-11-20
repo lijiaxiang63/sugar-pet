@@ -169,7 +169,7 @@ func (a *app) referenceLine() string {
 	case ref == "":
 		return Tf("Built from the %d controls when Intensity Normalisation runs", "运行强度归一化时由 %d 例对照自动建立", n)
 	case a.refStale():
-		return Tf("Built anew from the %d controls when Intensity Normalisation runs", "下次运行强度归一化时由 %d 例对照重新建立", n)
+		return Tf("Built anew from the %d controls when %s runs", "下次运行%[2]s时由 %[1]d 例对照重新建立", n, a.rebuiltWhen())
 	}
 	return referenceText(ref, a.zmap.info)
 }
@@ -279,8 +279,10 @@ func (r *refInfo) covariateNames() []string {
 
 // The reference of a project is its healthy controls, summarised: it is no
 // step of its own.  Intensity Normalisation builds it from the controls
-// before it normalises the images, and builds it anew once the controls,
-// the covariates or the settings it was built with have changed.  A project
+// before it normalises the images, and builds it anew once the controls or
+// the settings it was built with have changed.  Where no more than its model
+// of the covariates, or the statistics it keeps, have changed, the images
+// normalised still stand, and Z-score Maps builds it anew instead.  A project
 // without controls of its own imports a reference built elsewhere instead.
 type refPage struct {
 	files  fileList // the healthy controls of the project
@@ -332,18 +334,16 @@ func (a *app) refStatsFor() []string {
 	return out
 }
 
-// refSignature is what, besides its controls, the reference of the project
-// is built with: the covariates and the settings.  "" while the project
-// builds none.  It names no folder, so that a project moved keeps it.
-func (a *app) refSignature() string {
+// refFactorSignature is what of the settings the reference of the project
+// is built with that the factors of Intensity Normalisation rest on: its
+// mask and smoothing, and how the factors of its controls are estimated.
+// "" while the project builds none.  It names no folder, so that a project
+// moved keeps it.
+func (a *app) refFactorSignature() string {
 	if !a.buildsReference() {
 		return ""
 	}
-	o, cv := &a.opt, &a.cov
-	covariates := "none"
-	if cv.path != "" {
-		covariates = fmt.Sprint(cv.stamp.size, cv.stamp.modified, cv.names())
-	}
+	o := &a.opt
 	mask := o.RefMask
 	if mask == "file" {
 		mask = filepath.Base(o.RefMaskFile)
@@ -352,8 +352,42 @@ func (a *app) refSignature() string {
 	if !o.FWHMAuto {
 		factors = num(o.FWHM)
 	}
-	return fmt.Sprint("covariates ", covariates, "; mask ", mask, "; smoothing ", num(o.RefFWHM), "; statistic ", o.Statistic,
-		"; factors after ", factors, "; also ", o.statsFor())
+	return fmt.Sprint("mask ", mask, "; smoothing ", num(o.RefFWHM), "; statistic ", o.Statistic, "; factors after ", factors)
+}
+
+// refSignature is all that, besides its controls, the reference of the
+// project is built with: what refFactorSignature names, and its model of
+// the covariates and the methods it keeps control statistics for, which
+// only the maps rest on.  "" while the project builds none.
+func (a *app) refSignature() string {
+	if !a.buildsReference() {
+		return ""
+	}
+	cv := &a.cov
+	covariates := "none"
+	if cv.path != "" {
+		covariates = fmt.Sprint(cv.stamp.size, cv.stamp.modified, cv.names())
+	}
+	return fmt.Sprint(a.refFactorSignature(), "; covariates ", covariates, "; also ", a.opt.statsFor())
+}
+
+// refBuilder is the step whose next run builds the reference of the project
+// anew: Z-score Maps while step 1 still stands, as when no more than the
+// covariates or the statistics it keeps have changed, on which no factor
+// rests; otherwise Intensity Normalisation.
+func (a *app) refBuilder() string {
+	if a.normCurrent() != nil {
+		return "zmap"
+	}
+	return "normalize"
+}
+
+// rebuiltWhen says when the reference of the project is built anew.
+func (a *app) rebuiltWhen() string {
+	if a.refBuilder() == "zmap" {
+		return T("Z-score Maps", "Z 值图")
+	}
+	return T("Intensity Normalisation", "强度归一化")
 }
 
 // refStale reports whether the reference of the project is not, or no
@@ -398,8 +432,8 @@ type refBuild struct {
 	built *refBuilt
 }
 
-// referenceBuild is the building a run of Intensity Normalisation begins
-// with: nil where the project builds no reference, or the one it has is
+// referenceBuild is the building a run of Intensity Normalisation, or of
+// Z-score Maps, begins with: nil where the project builds no reference, or the one it has is
 // still what its controls and the settings make.  Or what keeps it from
 // being built.
 func (a *app) referenceBuild() (*refBuild, string) {
@@ -526,8 +560,8 @@ func (a *app) referenceView(c *ui.Context) {
 				}
 				ui.Column(c).Gap(8).Children(func() {
 					if a.refStale() {
-						caution(c, T("The controls, the covariates or the settings have changed since this reference was built: Intensity Normalisation builds it anew the next time it runs.",
-							"建立该参考库之后，对照、协变量或设置有了变化：下次运行强度归一化时会重新建立。"))
+						caution(c, Tf("The controls, the covariates or the settings have changed since this reference was built: %s builds it anew the next time it runs.",
+							"建立该参考库之后，对照、协变量或设置有了变化：下次运行%s时会重新建立。", a.rebuiltWhen()))
 					}
 					stats(c,
 						[2]string{strconv.Itoa(info.N), T("Controls", "对照人数")},
@@ -557,8 +591,8 @@ func (a *app) referenceView(c *ui.Context) {
 			if a.imported() {
 				return
 			}
-			section(c, T("How it is built", "如何建立"), T("There is nothing to run here: Intensity Normalisation builds the reference from the healthy controls of the project, and builds it anew after the controls, the covariates or these settings change. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
-				"这里没有需要运行的步骤：强度归一化会用项目的健康对照自动建立参考库，对照、协变量或这些设置变动后会重新建立。少于约 10 例对照时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
+			section(c, T("How it is built", "如何建立"), T("There is nothing to run here: Intensity Normalisation builds the reference from the healthy controls of the project, and builds it anew after the controls or these settings change. When only the covariates change, the images normalised still stand, and Z-score Maps builds it anew. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
+				"这里没有需要运行的步骤：强度归一化会用项目的健康对照自动建立参考库，对照或这些设置变动后会重新建立；只改了协变量时，已归一化的图像仍然有效，由 Z 值图重新建立。少于约 10 例对照时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
 				a.source(c, "ref-data", "data", changeInData(),
 					fact(c, T("Healthy controls", "健康对照"), countText(p.files.files)),
 					fact(c, T("Covariates", "协变量"), a.covText()),

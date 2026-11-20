@@ -188,7 +188,7 @@ func (a *app) demo() {
 	for _, path := range controls {
 		a.ref.built.controls[path] = fileStamp{}
 	}
-	a.norm.done.refSig = a.ref.built.sig
+	a.norm.done.refSig = a.refFactorSignature()
 	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
 	a.zmap.covTable = a.cov.path
 	a.zmap.outDir = a.zmap.output
@@ -203,7 +203,7 @@ func (a *app) demo() {
 		}
 	}
 	a.zmap.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", 12)
-	a.zmap.done = &zmapDone{from: a.norm.done, files: patients, methods: a.norm.chosen(), table: a.zmap.covTable}
+	a.zmap.done = &zmapDone{from: a.norm.done, files: patients, methods: a.norm.chosen(), table: a.zmap.covTable, refSig: a.refSignature()}
 
 	cl := &a.classify
 	cl.loadedFrom, cl.info = cl.reference, info

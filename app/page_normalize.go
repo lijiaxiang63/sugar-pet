@@ -408,7 +408,7 @@ func (a *app) runNormalize() {
 		reference = build.out
 	}
 	// What the steps after this one take of it.
-	record := &normDone{asked: files, controls: controls, methods: methods, reference: reference, refSig: a.refSignature(),
+	record := &normDone{asked: files, controls: controls, methods: methods, reference: reference, refSig: a.refFactorSignature(),
 		settings: o.normSettings(methods), images: map[string]map[string]string{}, factors: map[string]map[string]float64{},
 		target: opt.Target, median: opt.Statistic == "median", fwhm: opt.FWHM}
 	record.stamp()

@@ -447,7 +447,35 @@ func regionStatus(z *float64) string {
 	return "normal"
 }
 
-// summarise gives the mean score of a region, and how much of it is abnormal.
+// gridRegions keeps the regions of the classification as they were last
+// put on a grid, and the share of each that the grid holds.  The patients of
+// a study lie on one grid: putting the regions on it is most of what a
+// classification costs, and is done once for the grid, not for every patient.
+var gridRegions struct {
+	sync.Mutex
+	dim   [3]int
+	aff   Affine
+	masks map[regionKey][]bool
+	view  map[regionKey]float64
+}
+
+// regionsOnGrid returns the regions of the classification on a grid, and
+// the share of each that lies inside it.  They are only read.
+func regionsOnGrid(dim [3]int, aff Affine) (map[regionKey][]bool, map[regionKey]float64) {
+	c := &gridRegions
+	c.Lock()
+	defer c.Unlock()
+	if c.masks == nil || c.dim != dim || c.aff != aff {
+		a := atlasOnce()
+		masks := map[regionKey][]bool{}
+		for key, mask := range regionMasks() {
+			masks[key] = maskOnGrid(boolVolume(mask, a.dim, a.aff), dim, aff)
+		}
+		c.dim, c.aff, c.masks, c.view = dim, aff, masks, regionView(dim, aff)
+	}
+	return c.masks, c.view
+}
+
 // regionView is the share of each region that lies inside a grid.  On a
 // grid that ends inside a region only a part of the region is left: what
 // is scored there must be counted against the whole region.
@@ -834,16 +862,7 @@ func classifyMaps(img *Volume, name, method string, ref *Reference, checks []str
 	methods := append([]string{method}, checks...)
 	main := maps[method]
 
-	a := atlasOnce()
-	onGrid := map[regionKey][]bool{}
-	for key, mask := range regionMasks() {
-		resampled, err := GetMask(MaskSpec{Vol: boolVolume(mask, a.dim, a.aff)}, img.Dim, img.Aff)
-		if err != nil {
-			return nil, err
-		}
-		onGrid[key] = resampled
-	}
-	view := regionView(img.Dim, img.Aff)
+	onGrid, view := regionsOnGrid(img.Dim, img.Aff)
 	var regions []RegionEntry
 	score, steady := regionScores{}, regionScores{}
 	robustHigh := map[string]*float64{}

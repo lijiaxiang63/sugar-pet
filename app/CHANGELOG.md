@@ -91,6 +91,11 @@ that version, so write it for the people who use the app.
   with another normalisation** turns the check by global scaling (and by
   deep white matter, if the reference keeps its statistics) back on; the
   maps for it are then computed during the classification, as before.
+- Classifying many patients is several times faster. The regions the
+  classification reads were put on the grid of the image anew for every
+  patient, which took most of its time; they are now put on a grid once,
+  and so are the built-in masks that Intensity Normalisation and Z-score
+  Maps use. The results are the same.
 - Z-score Maps makes a map with each method of Intensity Normalisation that
   the reference holds control statistics for, and says which it leaves out.
 - A reference is built with the *Region statistic* and the *Smoothing before

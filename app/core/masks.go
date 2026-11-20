@@ -305,6 +305,51 @@ func LabelsMask(labels []int) (*Volume, error) {
 	return boolVolume(isIn(a.labels, labels), a.dim, a.aff), nil
 }
 
+// gridMasks keeps the built-in masks as they were last put on a grid.  The
+// images of a study lie on one grid, and putting a mask on it costs far
+// more than anything else that is done with the mask: it is done once for
+// the grid, not once for every image.
+var gridMasks struct {
+	sync.Mutex
+	dim   [3]int
+	aff   Affine
+	masks map[string][]bool
+}
+
+// builtinOnGrid returns a built-in mask on a grid.  The mask is the
+// caller's own, to change as it likes.
+func builtinOnGrid(name string, dim [3]int, aff Affine) []bool {
+	c := &gridMasks
+	c.Lock()
+	defer c.Unlock()
+	if c.masks == nil || c.dim != dim || c.aff != aff {
+		c.dim, c.aff, c.masks = dim, aff, map[string][]bool{}
+	}
+	mask, ok := c.masks[name]
+	if !ok {
+		a := atlasOnce()
+		mask = maskOnGrid(boolVolume(builtin(name), a.dim, a.aff), dim, aff)
+		c.masks[name] = mask
+	}
+	return append([]bool(nil), mask...)
+}
+
+// maskOnGrid puts a mask of zeros and ones on a grid.
+func maskOnGrid(vol *Volume, dim [3]int, aff Affine) []bool {
+	out := make([]bool, dim[0]*dim[1]*dim[2])
+	if SameGrid(vol.Dim, vol.Aff, dim, aff) {
+		for i, v := range vol.Data {
+			out[i] = v > 0.5
+		}
+		return out
+	}
+	res := resampleLinear(vol.Data, vol.Dim, vol.Aff, dim, aff, true)
+	for i, v := range res {
+		out[i] = v > 0.5
+	}
+	return out
+}
+
 // GetMask returns a boolean mask on the given grid.
 func GetMask(spec MaskSpec, dim [3]int, aff Affine) ([]bool, error) {
 	var vol *Volume
@@ -317,8 +362,7 @@ func GetMask(spec MaskSpec, dim [3]int, aff Affine) ([]bool, error) {
 			}
 		}
 	case IsMask(spec.Name):
-		a := atlasOnce()
-		vol = boolVolume(builtin(spec.Name), a.dim, a.aff)
+		return builtinOnGrid(spec.Name, dim, aff), nil
 	default:
 		if _, err := os.Stat(spec.Name); err != nil {
 			return nil, errorf("'%s' is neither a built-in mask (%s) nor an existing file", spec.Name, maskNames())
@@ -337,18 +381,7 @@ func GetMask(spec MaskSpec, dim [3]int, aff Affine) ([]bool, error) {
 			}
 		}
 	}
-	out := make([]bool, dim[0]*dim[1]*dim[2])
-	if SameGrid(vol.Dim, vol.Aff, dim, aff) {
-		for i, v := range vol.Data {
-			out[i] = v > 0.5
-		}
-		return out, nil
-	}
-	res := resampleLinear(vol.Data, vol.Dim, vol.Aff, dim, aff, true)
-	for i, v := range res {
-		out[i] = v > 0.5
-	}
-	return out, nil
+	return maskOnGrid(vol, dim, aff), nil
 }
 
 // resampleTo resamples a float volume onto another grid (trilinear).

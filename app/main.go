@@ -76,6 +76,15 @@ type app struct {
 	// cov is the covariate table of the project, which the reference, the
 	// maps and the group comparison all adjust by.
 	cov covChoice
+	// reference is the reference every page uses: the one the project
+	// builds from its controls, or one imported.  setReference changes it.
+	reference string
+	// refRead is what the reference said about itself when refInfo last read
+	// its folder (of).
+	refRead struct {
+		of   string
+		info *refInfo
+	}
 	// ranAt is when the last run of each page ended.
 	ranAt map[string]time.Time
 
@@ -181,19 +190,29 @@ func (a *app) saveSettings() bool {
 	return true
 }
 
-// setReference makes a reference folder the one every page uses.
+// setReference makes a reference folder the one every page uses.  What was
+// read of the reference before is read anew, also if the path is the same:
+// another reference may have its name.
 func (a *app) setReference(path string) {
-	a.norm.reference, a.zmap.reference, a.cmp.reference, a.cluster.reference = path, path, path, path
-	a.classify.reference = path
-	// What the pages read of the reference before is read anew, or let go
-	// of with it.
-	a.zmap.loadedFrom, a.classify.loadedFrom = "", ""
-	a.zmap.info, a.classify.info = nil, nil
-	// Also if the path is the same: another reference may have its name.
-	a.ref.current = ""
+	a.reference = path
+	a.forgetRefInfo()
 	a.ref.pic.forget()
-	a.cmp.fwhmKnown = false
 }
+
+// refInfo is what the reference in use says about itself, read from its
+// folder once; nil while there is none.
+func (a *app) refInfo() *refInfo {
+	if a.reference == "" {
+		return nil
+	}
+	if a.refRead.info == nil || a.refRead.of != a.reference {
+		a.refRead.of, a.refRead.info = a.reference, readRefInfo(a.reference)
+	}
+	return a.refRead.info
+}
+
+// forgetRefInfo has refInfo read the folder of the reference again.
+func (a *app) forgetRefInfo() { a.refRead.of, a.refRead.info = "", nil }
 
 type pageInfo struct {
 	id     string
@@ -243,9 +262,9 @@ func (a *app) pageCount(id string) int {
 	case "data":
 		return len(a.proj.patients.files) + len(a.proj.controls.files)
 	case "spatial":
-		return len(a.spatial.files.files)
+		return len(a.toWarp())
 	case "normalize":
-		return len(a.norm.files.files)
+		return len(a.normImages())
 	case "zmap": // the steps after the first take their images from the one before
 		if n := a.normCurrent(); n != nil {
 			patients, _ := n.of(false)
@@ -256,9 +275,11 @@ func (a *app) pageCount(id string) int {
 			return len(z.files)
 		}
 	case "compare":
-		return len(a.cmp.g1.files) + len(a.cmp.g2.files)
+		g1, g2 := a.cmpGroups()
+		return len(g1) + len(g2)
 	case "cluster":
-		return len(a.cluster.files.files)
+		patients, _ := a.images()
+		return len(patients)
 	}
 	return 0
 }
@@ -282,7 +303,6 @@ func (a *app) view(c *ui.Context) {
 		a.saveSettings()
 		return
 	}
-	a.feed()
 	a.cov.sync(c.Now()) // the table may be filled in with another program
 	ui.Row(c.Key("project")).Fill().AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(sidebarWidth).Shrink(0).Children(func() { a.sidebar(c) })
@@ -411,7 +431,7 @@ func (a *app) sidebar(c *ui.Context) {
 
 	// The reference in use, and the settings.
 	ui.Column(c).Padding(6, 10, 10, 10).Gap(5).Shrink(0).Children(func() {
-		ref := a.norm.reference
+		ref := a.reference
 		box := ui.ButtonBase(c.Key("ref-chip")).Padding(7, 10).Radius(10).Gap(9).AlignItems(ui.Center).
 			Label(T("Reference in use", "当前参考库"))
 		bg := pal.text.Alpha(0.045)

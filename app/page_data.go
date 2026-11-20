@@ -283,7 +283,7 @@ func (a *app) dataSummary() string {
 // spatialDone reports whether every image of a project in native space has
 // been warped into MNI space.
 func (a *app) spatialDone() bool {
-	files := a.spatial.files.files
+	files := a.toWarp()
 	for _, f := range files {
 		if a.spatial.warped[f] == "" {
 			return false

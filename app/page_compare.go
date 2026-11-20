@@ -15,14 +15,8 @@ import (
 // as Intensity Normalisation wrote them: it normalises nothing itself, so
 // that what is tested is what step 1 shows, made with its settings.
 type comparePage struct {
-	g1, g2    fileList
-	reference string
-	// The smoothing of the reference, as last read from its folder.
-	fwhmKnown bool
-	fwhmOf    string
-	fwhmRef   *float64
-	name      string
-	output    string
+	name   string
+	output string
 
 	// swapped is whether the groups were swapped: the controls of the
 	// project are then group 1 and its patients group 2.
@@ -38,8 +32,6 @@ type comparePage struct {
 // swap makes group 1 group 2 and the other way round.  The result on the
 // page goes: its T-map has the sign of the groups as they were.
 func (p *comparePage) swap() {
-	p.g1.files, p.g2.files = p.g2.files, p.g1.files
-	p.g1.query, p.g2.query = p.g2.query, p.g1.query
 	p.swapped = !p.swapped
 	p.result, p.how, p.st = nil, "", status{}
 }
@@ -59,39 +51,23 @@ func (p *comparePage) groups(n *normDone) (g1, g2 []string, dropped [2]int) {
 	return g1, g2, dropped
 }
 
-// referenceFWHM is the smoothing (mm) of the chosen reference, if there is
-// one that can be read.
-func (p *comparePage) referenceFWHM() (fwhm float64, ok bool) {
-	if !p.fwhmKnown || p.fwhmOf != p.reference {
-		p.fwhmKnown, p.fwhmOf, p.fwhmRef = true, p.reference, nil
-		if p.reference != "" {
-			if info := readRefInfo(p.reference); info.err == "" {
-				p.fwhmRef = &info.FWHM
-			}
-		}
-	}
-	if p.fwhmRef == nil {
-		return 0, false
-	}
-	return *p.fwhmRef, true
-}
-
-// smoothing is the smoothing (mm) before the test.  Left to the app, it is
-// that of the chosen reference, whether or not the method needs one, or 8 mm
-// without a reference.
-func (p *comparePage) smoothing(o *options) float64 {
-	if !o.CmpFWHMAuto {
+// cmpSmoothing is the smoothing (mm) before the test.  Left to the app, it
+// is that of the reference in use, whether or not the method needs one, or
+// 8 mm without a reference.
+func (a *app) cmpSmoothing() float64 {
+	if o := &a.opt; !o.CmpFWHMAuto {
 		return o.CmpFWHM
 	}
-	if fwhm, ok := p.referenceFWHM(); ok {
-		return fwhm
+	if info := a.refInfo(); info != nil && info.err == "" {
+		return info.FWHM
 	}
 	return 8
 }
 
 func (a *app) cmpProblem() string {
 	p, o := &a.cmp, &a.opt
-	for i, g := range [][]string{p.g1.files, p.g2.files} {
+	g1, g2 := a.cmpGroups()
+	for i, g := range [][]string{g1, g2} {
 		group := [...]string{"patients", "controls"}[i]
 		if p.swapped {
 			group = [...]string{"controls", "patients"}[i]
@@ -134,7 +110,8 @@ func (a *app) compareView(c *ui.Context) {
 					names[0], names[1] = names[1], names[0]
 				}
 				// Once step 1 is done, what it normalised of each group.
-				texts := [2]string{countText(p.g1.files), countText(p.g2.files)}
+				g1, g2 := a.cmpGroups()
+				texts := [2]string{countText(g1), countText(g2)}
 				if n != nil {
 					g1, g2, dropped := p.groups(n)
 					texts = [2]string{imagesText(g1, dropped[0]), imagesText(g2, dropped[1])}
@@ -257,8 +234,8 @@ func (a *app) runCompare() {
 	opt.Method, opt.Name, opt.KeepImages = method, strings.TrimSpace(p.name), o.KeepImages
 	opt.Correction = [...]string{"grf", "fdr", "none"}[o.Correction]
 	opt.VoxelP, opt.ClusterP, opt.Q = o.VoxelP, o.ClusterP, o.Q
-	p.fwhmKnown = false // the reference may have been built anew
-	fwhm := p.smoothing(&o)
+	a.forgetRefInfo() // the reference may have been built anew
+	fwhm := a.cmpSmoothing()
 	opt.FWHM = &fwhm
 	opt.AnalysisMask = core.MaskSpec{Name: o.Analysis}
 	if o.Analysis == "file" {

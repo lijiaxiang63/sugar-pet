@@ -210,7 +210,7 @@ func (a *app) projectState() *projectState {
 	p := a.proj
 	s := &projectState{Format: projectFormat, Name: p.name, Created: p.created, App: core.Version,
 		Copies: p.copies, Native: p.native, Patients: p.patients.files, Controls: p.controls.files,
-		Reference: a.norm.reference, Page: a.page, Options: a.opt}
+		Reference: a.reference, Page: a.page, Options: a.opt}
 	if s.Patients == nil {
 		s.Patients = []string{}
 	}
@@ -516,7 +516,6 @@ func (a *app) openProject(dir string) error {
 	a.proj = &project{dir: dir}
 	a.projectOutputs()
 	a.applyState(&s)
-	a.feed()
 	// What the file says is what is open: nothing is written until it changes.
 	if now, err := json.MarshalIndent(a.projectState(), "", "  "); err == nil && bytes.Equal(portable(now, dir), bytes.TrimRight(raw, "\n")) {
 		a.proj.saved = string(now)
@@ -557,7 +556,6 @@ func (a *app) createProject(dir, name string, copies bool) error {
 		a.cov.path = table
 		a.cov.load()
 	}
-	a.feed()
 	a.saveProject()
 	if p.saveErr != "" {
 		err := errorString(Tf("The project cannot be written into %s: %s", "无法把项目写入 %s：%s", shortDir(dir), p.saveErr))
@@ -648,9 +646,13 @@ func (a *app) confirm(title, detail, yes string, then func()) {
 }
 
 // images are the images of the project in MNI space: its own or, of images
-// in native space, what Spatial Normalisation made of them.
+// in native space, what Spatial Normalisation made of them.  Every page
+// takes its images from here, as the project holds them now.
 func (a *app) images() (patients, controls []string) {
 	p := a.proj
+	if p == nil {
+		return nil, nil
+	}
 	if !p.native {
 		return p.patients.files, p.controls.files
 	}
@@ -665,26 +667,38 @@ func (a *app) images() (patients, controls []string) {
 	return warped(p.patients.files), warped(p.controls.files)
 }
 
-// feed gives the pages what they take of the project: its images and its
-// covariate table.  No page asks for them itself.
-func (a *app) feed() {
-	p := a.proj
-	if p == nil {
-		return
-	}
+// controls are the healthy controls of the project in MNI space: what its
+// reference is built from.
+func (a *app) controls() []string {
+	_, controls := a.images()
+	return controls
+}
+
+// normImages are the images Intensity Normalisation takes: both groups,
+// the patients first.
+func (a *app) normImages() []string {
 	patients, controls := a.images()
-	a.ref.files.files, a.cluster.files.files = controls, patients
-	// Intensity Normalisation takes both groups, the patients first.
-	a.norm.files.files, a.norm.controls = append(append([]string(nil), patients...), controls...), controls
+	return append(slices.Clone(patients), controls...)
+}
+
+// cmpGroups are group 1 and group 2 of Compare Groups: the patients and the
+// controls, or the other way round once swapped.
+func (a *app) cmpGroups() (g1, g2 []string) {
+	g1, g2 = a.images()
 	if a.cmp.swapped {
-		patients, controls = controls, patients
+		g1, g2 = g2, g1
 	}
-	a.cmp.g1.files, a.cmp.g2.files = patients, controls
-	a.spatial.files.files = nil
-	if p.native {
-		a.spatial.files.files = append(append([]string(nil), p.patients.files...), p.controls.files...)
+	return g1, g2
+}
+
+// toWarp are the images Spatial Normalisation warps: all of the project
+// while they are in native space, else none.
+func (a *app) toWarp() []string {
+	p := a.proj
+	if p == nil || !p.native {
+		return nil
 	}
-	a.zmap.covTable = a.cov.path
+	return append(slices.Clone(p.patients.files), p.controls.files...)
 }
 
 // groupFolder is the folder of the project that the images of a group are

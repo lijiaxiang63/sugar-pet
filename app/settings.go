@@ -637,7 +637,6 @@ func (a *app) settingsClassify(c *ui.Context) {
 
 func (a *app) settingsCompare(c *ui.Context) {
 	o := &a.opt
-	p := &a.cmp
 	section(c, T("Statistics", "统计"), "", func() {
 		list := []func(){func() {
 			setting(c, lblCorrection.String(), [...]string{
@@ -677,8 +676,8 @@ func (a *app) settingsCompare(c *ui.Context) {
 			fileRow,
 			func() {
 				about := T("Automatic: 8 mm, as no reference is chosen. Use 0 if the images are already smoothed.", "自动：未选择参考库，采用 8 mm。图像已平滑时填 0。")
-				if fwhm, ok := p.referenceFWHM(); ok {
-					about = Tf("Automatic: %g mm, that of the reference. Use 0 if the images are already smoothed.", "自动：采用参考库的平滑 %g mm。图像已平滑时填 0。", fwhm)
+				if info := a.refInfo(); info != nil && info.err == "" {
+					about = Tf("Automatic: %g mm, that of the reference. Use 0 if the images are already smoothed.", "自动：采用参考库的平滑 %g mm。图像已平滑时填 0。", info.FWHM)
 				}
 				setting(c, lblCmpFWHM.String(), about,
 					func() {

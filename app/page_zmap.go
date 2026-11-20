@@ -20,11 +20,7 @@ type zmapRow struct {
 }
 
 type zmapPage struct {
-	reference  string
-	loadedFrom string
-	info       *refInfo
-	covTable   string
-	output     string
+	output string
 
 	st     status
 	rows   []zmapRow
@@ -39,26 +35,16 @@ type zmapPage struct {
 
 func (p *zmapPage) init() {}
 
-// load reads what the reference in use says about itself.
-func (p *zmapPage) load() {
-	if p.reference != p.loadedFrom {
-		p.loadedFrom, p.info = p.reference, nil
-		if p.reference != "" {
-			p.info = readRefInfo(p.reference)
-		}
-	}
-}
-
-// allowed tells whether the reference can serve a method.
-func (p *zmapPage) allowed(id string) (bool, string) {
+// zmapAllowed tells whether the reference in use can serve a method.
+func (a *app) zmapAllowed(id string) (bool, string) {
 	switch id {
 	case "ps", "ips", "hn", "ihn":
 		return true, ""
 	case "region":
 		return false, T("Z-score maps cannot use a custom region.", "Z 值图不支持自选区域。")
 	}
-	if p.info != nil {
-		for _, m := range p.info.StatsFor {
+	if info := a.refInfo(); info != nil {
+		for _, m := range info.StatsFor {
 			if m == id {
 				return true, ""
 			}
@@ -76,16 +62,15 @@ func noMethod(methods []string) string {
 
 // zmapProblem is what keeps step 2 from running, or "".
 func (a *app) zmapProblem() string {
-	p := &a.zmap
 	if _, why := a.lock("zmap"); why != "" {
 		return why
 	}
 	n := a.normCurrent()
 	switch {
-	case p.reference == "":
+	case a.reference == "":
 		return needReference()
-	case p.info != nil && p.info.err != "":
-		return p.info.err
+	case a.refInfo() != nil && a.refInfo().err != "":
+		return a.refInfo().err
 	}
 	if patients, _ := n.of(false); len(patients) == 0 {
 		if len(n.asked) == len(n.controls) {
@@ -93,7 +78,7 @@ func (a *app) zmapProblem() string {
 		}
 		return T("Step 1 normalised none of the patients: see its notes.", "第 1 步没有成功归一化任何患者图像：详见该步的说明。")
 	}
-	yes, no := p.usable(n.methods)
+	yes, no := a.usable(n.methods)
 	if len(yes) == 0 {
 		return noMethod(no)
 	}
@@ -103,7 +88,7 @@ func (a *app) zmapProblem() string {
 			return msg
 		}
 	}
-	if why := n.unfit(yes, p.info); why != "" {
+	if why := n.unfit(yes, a.refInfo()); why != "" {
 		return why
 	}
 	return ""
@@ -111,12 +96,11 @@ func (a *app) zmapProblem() string {
 
 func (a *app) zmapView(c *ui.Context) {
 	p := &a.zmap
-	p.load()
-	hasModels := p.info != nil && len(p.info.Covariates) > 0
+	hasModels := a.refInfo() != nil && len(a.refInfo().Covariates) > 0
 	n := a.normCurrent()
 	var methods, skipped []string
 	if n != nil {
-		methods, skipped = p.usable(n.methods)
+		methods, skipped = a.usable(n.methods)
 	}
 	a.frame(c, T("Z-score Maps", "Z 值图"),
 		T("How far each voxel is from the healthy controls", "每个体素偏离健康对照的程度"),
@@ -142,20 +126,20 @@ func (a *app) zmapView(c *ui.Context) {
 						"本步不用%s制作 Z 值图：当前参考库中没有它的对照统计。", methodNames(skipped)))
 				}
 			})
-			if p.reference != "" && (p.info == nil || p.info.err == "") {
+			if a.reference != "" && (a.refInfo() == nil || a.refInfo().err == "") {
 				section(c, T("Age and sex (W-scores)", "年龄和性别（W 值）"), "", func() {
 					about := T("This reference was built without covariates, so the maps are plain z-scores.", "该参考库建立时未提供协变量，因此输出普通 Z 值图。")
 					switch {
-					case hasModels && p.covTable != "":
+					case hasModels && a.cov.path != "":
 						about = Tf("The reference models %s, and the table gives them for these images: the maps are W-scores, compared with what the controls predict for such a person.",
-							"参考库对%s建了模型，表格中有这些图像的取值：输出 W 值图，与对照对同样条件的人的预测值比较。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
+							"参考库对%s建了模型，表格中有这些图像的取值：输出 W 值图，与对照对同样条件的人的预测值比较。", strings.Join(a.refInfo().covariateNames(), T(" and ", "、")))
 					case hasModels:
 						about = Tf("The reference models %s. Choose a covariate table on the Data page to get W-scores; without one the maps are plain z-scores.",
-							"参考库对%s建了模型。在“数据”页面选择协变量表即可输出 W 值图；不选则输出普通 Z 值图。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
+							"参考库对%s建了模型。在“数据”页面选择协变量表即可输出 W 值图；不选则输出普通 Z 值图。", strings.Join(a.refInfo().covariateNames(), T(" and ", "、")))
 					}
 					table := T("None", "无")
-					if p.covTable != "" {
-						table = filepath.Base(p.covTable)
+					if a.cov.path != "" {
+						table = filepath.Base(a.cov.path)
 					}
 					a.source(c, "z-cov", "data", changeInData(), func() {
 						setting(c, T("Covariate table", "协变量表"), about, func() {
@@ -212,8 +196,8 @@ func (a *app) runZMap() {
 		return
 	}
 	files, _ := from.of(false) // the patients: the controls are the reference
-	methods, _ := p.usable(from.methods)
-	reference, out, table := p.reference, p.output, p.covariates()
+	methods, _ := a.usable(from.methods)
+	reference, out, table := a.reference, p.output, a.zmapCovariates()
 	// Where the covariates, or the statistics the reference keeps, have
 	// changed since it was built, the run begins by building it anew.  The
 	// controls and what the factors rest on are as step 1 found them: the

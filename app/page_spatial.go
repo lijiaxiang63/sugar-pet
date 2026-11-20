@@ -21,7 +21,6 @@ type spatialRow struct {
 // spatialPage warps native-space PET to MNI space with SPM, the step before
 // everything else in the app for images that are not there yet.
 type spatialPage struct {
-	files  fileList
 	spm    string
 	spmBad bool   // the folder chosen is not SPM12 or SPM25
 	matlab string // chosen by the user; "" is the MATLAB found on this computer
@@ -95,13 +94,13 @@ func (a *app) spatialProblem() string {
 	switch {
 	case !a.proj.native:
 		return notNative()
-	case len(p.files.files) == 0:
+	case len(a.toWarp()) == 0:
 		return a.dataProblem()
 	case p.setupProblem() != "":
 		return p.setupProblem()
 	}
 	targets := map[string]string{}
-	for _, path := range p.files.files {
+	for _, path := range a.toWarp() {
 		target := a.spatialTarget(path)
 		if other, ok := targets[target]; ok {
 			return Tf("%s and %s would both be written as %s: rename one of them.",
@@ -206,7 +205,7 @@ func (a *app) spatialView(c *ui.Context) {
 
 func (a *app) runSpatial() {
 	p := &a.spatial
-	files, out := append([]string(nil), p.files.files...), a.proj.dir
+	files, out := a.toWarp(), a.proj.dir
 	targets := make([]string, len(files))
 	for i, path := range files {
 		targets[i] = a.spatialTarget(path)

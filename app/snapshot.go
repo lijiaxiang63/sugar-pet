@@ -144,7 +144,6 @@ func (a *app) demo() {
 		warp(&a.proj.controls, fmt.Sprintf("sub-hc%02d", i), control(i))
 	}
 	sp.st.ok = Tf("%d image(s) warped to MNI space.", "已完成：%d 幅图像已配准到 MNI 空间。", 22)
-	a.feed()
 	a.norm.methods["cerebellum"] = true
 	a.setReference("/Users/ada/study/hc_reference")
 	a.norm.outDir = a.norm.output
@@ -169,14 +168,14 @@ func (a *app) demo() {
 	a.norm.st.ok = Tf("%d patient and %d control image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅患者图像、%d 幅对照图像 × %d 种方法。", 6, 16, 2)
 	// The steps of the individual analysis, each done on what is before it.
 	patients, controls := a.images()
-	a.norm.done = &normDone{asked: a.norm.files.files, files: a.norm.files.files, controls: controls, methods: a.norm.chosen(),
-		reference: a.norm.reference, settings: a.opt.normSettings(a.norm.chosen())}
+	a.norm.done = &normDone{asked: a.normImages(), files: a.normImages(), controls: controls, methods: a.norm.chosen(),
+		reference: a.reference, settings: a.opt.normSettings(a.norm.chosen())}
 
 	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"cerebellum", "white-matter"}}
 	info.Covariates = []struct {
 		Name string `json:"name"`
 	}{{"age"}, {"sex"}}
-	a.ref.current, a.ref.info = a.norm.reference, info
+	a.refRead.of, a.refRead.info = a.reference, info
 	a.opt.RefStatsFor["cerebellum"], a.opt.RefStatsFor["white-matter"] = true, true
 	a.cov.path = "/Users/ada/study/participants.tsv"
 	a.cov.table = &core.Table{Path: a.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 22)}
@@ -189,8 +188,6 @@ func (a *app) demo() {
 		a.ref.built.controls[path] = fileStamp{}
 	}
 	a.norm.done.refSig = a.refFactorSignature()
-	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
-	a.zmap.covTable = a.cov.path
 	a.zmap.outDir = a.zmap.output
 	// A map of each image by each method of step 1, the first of them HN's.
 	for i, r := range [][4]string{{"-6.41", "9.8%", "-6.02", "8.9%"}, {"-5.07", "6.3%", "-4.71", "5.6%"}, {"-3.12", "2.6%", "-2.95", "2.4%"},
@@ -203,10 +200,9 @@ func (a *app) demo() {
 		}
 	}
 	a.zmap.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", 12)
-	a.zmap.done = &zmapDone{from: a.norm.done, files: patients, methods: a.norm.chosen(), table: a.zmap.covTable, refSig: a.refSignature()}
+	a.zmap.done = &zmapDone{from: a.norm.done, files: patients, methods: a.norm.chosen(), table: a.cov.path, refSig: a.refSignature()}
 
 	cl := &a.classify
-	cl.loadedFrom, cl.info = cl.reference, info
 	cl.outDir = cl.output
 	cl.from, cl.method = a.zmap.done, "hn"
 	// A reading for each image of step 2.
@@ -261,7 +257,7 @@ func (a *app) demo() {
 	pics := demoPictures()
 	show := func(pic *picture, key string, bitmap *ui.Bitmap) { pic.key, pic.bitmap = key, bitmap }
 	show(&sp.pic, sp.rows[0].path, pics.warped)
-	show(&a.ref.pic, a.ref.current, pics.mean)
+	show(&a.ref.pic, a.reference, pics.mean)
 	show(&a.zmap.pic, a.zmap.rows[0].path, pics.scores)
 	show(&cl.pic, cl.rows[0].zmap, pics.scores)
 	show(&a.cmp.pic, a.cmp.result.File("thresholded"), pics.tmap)

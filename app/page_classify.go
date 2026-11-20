@@ -45,10 +45,7 @@ func classifyBadge(category, confidence string, pal *palette) (string, ui.Color)
 }
 
 type classifyPage struct {
-	reference  string
-	loadedFrom string
-	info       *refInfo
-	output     string
+	output string
 
 	st     status
 	rows   []classifyRow
@@ -66,31 +63,17 @@ type classifyPage struct {
 
 func (p *classifyPage) init() {}
 
-// load reads what the reference in use says about itself.
-func (p *classifyPage) load() {
-	if p.reference != p.loadedFrom {
-		p.loadedFrom, p.info = p.reference, nil
-		if p.reference != "" {
-			p.info = readRefInfo(p.reference)
-		}
-	}
-}
-
-// leading is the method the classification rests on: the one chosen here
-// if step 2 made a map with it, or else HN, or the first of step 2.
-
 // checks are the other normalisations the findings are checked with, where
 // the settings ask for the cross-check: none otherwise.
 func (a *app) classifyChecks(method string) []string {
-	p := &a.classify
 	out := []string{}
 	if !a.opt.CrossCheck {
 		return out
 	}
 	for _, m := range []string{"ps", "white-matter"} {
 		stored := m == "ps"
-		if p.info != nil {
-			for _, s := range p.info.StatsFor {
+		if info := a.refInfo(); info != nil {
+			for _, s := range info.StatsFor {
 				stored = stored || s == m
 			}
 		}
@@ -111,16 +94,15 @@ func (o *options) reportLang() string {
 
 // classifyProblem is what keeps step 3 from running, or "".
 func (a *app) classifyProblem() string {
-	p := &a.classify
 	if _, why := a.lock("classify"); why != "" {
 		return why
 	}
 	z := a.zmapCurrent()
 	switch {
-	case p.reference == "":
+	case a.reference == "":
 		return needReference()
-	case p.info != nil && p.info.err != "":
-		return p.info.err
+	case a.refInfo() != nil && a.refInfo().err != "":
+		return a.refInfo().err
 	case !slices.Contains(z.methods, a.norm.primary()):
 		return primaryWithoutMap(a.norm.primary())
 	}
@@ -173,7 +155,6 @@ func (a *app) classifyView(c *ui.Context) {
 	p := &a.classify
 	t := c.Theme()
 	pal := paletteFor(c)
-	p.load()
 	z := a.zmapCurrent()
 	a.frame(c, T("Classify Parkinsonism", "帕金森综合征分类"),
 		T("Which pattern a patient's scan matches, with a report", "判断患者图像符合哪种代谢模式，并生成报告"),
@@ -190,8 +171,8 @@ func (a *app) classifyView(c *ui.Context) {
 				if checks := a.classifyChecks(method); len(checks) > 0 {
 					shown += Tf(" · checked with %s", " · 另以%s复核", methodNames(checks))
 				}
-				reference := referenceText(p.reference, p.info)
-				if p.info != nil && p.info.err == "" && p.info.N < 30 {
+				reference := referenceText(a.reference, a.refInfo())
+				if a.refInfo() != nil && a.refInfo().err == "" && a.refInfo().N < 30 {
 					reference += T(" (30 or more are recommended)", "（建议至少 30 例）")
 				}
 				table := T("None: the scores are not adjusted for age and sex", "未提供：评分不校正年龄和性别")
@@ -288,7 +269,7 @@ func (a *app) runClassify() {
 	}
 	files := append([]string(nil), from.files...)
 	norm := from.from
-	reference, out, table, method, lang := p.reference, p.output, from.table, a.norm.primary(), a.opt.reportLang()
+	reference, out, table, method, lang := a.reference, p.output, from.table, a.norm.primary(), a.opt.reportLang()
 	// Without the cross-check nothing but the maps of step 2 is read: no
 	// map of another normalisation is computed for it.
 	checked := a.opt.CrossCheck

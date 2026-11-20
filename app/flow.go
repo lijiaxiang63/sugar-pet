@@ -101,13 +101,13 @@ func (a *app) normChanged() string {
 		return ""
 	}
 	var what []string
-	if !slices.Equal(d.asked, p.files.files) || d.changed {
+	if !slices.Equal(d.asked, a.normImages()) || d.changed {
 		what = append(what, T("images", "图像"))
 	}
 	if !slices.Equal(d.methods, p.chosen()) {
 		what = append(what, T("methods", "方法"))
 	}
-	if d.reference != p.reference || d.rebuilt {
+	if d.reference != a.reference || d.rebuilt {
 		what = append(what, T("reference", "参考库"))
 	} else if d.refSig != a.refFactorSignature() {
 		// The reference of the project would be built anew, and the factors
@@ -171,23 +171,21 @@ func (d *normDone) unfit(methods []string, ref *refInfo) string {
 		strings.Join(mine, and), strings.Join(theirs, and))
 }
 
-// covariates is the covariate table a run of step 2 uses: none while the
-// reference holds no model of covariates.
-func (p *zmapPage) covariates() string {
-	p.load()
-	if p.info == nil || len(p.info.Covariates) == 0 {
+// zmapCovariates is the covariate table a run of step 2 uses: none while
+// the reference holds no model of covariates.
+func (a *app) zmapCovariates() string {
+	if info := a.refInfo(); info == nil || len(info.Covariates) == 0 {
 		return ""
 	}
-	return p.covTable
+	return a.cov.path
 }
 
 // usable are the methods of step 1 that maps can be made with, and those
 // that cannot: a custom region, or a method the reference holds no control
 // statistics for.
-func (p *zmapPage) usable(methods []string) (yes, no []string) {
-	p.load()
+func (a *app) usable(methods []string) (yes, no []string) {
 	for _, m := range methods {
-		if ok, _ := p.allowed(m); ok {
+		if ok, _ := a.zmapAllowed(m); ok {
 			yes = append(yes, m)
 		} else {
 			no = append(no, m)
@@ -200,7 +198,7 @@ func (p *zmapPage) usable(methods []string) (yes, no []string) {
 // on the covariate table it ran with and on the reference as it was built.
 func (a *app) zmapCurrent() *zmapDone {
 	d, n := a.zmap.done, a.normCurrent()
-	if d == nil || n == nil || d.from != n || d.table != a.zmap.covariates() || d.refSig != a.refSignature() {
+	if d == nil || n == nil || d.from != n || d.table != a.zmapCovariates() || d.refSig != a.refSignature() {
 		return nil
 	}
 	return d

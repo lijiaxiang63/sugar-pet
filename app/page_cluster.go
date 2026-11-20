@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,9 +13,7 @@ import (
 )
 
 type clusterPage struct {
-	files     fileList
-	reference string
-	output    string
+	output string
 
 	st     status
 	saved  string
@@ -24,25 +23,26 @@ type clusterPage struct {
 
 func (p *clusterPage) init() {}
 func (a *app) clusterProblem() string {
-	p := &a.cluster
+	patients, _ := a.images()
 	switch {
-	case len(p.files.files) == 0:
+	case len(patients) == 0:
 		return a.needImages("patients")
-	case len(p.files.files) < 2:
+	case len(patients) < 2:
 		return T("A reference cluster needs at least 2 patients: add more on the Data page.", "查找参考簇至少需要 2 例患者：请到“数据”页面添加。")
-	case p.reference == "":
+	case a.reference == "":
 		return needReference()
 	}
 	return ""
 }
 func (a *app) clusterView(c *ui.Context) {
 	p := &a.cluster
+	patients, _ := a.images()
 	a.frame(c, T("Reference Cluster", "参考簇"),
 		T("A reference region found from the data of a patient group", "从患者组数据中找出的参考区"),
 		func() {
 			section(c, T("Patient group", "患者组"), T("After scaling by the global mean, regions spared by the disease look hypermetabolic. A t-test against the controls picks them out (Yakushev et al., 2009).",
 				"按全局均值缩放后，未受疾病累及的区域会显得高代谢，与对照做 t 检验即可找出这些区域（Yakushev 等，2009）。"), func() {
-				a.source(c, "cl-data", "data", changeInData(), fact(c, T("Patients", "患者"), countText(p.files.files)))
+				a.source(c, "cl-data", "data", changeInData(), fact(c, T("Patients", "患者"), countText(patients)))
 			})
 			section(c, T("Reference and output", "参考库与输出"), "", func() {
 				a.source(c, "cl-ref", "reference", changeInReference(),
@@ -80,7 +80,8 @@ func (a *app) clusterView(c *ui.Context) {
 
 func (a *app) runCluster() {
 	p := &a.cluster
-	files, reference, out := append([]string(nil), p.files.files...), p.reference, p.output
+	patients, _ := a.images()
+	files, reference, out := slices.Clone(patients), a.reference, p.output
 	if !core.IsNiftiName(out) {
 		out = strings.TrimSuffix(out, filepath.Ext(out)) + ".nii.gz"
 	}

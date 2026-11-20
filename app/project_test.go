@@ -131,8 +131,8 @@ func TestProject(t *testing.T) {
 	if text := read(); !strings.Contains(text, filepath.ToSlash(pt[0])) && !strings.Contains(text, strings.ReplaceAll(pt[0], `\`, `\\`)) {
 		t.Fatalf("the project file does not say where the patients are: %s", text)
 	}
-	if !slices.Equal(a.norm.files.files, pt) || !slices.Equal(a.cmp.g1.files, pt) || !slices.Equal(a.cluster.files.files, pt) {
-		t.Errorf("the pages do not take the patients of the project: %v", a.norm.files.files)
+	if g1, _ := a.cmpGroups(); !slices.Equal(a.normImages(), pt) || !slices.Equal(g1, pt) || a.pageCount("cluster") != len(pt) {
+		t.Errorf("the pages do not take the patients of the project: %v", a.normImages())
 	}
 	// Images that are copied in, the same twice: one copy, listed once.
 	click("Copy into Project")
@@ -169,15 +169,15 @@ func TestProject(t *testing.T) {
 	if !strings.Contains(text, `"$PROJECT/controls/sub-hc01_pet.nii.gz"`) || strings.Contains(text, filepath.ToSlash(dir)+"/controls") {
 		t.Fatalf("the copied images are not written as of the project: %s", text)
 	}
-	if !slices.Equal(a.ref.files.files, copied) {
-		t.Errorf("the Reference page does not take the controls of the project: %v", a.ref.files.files)
+	if !slices.Equal(a.controls(), copied) {
+		t.Errorf("the Reference page does not take the controls of the project: %v", a.controls())
 	}
 
 	// Some choices of the pages, and a run that is noted.
 	a.norm.methods = map[string]bool{"cerebellum": true, "pons": true}
 	a.cmp.name, a.cmp.swapped, a.opt.Target, a.page = "pd_vs_hc", true, 50, "compare"
 	mapOf := writeFile(t, filepath.Join(dir, "normalised", "sub-pt01_desc-cerebellum_pet.nii.gz"), "normalised")
-	a.norm.done = &normDone{asked: slices.Clone(a.norm.files.files), files: pt[:1], controls: slices.Clone(a.norm.controls),
+	a.norm.done = &normDone{asked: a.normImages(), files: pt[:1], controls: a.controls(),
 		methods: a.norm.chosen(), refSig: a.refFactorSignature(), settings: a.opt.normSettings(a.norm.chosen()),
 		images: map[string]map[string]string{pt[0]: {"cerebellum": mapOf}}, factors: map[string]map[string]float64{pt[0]: {"cerebellum": 5.5}}, target: 50}
 	a.norm.done.stamp()
@@ -197,7 +197,7 @@ func TestProject(t *testing.T) {
 	a.page = "data"
 	click("Close Project")
 	tt.Frame()
-	if a.proj != nil || !tt.HasText("Recent projects") || !tt.HasText("trial") || a.opt.Target == 50 || len(a.norm.files.files) != 0 {
+	if a.proj != nil || !tt.HasText("Recent projects") || !tt.HasText("trial") || a.opt.Target == 50 || len(a.normImages()) != 0 {
 		t.Fatalf("the project was not left: %q", tt.Texts())
 	}
 	kept = settings{}
@@ -216,8 +216,8 @@ func TestProject(t *testing.T) {
 	if !a.stepDone("normalize") || a.norm.done.images[pt[0]]["cerebellum"] != mapOf || a.norm.done.factors[pt[0]]["cerebellum"] != 5.5 || len(a.norm.rows) != 1 {
 		t.Fatalf("the run of step 1 was not kept: %+v (changed: %q)", a.norm.done, a.normChanged())
 	}
-	if !slices.Equal(a.cmp.g1.files, copied) || !slices.Equal(a.cmp.g2.files, pt) {
-		t.Errorf("the groups are not swapped as they were: %v", a.cmp.g1.files)
+	if g1, g2 := a.cmpGroups(); !slices.Equal(g1, copied) || !slices.Equal(g2, pt) {
+		t.Errorf("the groups are not swapped as they were: %v", g1)
 	}
 	// Opening it writes nothing: the file is as it was.
 	before, _ := os.Stat(file)
@@ -308,8 +308,8 @@ func TestStudyFolder(t *testing.T) {
 	if !slices.Equal(p.patients.files, []string{pt}) || !slices.Equal(p.controls.files, []string{hc}) {
 		t.Errorf("the images of the study were not taken: %v, %v", p.patients.files, p.controls.files)
 	}
-	if a.norm.reference != filepath.Join(study, "hc_reference") || !a.ownReference() || a.imported() {
-		t.Errorf("the reference of the study is not in use: %q", a.norm.reference)
+	if a.reference != filepath.Join(study, "hc_reference") || !a.ownReference() || a.imported() {
+		t.Errorf("the reference of the study is not in use: %q", a.reference)
 	}
 	if a.cov.path != table || !slices.Equal(a.cov.names(), []string{"age", "sex"}) {
 		t.Errorf("the table of the study is not used: %q, %v", a.cov.path, a.cov.names())
@@ -326,8 +326,8 @@ func TestStudyFolder(t *testing.T) {
 	}
 	tt.Frame()
 	b := newApp()
-	if err := b.openProject(study); err != nil || b.norm.reference != other {
-		t.Fatalf("the imported reference was not kept: %v, %q", err, b.norm.reference)
+	if err := b.openProject(study); err != nil || b.reference != other {
+		t.Fatalf("the imported reference was not kept: %v, %q", err, b.reference)
 	}
 	if err := tt.Click("Use the Project's Controls"); err != nil {
 		t.Fatalf("%v (shown: %q)", err, tt.Texts())

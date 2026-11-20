@@ -287,7 +287,7 @@ func TestWorkflow(t *testing.T) {
 	a.cov.load()
 	a.page = "reference"
 	tt.Frame()
-	if _, shown := tt.Find("建立参考库"); shown || !tt.HasText("还没有参考库") || !tt.HasText("如何建立") || a.norm.reference != "" || !a.buildsReference() {
+	if _, shown := tt.Find("建立参考库"); shown || !tt.HasText("还没有参考库") || !tt.HasText("如何建立") || a.reference != "" || !a.buildsReference() {
 		t.Fatalf("the Reference page before step 1: %q", tt.Texts())
 	}
 
@@ -312,8 +312,8 @@ func TestWorkflow(t *testing.T) {
 	}
 	press("normalize", "开始强度归一化", &a.norm.st)
 	exists(filepath.Join(ref, "reference.json"))
-	if a.norm.reference != ref || a.cmp.reference != ref || a.ref.built == nil || a.refStale() || !strings.HasPrefix(a.norm.st.ok, "已用 12 例对照建立参考库") {
-		t.Fatalf("step 1 did not build the reference of the project: %q, %q", a.norm.reference, a.norm.st.ok)
+	if a.reference != ref || a.ref.built == nil || a.refStale() || !strings.HasPrefix(a.norm.st.ok, "已用 12 例对照建立参考库") {
+		t.Fatalf("step 1 did not build the reference of the project: %q, %q", a.reference, a.norm.st.ok)
 	}
 	if info := readRefInfo(ref); !slices.Contains(info.StatsFor, "cerebellum") || fmt.Sprint(info.covariateNames()) != "[age sex]" || info.N != len(hc) {
 		t.Fatalf("the reference built: %+v", info)
@@ -375,25 +375,25 @@ func TestWorkflow(t *testing.T) {
 	}
 	// A reference whose controls were scaled by the median is one to
 	// compare them with; of HN alone the statistic is no part.
-	a.zmap.info.Statistic = "median"
+	a.refInfo().Statistic = "median"
 	if why := a.zmapProblem(); why != "" {
 		t.Fatalf("step 1 and the reference both by the median: %q", why)
 	}
-	a.zmap.info.Statistic = "mean"
-	if why := a.norm.done.unfit([]string{"hn"}, a.zmap.info); why != "" {
+	a.refInfo().Statistic = "mean"
+	if why := a.norm.done.unfit([]string{"hn"}, a.refInfo()); why != "" {
 		t.Fatalf("HN with another statistic than the reference: %q", why)
 	}
 	a.norm.done.median = false
 	six := 6.0
 	a.norm.done.fwhm = &six
-	if why := a.norm.done.unfit([]string{"hn"}, a.zmap.info); !strings.Contains(why, "6 mm") || !strings.Contains(why, "自动平滑") {
+	if why := a.norm.done.unfit([]string{"hn"}, a.refInfo()); !strings.Contains(why, "6 mm") || !strings.Contains(why, "自动平滑") {
 		t.Fatalf("with a smoothing of its own: %q", why)
 	}
-	a.zmap.info.FactorFWHM = &six
+	a.refInfo().FactorFWHM = &six
 	if why := a.zmapProblem(); why != "" {
 		t.Fatalf("step 1 and the reference both after 6 mm: %q", why)
 	}
-	a.norm.done.fwhm, a.zmap.info.FactorFWHM = nil, nil
+	a.norm.done.fwhm, a.refInfo().FactorFWHM = nil, nil
 	// The reference built anew in its folder is not the one step 1 used.
 	a.norm.done.rebuilt = true
 	if _, why := a.lock("zmap"); a.stepDone("normalize") || !strings.Contains(why, "参考库") {
@@ -464,14 +464,14 @@ func TestWorkflow(t *testing.T) {
 		}
 	}
 	// Another covariate table is not what the maps were made with.
-	a.zmap.covTable = ""
+	a.cov.path = ""
 	if a.stepDone("zmap") {
 		t.Fatal("step 2 is done though its covariate table was taken away")
 	}
 	if step, _ := a.lock("classify"); step != "zmap" {
 		t.Fatalf("step 3 waits for %q", step)
 	}
-	a.zmap.covTable = table
+	a.cov.path = table
 	if !a.stepDone("zmap") {
 		t.Fatal("step 2 is not marked as done")
 	}
@@ -590,9 +590,9 @@ func TestWorkflow(t *testing.T) {
 		t.Fatalf("the project opened again builds its reference anew: %q", problem)
 	}
 	if len(again.norm.rows) != len(a.norm.rows) || len(again.zmap.rows) != len(a.zmap.rows) || len(again.classify.rows) != len(pt) ||
-		again.norm.reference != ref || again.classify.rows[0].reading != a.classify.rows[0].reading {
+		again.reference != ref || again.classify.rows[0].reading != a.classify.rows[0].reading {
 		t.Fatalf("the project opened again does not show what the steps did: %d, %d and %d rows, reference %q",
-			len(again.norm.rows), len(again.zmap.rows), len(again.classify.rows), again.norm.reference)
+			len(again.norm.rows), len(again.zmap.rows), len(again.classify.rows), again.reference)
 	}
 	// An image of step 1 changed on disk since: it is not what was normalised.
 	if err := os.Chtimes(pt[0], time.Time{}, time.Now().Add(time.Hour)); err != nil {
@@ -1042,15 +1042,15 @@ func TestSpatial(t *testing.T) {
 	// Images in MNI space need no warp: the page says so, and leads back.
 	a.proj.patients.files, a.proj.controls.files = pt[:2], pt[2:]
 	tt.Frame()
-	if msg := a.spatialProblem(); msg != notNative() || a.remedy("spatial", msg) != "data" || len(p.files.files) != 0 {
-		t.Fatalf("a project of images in MNI space: %q, %d images to warp", msg, len(p.files.files))
+	if msg := a.spatialProblem(); msg != notNative() || a.remedy("spatial", msg) != "data" || len(a.toWarp()) != 0 {
+		t.Fatalf("a project of images in MNI space: %q, %d images to warp", msg, len(a.toWarp()))
 	}
 	a.proj.native = true
 	p.matlab, a.opt.Jobs = matlab, 2
 	tt.Frame()
 	// Nothing is read by the pages after this one until it is warped.
-	if len(a.norm.files.files) != 0 || len(a.ref.files.files) != 0 || a.normProblem() == "" || a.remedy("normalize", a.normProblem()) != "spatial" {
-		t.Fatalf("images in native space are read before they are warped: %v, %q", a.norm.files.files, a.normProblem())
+	if len(a.normImages()) != 0 || len(a.controls()) != 0 || a.normProblem() == "" || a.remedy("normalize", a.normProblem()) != "spatial" {
+		t.Fatalf("images in native space are read before they are warped: %v, %q", a.normImages(), a.normProblem())
 	}
 	p.setSPM(dir)
 	if a.spatialProblem() == "" {
@@ -1121,8 +1121,8 @@ func TestSpatial(t *testing.T) {
 	// The pages after this one read what was warped, each of its group: the
 	// patient that failed is left out, and the page is not done.
 	tt.Frame()
-	if !slices.Equal(a.norm.files.files, p.written) || !slices.Equal(a.norm.controls, p.written[1:]) || !slices.Equal(a.ref.files.files, p.written[1:]) || a.spatialDone() || a.done("spatial") {
-		t.Fatalf("the warped images were not handed on: patients %v, controls %v", a.norm.files.files, a.ref.files.files)
+	if !slices.Equal(a.normImages(), p.written) || !slices.Equal(a.controls(), p.written[1:]) || a.spatialDone() || a.done("spatial") {
+		t.Fatalf("the warped images were not handed on: %v, controls %v", a.normImages(), a.controls())
 	}
 	// Step 1 says what it leaves out, and its step bar leads back here.
 	a.page = "normalize"
@@ -1143,14 +1143,13 @@ func TestSpatial(t *testing.T) {
 	if err := again.openProject(a.proj.dir); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(again.norm.files.files, p.written) || len(again.spatial.rows) != 3 || !again.spatial.rows[1].failed {
-		t.Fatalf("the project opened again reads %v, rows %+v", again.norm.files.files, again.spatial.rows)
+	if !slices.Equal(again.normImages(), p.written) || len(again.spatial.rows) != 3 || !again.spatial.rows[1].failed {
+		t.Fatalf("the project opened again reads %v, rows %+v", again.normImages(), again.spatial.rows)
 	}
 
 	// Two images of a group that would be written under one name.
 	other := filepath.Join(dir, "other", filepath.Base(pt[0]))
 	a.proj.patients.files = []string{pt[0], other}
-	a.feed()
 	if a.spatialProblem() == "" {
 		t.Fatal("two images with one output name were accepted")
 	}
@@ -1198,30 +1197,29 @@ func TestCompareSmoothing(t *testing.T) {
 		}
 	}
 	a := newApp()
-	p := &a.cmp
 	for _, a.norm.main = range []string{"cerebellum", "hn"} {
 		a.setReference("")
-		if got := p.smoothing(&a.opt); got != 8 {
+		if got := a.cmpSmoothing(); got != 8 {
 			t.Errorf("%s without a reference: %g mm, want 8", a.norm.main, got)
 		}
 		write(6)
 		a.setReference(ref)
-		if got := p.smoothing(&a.opt); got != 6 {
+		if got := a.cmpSmoothing(); got != 6 {
 			t.Errorf("%s with a reference smoothed by 6 mm: %g mm", a.norm.main, got)
 		}
 		write(0)
 		a.setReference(ref) // as after building it anew
-		if got := p.smoothing(&a.opt); got != 0 {
+		if got := a.cmpSmoothing(); got != 0 {
 			t.Errorf("%s with an unsmoothed reference: %g mm", a.norm.main, got)
 		}
 		a.opt.CmpFWHMAuto, a.opt.CmpFWHM = false, 10
-		if got := p.smoothing(&a.opt); got != 10 {
+		if got := a.cmpSmoothing(); got != 10 {
 			t.Errorf("%s with 10 mm asked for: %g mm", a.norm.main, got)
 		}
 		a.opt.CmpFWHMAuto = true
 	}
 	a.setReference(filepath.Join(ref, "missing"))
-	if got := p.smoothing(&a.opt); got != 8 {
+	if got := a.cmpSmoothing(); got != 8 {
 		t.Errorf("with a reference that cannot be read: %g mm, want 8", got)
 	}
 }
@@ -1385,10 +1383,9 @@ func TestRemedy(t *testing.T) {
 		if got := a.remedy("normalize", a.normProblem()); got != "data" {
 			t.Errorf("normalize without images: remedy %q for %q", got, a.normProblem())
 		}
-		file := []string{"/study/patients/sub-01_pet.nii.gz"}
-		a.proj.patients.files, a.norm.files.files = file, file
-		a.cluster.files.files = append(file, "/study/patients/sub-02_pet.nii.gz")
-		a.cmp.g1.files, a.cmp.g2.files = a.cluster.files.files, a.cluster.files.files
+		file := []string{"/study/patients/sub-01_pet.nii.gz", "/study/patients/sub-02_pet.nii.gz"}
+		a.proj.patients.files = file
+		a.proj.controls.files = []string{"/study/controls/sub-03_pet.nii.gz", "/study/controls/sub-04_pet.nii.gz"}
 		// The pages that rest on step 1 wait for it, and lead there.
 		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize", "compare": "normalize"} {
 			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "compare": a.cmpProblem()}[page]
@@ -1397,7 +1394,8 @@ func TestRemedy(t *testing.T) {
 			}
 		}
 		a.norm.methods = map[string]bool{"cerebellum": true}
-		a.norm.done = &normDone{asked: file, files: file, methods: a.norm.chosen(), settings: a.opt.normSettings(a.norm.chosen())}
+		a.norm.done = &normDone{asked: a.normImages(), files: a.normImages(), controls: a.controls(), methods: a.norm.chosen(),
+			settings: a.opt.normSettings(a.norm.chosen())}
 		if got := a.remedy("classify", a.classifyProblem()); got != "zmap" {
 			t.Errorf("classify before step 2 is done: remedy %q for %q", got, a.classifyProblem())
 		}
@@ -1415,7 +1413,8 @@ func TestRemedy(t *testing.T) {
 		// A method that needs none, and a page that has one.
 		a.norm.methods = map[string]bool{"cerebellum": true}
 		a.norm.done.methods = a.norm.chosen()
-		a.zmap.reference = "/study/hc_reference"
+		a.setReference("/study/hc_reference")
+		a.norm.done.reference = a.reference // what step 1 ran with
 		if got := a.remedy("normalize", a.normProblem()); got != "" {
 			t.Errorf("normalize by the cerebellum: remedy %q for %q", got, a.normProblem())
 		}
@@ -1423,13 +1422,12 @@ func TestRemedy(t *testing.T) {
 			t.Errorf("zmap with a reference: remedy %q for %q", got, a.zmapProblem())
 		}
 		// What step 1 ran with was changed since: the steps after it wait again.
-		a.norm.files.files = append(file, "/study/patients/sub-03_pet.nii.gz")
+		a.proj.patients.files = append(file, "/study/patients/sub-05_pet.nii.gz")
 		if got := a.remedy("zmap", a.zmapProblem()); got != "normalize" || a.stepDone("normalize") {
 			t.Errorf("zmap after step 1 was changed: remedy %q for %q", got, a.zmapProblem())
 		}
 		// Spatial Normalisation: the settings mend SPM, not the output folder.
 		a.proj.native = true
-		a.spatial.files.files = file
 		if a.spatial.spm == "" {
 			if got := a.remedy("spatial", a.spatialProblem()); got != "spm" {
 				t.Errorf("spatial without SPM: remedy %q for %q", got, a.spatialProblem())
@@ -1441,9 +1439,9 @@ func TestRemedy(t *testing.T) {
 	}
 }
 
-// TestFollowCompare checks that Compare Groups compares by one of the
-// methods step 1 normalised with: the one chosen on its page while it is
-// among them, else the leading one.
+// TestPrimaryMethod checks which of the methods of step 1 classification
+// and Compare Groups take: the one made primary while it is chosen, else
+// HN, else the first that is no custom region.
 func TestPrimaryMethod(t *testing.T) {
 	a := newApp()
 	if got := a.norm.primary(); got != "hn" {
@@ -1545,23 +1543,23 @@ func TestSwapGroups(t *testing.T) {
 	a := newApp()
 	a.demo()
 	p := &a.cmp
-	g1, g2 := slices.Clone(p.g1.files), slices.Clone(p.g2.files)
+	g1, g2 := a.cmpGroups()
 	if p.result == nil || p.st.ok == "" {
 		t.Fatal("the made-up comparison has no result")
 	}
 	p.swap()
-	if !slices.Equal(p.g1.files, g2) || !slices.Equal(p.g2.files, g1) || !p.swapped {
+	if s1, s2 := a.cmpGroups(); !slices.Equal(s1, g2) || !slices.Equal(s2, g1) || !p.swapped {
 		t.Error("the groups are not swapped")
 	}
 	if p.result != nil || p.st.ok != "" || p.how != "" {
 		t.Errorf("the result of the groups as they were is still shown: %q", p.st.ok)
 	}
-	// The groups stay swapped when the page takes the images of the project
-	// again, and the page says which group is which.
+	// The groups stay swapped while the page is drawn, and the page says
+	// which group is which.
 	a.page = "compare"
 	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
 	tt.Frame()
-	if !slices.Equal(p.g1.files, g2) || !slices.Equal(p.g2.files, g1) || !tt.HasText("Group 1 · Healthy controls") || !tt.HasText("Group 2 · Patients") {
+	if s1, s2 := a.cmpGroups(); !slices.Equal(s1, g2) || !slices.Equal(s2, g1) || !tt.HasText("Group 1 · Healthy controls") || !tt.HasText("Group 2 · Patients") {
 		t.Errorf("the groups do not stay swapped (shown: %q)", tt.Texts())
 	}
 }

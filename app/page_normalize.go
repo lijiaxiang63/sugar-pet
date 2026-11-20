@@ -19,19 +19,16 @@ type normRow struct {
 	value                                         float64 // the factor
 }
 
+// The images Intensity Normalisation takes are those of the project, the
+// patients and then the healthy controls (app.normImages): both groups are
+// normalised the same way, by the same run.
 type normPage struct {
-	// files are the images of the project, the patients and then the
-	// healthy controls, and controls those of them that are controls: both
-	// groups are normalised the same way, by the same run.
-	files    fileList
-	controls []string
-	methods  map[string]bool
+	methods map[string]bool
 	// main is the method made primary of several chosen; "" for the one
 	// the app takes.
-	main      string
-	reference string
-	region    regionChoice
-	output    string
+	main   string
+	region regionChoice
+	output string
 
 	st     status
 	rows   []normRow
@@ -255,7 +252,7 @@ func (p *normPage) chosen() []string {
 // reference, and the project has none and cannot build one, or "".
 func (a *app) normReferenceProblem() string {
 	p := &a.norm
-	if p.reference != "" || a.buildsReference() {
+	if a.reference != "" || a.buildsReference() {
 		return ""
 	}
 	for _, m := range p.chosen() {
@@ -270,11 +267,11 @@ func (a *app) normReferenceProblem() string {
 func (a *app) normProblem() string {
 	p := &a.norm
 	methods := p.chosen()
-	if a.proj != nil && len(p.files.files) > 0 && a.dataProblem() != "" {
+	if a.proj != nil && len(a.normImages()) > 0 && a.dataProblem() != "" {
 		return a.dataProblem()
 	}
 	switch {
-	case len(p.files.files) == 0:
+	case len(a.normImages()) == 0:
 		return a.needImages("patients")
 	case len(methods) == 0:
 		return T("Choose at least one method.", "请至少选择一种方法。")
@@ -302,10 +299,10 @@ func (a *app) normalizeView(c *ui.Context) {
 			a.steps(c)
 			section(c, T("Images", "图像"), T("Every image of the project, in MNI space. The patients and the healthy controls are normalised the same way, so that they can be compared.",
 				"项目的全部图像，须在 MNI 空间。患者和健康对照按同样的方式归一化，这样两者才能比较。"), func() {
-				patients := p.files.files[:len(p.files.files)-min(len(p.controls), len(p.files.files))]
+				patients, controls := a.images()
 				a.source(c, "norm-data", "data", changeInData(),
 					fact(c, T("Patients", "患者"), countText(patients)),
-					fact(c, T("Healthy controls", "健康对照"), countText(p.controls)))
+					fact(c, T("Healthy controls", "健康对照"), countText(controls)))
 				// Of images in native space, those not warped yet are left
 				// out; the step bar leads to where they are warped.
 				if missing, total := a.unwarped(); missing > 0 && missing < total {
@@ -413,7 +410,7 @@ func groupName(group string) string {
 
 func (a *app) runNormalize() {
 	p := &a.norm
-	files, controls := append([]string(nil), p.files.files...), append([]string(nil), p.controls...)
+	files, controls := a.normImages(), slices.Clone(a.controls())
 	methods := p.chosen()
 	o := a.opt
 	opt := core.DefaultNormOptions()
@@ -446,7 +443,7 @@ func (a *app) runNormalize() {
 		p.st.err = problem
 		return
 	}
-	reference, out, saveMasks := p.reference, p.output, o.SaveMasks
+	reference, out, saveMasks := a.reference, p.output, o.SaveMasks
 	if build != nil {
 		reference = build.out
 	}

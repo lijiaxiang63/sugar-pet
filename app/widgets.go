@@ -603,21 +603,21 @@ func (a *app) remedy(page, problem string) string {
 	case "normalize":
 		lack = a.normReferenceProblem()
 	case "zmap":
-		if a.zmap.reference == "" {
+		if a.reference == "" {
 			lack = needReference()
 		} else if n := a.normCurrent(); n != nil {
-			if yes, _ := a.zmap.usable(n.methods); n.unfit(yes, a.zmap.info) == problem {
+			if yes, _ := a.usable(n.methods); n.unfit(yes, a.refInfo()) == problem {
 				return "factors"
 			}
 		}
 	case "classify":
-		if a.classify.reference == "" {
+		if a.reference == "" {
 			lack = needReference()
 		} else if problem == primaryWithoutMap(a.norm.primary()) {
 			return "normalize"
 		}
 	case "cluster":
-		if a.cluster.reference == "" {
+		if a.reference == "" {
 			lack = needReference()
 		}
 	}

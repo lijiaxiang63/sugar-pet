@@ -159,11 +159,10 @@ func (a *app) referenceFact(c *ui.Context) func() {
 // referenceLine says in a line which reference the project uses, or how it
 // comes to one.
 func (a *app) referenceLine() string {
-	a.zmap.load()
-	ref, n := a.zmap.reference, len(a.ref.files.files)
+	ref, n := a.reference, len(a.controls())
 	switch {
 	case a.imported():
-		return referenceText(ref, a.zmap.info) + T(" · imported", " · 导入")
+		return referenceText(ref, a.refInfo()) + T(" · imported", " · 导入")
 	case ref == "" && !a.buildsReference():
 		return T("None: it takes at least 3 healthy controls, or an imported reference", "无：需要至少 3 例健康对照，或导入参考库")
 	case ref == "":
@@ -171,7 +170,7 @@ func (a *app) referenceLine() string {
 	case a.refStale():
 		return Tf("Built anew from the %d controls when %s runs", "下次运行%[2]s时由 %[1]d 例对照重新建立", n, a.rebuiltWhen())
 	}
-	return referenceText(ref, a.zmap.info)
+	return referenceText(ref, a.refInfo())
 }
 
 // covText says in a line which covariates the project adjusts for.
@@ -285,13 +284,10 @@ func (r *refInfo) covariateNames() []string {
 // normalised still stand, and Z-score Maps builds it anew instead.  A project
 // without controls of its own imports a reference built elsewhere instead.
 type refPage struct {
-	files  fileList // the healthy controls of the project
-	output string   // where the reference of the project is built
+	output string // where the reference of the project is built
 
-	built   *refBuilt // what the reference in output was built from
-	current string    // the reference the summary below is of
-	info    *refInfo
-	pic     picture
+	built *refBuilt // what the reference in output was built from
+	pic   picture
 }
 
 // refBuilt is what the reference of the project was last built from.
@@ -306,19 +302,19 @@ func (p *refPage) init() {}
 
 // imported reports whether the reference in use was built elsewhere.
 func (a *app) imported() bool {
-	return a.norm.reference != "" && !sameDir(a.norm.reference, a.ref.output)
+	return a.reference != "" && !sameDir(a.reference, a.ref.output)
 }
 
 // ownReference reports whether the reference in use is the one built in
 // the project, and not one imported from elsewhere.
 func (a *app) ownReference() bool {
-	return a.norm.reference != "" && sameDir(a.norm.reference, a.ref.output)
+	return a.reference != "" && sameDir(a.reference, a.ref.output)
 }
 
 // buildsReference reports whether the project makes its own reference: it
 // has imported none, and holds the 3 controls that one takes at least.
 func (a *app) buildsReference() bool {
-	return a.ref.output != "" && !a.imported() && len(a.ref.files.files) >= 3
+	return a.ref.output != "" && !a.imported() && len(a.controls()) >= 3
 }
 
 // refStatsFor are the methods the reference of the project keeps control
@@ -397,7 +393,7 @@ func (a *app) refStale() bool {
 	if !a.buildsReference() {
 		return false
 	}
-	b, files := a.ref.built, a.ref.files.files
+	b, files := a.ref.built, a.controls()
 	if b == nil || b.sig != a.refSignature() || len(b.controls) != len(files) {
 		return true
 	}
@@ -443,7 +439,7 @@ func (a *app) referenceBuild() (*refBuild, string) {
 	if msg := a.cov.fresh(); msg != "" {
 		return nil, msg
 	}
-	files, out := append([]string(nil), a.ref.files.files...), a.ref.output
+	files, out := slices.Clone(a.controls()), a.ref.output
 	stamps := map[string]fileStamp{}
 	for _, path := range files {
 		stamps[path] = stampOf(path)
@@ -509,13 +505,7 @@ func (a *app) useOwn() {
 
 func (a *app) referenceView(c *ui.Context) {
 	p := &a.ref
-	if ref := a.norm.reference; ref != p.current {
-		p.current, p.info = ref, nil
-		if ref != "" {
-			p.info = readRefInfo(ref)
-		}
-	}
-	controls := len(p.files.files)
+	controls := len(a.controls())
 	// The way back from an imported reference, where the project can have
 	// one of its own.
 	ownButton := func() {
@@ -529,7 +519,7 @@ func (a *app) referenceView(c *ui.Context) {
 		T("The healthy controls, summarised: what every patient is compared with", "健康对照的统计汇总：每位患者都与它比较"),
 		func() {
 			section(c, T("Reference in use", "当前参考库"), "", func() {
-				if p.info == nil || p.info.err != "" {
+				if a.refInfo() == nil || a.refInfo().err != "" {
 					rows(c, func() {
 						desc := T("HN, iPS, iHN and z-score maps need a reference. Add at least 3 healthy controls on the Data page and Intensity Normalisation builds it from them; or import one built elsewhere.",
 							"HN、iPS、iHN 和 Z 值图都需要参考库。在“数据”页面添加至少 3 例健康对照，运行强度归一化时就会自动建立；也可以导入在别处建好的参考库。")
@@ -537,8 +527,8 @@ func (a *app) referenceView(c *ui.Context) {
 							desc = Tf("Intensity Normalisation builds it from the %d healthy controls of the project before it normalises the images. To use one built elsewhere instead, import it.",
 								"运行强度归一化时，会先用项目的 %d 例健康对照自动建立，再对图像做归一化。如要改用在别处建好的参考库，请导入。", controls)
 						}
-						if p.info != nil {
-							desc = p.info.err
+						if a.refInfo() != nil {
+							desc = a.refInfo().err
 						}
 						setting(c, T("No reference yet", "还没有参考库"), desc, func() {
 							if smallButton(c.Key("ref-import"), T("Import…", "导入…")).Clicked() {
@@ -549,7 +539,7 @@ func (a *app) referenceView(c *ui.Context) {
 					})
 					return
 				}
-				info := p.info
+				info := a.refInfo()
 				extra := T("PS, iPS, HN, iHN", "PS、iPS、HN、iHN")
 				for _, m := range info.StatsFor {
 					extra += T(", ", "、") + methodName(m)
@@ -572,10 +562,10 @@ func (a *app) referenceView(c *ui.Context) {
 						func() {
 							origin := T("Built from the healthy controls of this project", "由本项目的健康对照建立")
 							if a.imported() {
-								origin = T("Imported from ", "导入自 ") + shortDir(filepath.Dir(p.current))
+								origin = T("Imported from ", "导入自 ") + shortDir(filepath.Dir(a.reference))
 							}
-							setting(c, filepath.Base(p.current), origin, func() {
-								revealButton(c, "ref-reveal", revealLabel(), p.current)
+							setting(c, filepath.Base(a.reference), origin, func() {
+								revealButton(c, "ref-reveal", revealLabel(), a.reference)
 								if smallButton(c.Key("ref-import"), T("Import Another…", "导入其他…")).Clicked() {
 									a.chooseReference()
 								}
@@ -584,7 +574,7 @@ func (a *app) referenceView(c *ui.Context) {
 						},
 						func() { setting(c, T("Z-score maps available for", "可制作 Z 值图的方法"), extra, nil) },
 					)
-					a.show(&p.pic, p.current, referencePicture(p.current))
+					a.show(&p.pic, a.reference, referencePicture(a.reference))
 					a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
 				})
 			})
@@ -594,7 +584,7 @@ func (a *app) referenceView(c *ui.Context) {
 			section(c, T("How it is built", "如何建立"), T("There is nothing to run here: Intensity Normalisation builds the reference from the healthy controls of the project, and builds it anew after the controls or these settings change. When only the covariates change, the images normalised still stand, and Z-score Maps builds it anew. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
 				"这里没有需要运行的步骤：强度归一化会用项目的健康对照自动建立参考库，对照或这些设置变动后会重新建立；只改了协变量时，已归一化的图像仍然有效，由 Z 值图重新建立。少于约 10 例对照时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
 				a.source(c, "ref-data", "data", changeInData(),
-					fact(c, T("Healthy controls", "健康对照"), countText(p.files.files)),
+					fact(c, T("Healthy controls", "健康对照"), countText(a.controls())),
 					fact(c, T("Covariates", "协变量"), a.covText()),
 					fact(c, T("Saved in", "保存位置"), a.writesTo(p.output)))
 				a.optionsLine(c, "reference", "reference", groupReference)

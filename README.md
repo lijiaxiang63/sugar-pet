@@ -51,20 +51,49 @@ program (about 12 MB) for macOS, Windows and Linux, written in Go with
 The [user guide](https://lijiaxiang63.github.io/sugar-pet/) walks through the
 app step by step, with screenshots of every page.
 
-The app works on one **project** at a time: a folder with your images,
-everything the analyses write, and a file (`sugar-pet-project.json`) that
-records what was chosen and how far each step has come, so that a project
-opened again is where it was left. It opens with a page to make or open a
-project. Its pages then follow the workflow below: **Data**, **Spatial
-Normalisation**, **Intensity Normalisation**, **Z-score Maps**, **Classify
-Parkinsonism**, **Compare Groups** and **Reference Cluster**, with the
-**Reference** in use and the built-in **Masks & Atlas** beside them.
-Intensity Normalisation takes the patients and the healthy controls of the
-project together, and first builds the reference from the controls: there
-is no step to build it. The project folder is laid out as `sugar-pet init`
-lays out a study, and the app reads and writes the same files as the
-command line (reference folders, `factors.tsv`, output names, cluster
-reports, classification reports), so the two can be mixed.
+### Projects
+
+The app works on one **project** at a time. A project is a folder with your
+images, everything the analyses write, and a file,
+`sugar-pet-project.json`, that records the images, what was chosen on every
+page, the options of the analyses and what each step last did. The file is
+written as you work: there is nothing to save, and a project opened again is
+where it was left, results included. The app opens with a page to make a
+project, open one, or pick one opened lately.
+
+The pages of a project follow the workflow below, one step after the other:
+
+1. **Data.** The patients, the healthy controls and, if you have one, a
+   table of age and sex are given here once; every other page takes them
+   from it. Images stay where they are or are copied into the project, as
+   you choose. The project also says whether its images are in MNI space or
+   still in native space.
+2. **Spatial Normalisation**, only for images in native space: warps them
+   into MNI space with SPM.
+3. **Intensity Normalisation.** Normalises the patients and the controls
+   together, the same way, and shows the factors of both groups in one
+   table. It begins by building the reference from the controls of the
+   project: there is no step to build it, and it is built anew only after
+   the controls, the covariates or its settings have changed.
+4. **Z-score Maps** of the patients, from the images step 3 wrote.
+5. **Classify Parkinsonism**, from the maps step 4 wrote.
+6. **Compare Groups**, the patients against the controls, on the images
+   step 3 wrote; and **Reference Cluster**.
+
+Nothing is computed twice. A step reads what the one before it wrote, waits
+until that one has run, and is marked as to be run again once what it rests
+on has changed. A project without controls of its own imports a reference
+built elsewhere, on the **Reference** page, which otherwise shows the one in
+use; **Masks & Atlas** shows the built-in regions.
+
+The project folder is laid out as `sugar-pet init` lays out a study, and the
+app reads and writes the same files as the command line (reference folders,
+output names, cluster reports, classification reports), so the two can be
+mixed. Two things are the app's own: it writes the normalised images by
+group, in `normalised/patients` and `normalised/controls`, and its
+`factors.tsv` has a `group` column. What lies in the project folder is
+recorded by where it is in it, so a project that holds its images can be
+moved, or opened on another computer.
 
 The two normalisations are different steps. *Spatial* normalisation warps a
 native-space PET into MNI space; it is `sugar-pet spatial-norm`, needs
@@ -73,9 +102,12 @@ and is only for images that are not in MNI space yet. *Intensity*
 normalisation, the subject of this package, divides each image by its
 factor and needs nothing else.
 
-The options that most runs leave alone (smoothing, the iterative methods,
-the correction of a group comparison, SPM and MATLAB, the language) are in
-the app's settings: the gear at the bottom of the sidebar, or ⌘, / Ctrl+,.
+The options that most runs leave alone are in the settings: the gear at the
+bottom of the sidebar, or ⌘, / Ctrl+,. Those of the analyses (smoothing, the
+iterative methods, how the reference is built, the cross-check of the
+classification, the correction of a group comparison) are kept in the
+project, and a new project starts with the defaults; SPM, MATLAB and the
+language are the app's.
 
 Installers for macOS, Windows and Linux are on the
 [releases page](https://github.com/lijiaxiang63/sugar-pet/releases). From
@@ -213,8 +245,9 @@ and an empty `participants.tsv`, and says what each is for. The commands
 below read `patients/`, `controls/`, `participants.tsv` and `hc_reference/`
 from it: put your data in it and run them from inside it (`cd study/`).
 Where they write is up to you (`-o`); `init` makes `compare/` and `zmaps/`
-for the group comparison and the maps. The app does the same on its Study
-Folder page.
+for the group comparison and the maps. A project of the
+[desktop app](#projects) is such a folder: making one lays it out the same
+way, and a study folder opened in the app becomes a project.
 
 **1. Treat patients and controls the same way.** Same scanner and
 reconstruction if at all possible, the same spatial normalisation, and a look
@@ -389,7 +422,11 @@ are refused before anything is written, so that one patient's report cannot
 replace another's.
 
 In the [desktop app](#desktop-app) this is the **Classify Parkinsonism** page,
-which lists the conclusions and opens the reports:
+which lists the conclusions and opens the reports. It reads the maps the
+Z-score Maps page wrote. Unlike the command line, the app checks its findings
+with other normalisations (point 3 below) only when *Settings › Classify
+Parkinsonism › Cross-check with another normalisation* is on: it is off at
+first, so that no further map is computed.
 
 ![The Classify Parkinsonism page of SUGAR-PET](app/screenshots/classify-en.png)
 

@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -316,22 +314,9 @@ func (a *app) runZMap() {
 					record.maps[path] = map[string]string{}
 				}
 				record.maps[path][method] = filepath.Join(out, file)
-				lowest, below, inside := math.Inf(1), 0, 0
-				for _, v := range z.Data {
-					if v != 0 {
-						inside++
-						lowest = math.Min(lowest, float64(v))
-						if v < -2 {
-							below++
-						}
-					}
-				}
-				row := zmapRow{image: name, method: method, file: file, lowest: "–", share: "–",
+				row := zmapRow{image: name, method: method, file: file,
 					source: path, path: filepath.Join(out, file), wscore: values != nil}
-				if inside > 0 {
-					row.lowest = strconv.FormatFloat(lowest, 'f', 2, 64)
-					row.share = strconv.FormatFloat(100*float64(below)/float64(inside), 'f', 1, 64) + "%"
-				}
+				row.lowest, row.share = scoreSummary(z)
 				rows = append(rows, row)
 				step(done, total)
 			}

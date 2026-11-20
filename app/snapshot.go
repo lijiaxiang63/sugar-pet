@@ -172,9 +172,7 @@ func (a *app) demo() {
 		reference: a.reference, settings: a.opt.normSettings(a.norm.chosen())}
 
 	info := &refInfo{N: 16, FWHM: 8, Mask: "gray-matter", StatsFor: []string{"cerebellum", "white-matter"}}
-	info.Covariates = []struct {
-		Name string `json:"name"`
-	}{{"age"}, {"sex"}}
+	info.Covariates = []refTerm{{Name: "age", Type: "numeric"}, {Name: "sex", Type: "categorical", Levels: []string{"F", "M"}}}
 	a.refRead.of, a.refRead.info = a.reference, info
 	a.opt.RefStatsFor["cerebellum"], a.opt.RefStatsFor["white-matter"] = true, true
 	a.cov.path = "/Users/ada/study/participants.tsv"
@@ -232,6 +230,16 @@ func (a *app) demo() {
 	}
 	cl.st.ok = Tf("%d report(s) written.", "已生成 %d 份报告。", len(cl.rows))
 
+	// One more patient, from the clinic, classified quickly.
+	q := &a.quick
+	q.input = "/Users/ada/clinic/sub-new01_pet.nii.gz"
+	q.covs["age"], q.covs["sex"] = "67", "M"
+	row := cl.rows[0]
+	row.image, row.source = "sub-new01_pet.nii.gz", filepath.Join(q.output, "sub-new01", "sub-new01_space-MNI_pet.nii.gz")
+	row.zmap = filepath.Join(q.output, "sub-new01", "sub-new01_space-MNI_desc-hn_wmap.nii.gz")
+	q.res = &quickResult{row: row, method: "hn", folder: filepath.Join(q.output, "sub-new01"), native: true, lowest: "-6.41", share: "9.8%"}
+	q.st.ok = Tf("%s classified; the report is written.", "已完成 %s 的分类，并生成报告。", "sub-new01_pet.nii.gz")
+
 	a.cmp.name = "patients_vs_controls"
 	a.cmp.how = Tf("GRF correction: voxel p < %g, cluster p < %g, clusters of at least %d voxels (|z| > %.2f).",
 		"GRF 校正：体素 p < %g，团块 p < %g，团块至少 %d 个体素（|z| > %.2f）。", 0.001, 0.05, 187, 3.29)
@@ -260,6 +268,8 @@ func (a *app) demo() {
 	show(&a.ref.pic, a.reference, pics.mean)
 	show(&a.zmap.pic, a.zmap.rows[0].path, pics.scores)
 	show(&cl.pic, cl.rows[0].zmap, pics.scores)
+	show(&a.quick.mapPic, a.quick.res.row.zmap, pics.scores)
+	show(&a.quick.warpPic, a.quick.res.row.source, pics.warped)
 	show(&a.cmp.pic, a.cmp.result.File("thresholded"), pics.tmap)
 	show(&a.cluster.pic, a.cluster.saved, pics.cluster)
 }

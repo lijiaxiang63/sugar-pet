@@ -464,13 +464,14 @@ func (a *app) resetPages() {
 	spm, bad, matlab := a.spatial.spm, a.spatial.spmBad, a.spatial.matlab
 	a.spatial = spatialPage{spm: spm, spmBad: bad, matlab: matlab}
 	a.norm, a.ref, a.zmap, a.classify = normPage{}, refPage{}, zmapPage{}, classifyPage{}
-	a.cmp, a.cluster, a.masks = comparePage{}, clusterPage{}, masksPage{}
+	a.cmp, a.cluster, a.masks, a.quick = comparePage{}, clusterPage{}, masksPage{}, quickPage{}
 	a.norm.init()
 	a.ref.init()
 	a.zmap.init()
 	a.classify.init()
 	a.cmp.init()
 	a.cluster.init()
+	a.quick.init()
 	a.cov = covChoice{adjust: map[string]bool{}}
 	a.opt = defaultOptions()
 	a.page, a.reveal, a.scrolls, a.seen, a.normTold, a.ranAt = "data", "", nil, nil, nil, nil
@@ -482,6 +483,7 @@ func (a *app) projectOutputs() {
 	a.ref.output, a.norm.output, a.zmap.output = p.in("hc_reference"), p.in("normalised"), p.in("zmaps")
 	a.classify.output, a.cmp.output = p.in("reports"), p.in("compare")
 	a.cluster.output = p.in("reference_cluster.nii.gz")
+	a.quick.output = p.in("quick")
 }
 
 // realDir is a folder itself, not a link to it: what a project is known by.

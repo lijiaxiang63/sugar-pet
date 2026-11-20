@@ -610,6 +610,19 @@ func (a *app) remedy(page, problem string) string {
 		}
 	case "zmap", "cluster":
 		lack = needReference()
+	case "quick":
+		if _, why := a.lock("zmap"); problem == why {
+			return "normalize"
+		}
+		switch problem {
+		case a.spatial.setupProblem():
+			return "spm"
+		case a.quickStale():
+			return a.refBuilder()
+		case quickMethod(a.norm.primary()):
+			return "normalize"
+		}
+		lack = needReference()
 	case "classify":
 		lack = needReference()
 		if a.reference != "" && problem == primaryWithoutMap(a.norm.primary()) {

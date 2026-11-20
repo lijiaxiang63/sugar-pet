@@ -203,6 +203,12 @@ func (a *app) spatialView(c *ui.Context) {
 	)
 }
 
+// spatialOptions are the options of the warp as the settings make them.
+func (a *app) spatialOptions() core.SpatialOptions {
+	p := &a.spatial
+	return core.SpatialOptions{SPMPath: p.spm, Template: a.opt.Template, Matlab: p.matlabPath(), Jobs: int(a.opt.Jobs)}
+}
+
 func (a *app) runSpatial() {
 	p := &a.spatial
 	files, out := a.toWarp(), a.proj.dir
@@ -210,7 +216,7 @@ func (a *app) runSpatial() {
 	for i, path := range files {
 		targets[i] = a.spatialTarget(path)
 	}
-	opt := core.SpatialOptions{SPMPath: p.spm, Template: a.opt.Template, Matlab: p.matlabPath(), Jobs: int(a.opt.Jobs)}
+	opt := a.spatialOptions()
 	p.rows, p.notes, p.written, p.shown = nil, nil, nil, 0
 	a.start("spatial", T("Warping to MNI space", "正在空间标准化"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		for _, target := range targets {

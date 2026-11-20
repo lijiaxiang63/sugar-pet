@@ -49,6 +49,15 @@ that version, so write it for the people who use the app.
   methods chosen, so a z-score map can be made with each of them. The
   Intensity Normalisation page shows them, with the mean image of the
   controls.
+- **Quick Classification**, under *Outside the Project* in the sidebar:
+  one more patient's FDG-PET, not added to the project, goes the way the
+  patients of the project went. It is warped into MNI space with SPM (or
+  taken in MNI space), intensity-normalised with the primary method of step
+  1 and the settings of the project, mapped against the project's control
+  statistics (W-scores when you give its age and sex) and classified. The
+  page shows the reading, the scores of the patterns and the map, with the
+  warp to check, and opens the report; the files go into `quick/<name>` of
+  the project folder. It needs step 1 of the project to be done.
 - A step whose files are no longer in the project, or whose images changed
   on disk since it ran, is not shown as done when the project is opened.
 - **New Project…**, **Open Project…** and **Close Project** in the File menu

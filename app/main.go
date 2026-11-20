@@ -96,6 +96,7 @@ type app struct {
 	classify classifyPage
 	cmp      comparePage
 	cluster  clusterPage
+	quick    quickPage
 	masks    masksPage
 
 	settingsPath string
@@ -229,6 +230,7 @@ var pages = []pageInfo{
 	{"classify", "Classify Parkinsonism", "帕金森综合征分类", iconReport},
 	{"compare", "Compare Groups", "组间比较", iconCompare},
 	{"cluster", "Reference Cluster", "参考簇", iconTarget},
+	{"quick", "Quick Classification", "快速分类", iconBolt},
 	{"masks", "Masks & Atlas", "掩膜与图谱", iconGrid},
 }
 
@@ -242,6 +244,8 @@ var navGroups = []struct {
 	{label{"Prepare", "准备"}, []string{"spatial"}},
 	{label{"Individual", "个案分析"}, []string{"normalize", "zmap", "classify"}},
 	{label{"Group", "组水平统计"}, []string{"compare", "cluster"}},
+	// One more patient, classified with the controls of the project.
+	{label{"Outside the Project", "项目之外"}, []string{"quick"}},
 	{label{"Resources", "资源"}, []string{"masks"}},
 }
 
@@ -279,6 +283,10 @@ func (a *app) pageCount(id string) int {
 	case "cluster":
 		patients, _ := a.images()
 		return len(patients)
+	case "quick":
+		if a.quick.input != "" {
+			return 1
+		}
 	}
 	return 0
 }
@@ -323,6 +331,8 @@ func (a *app) view(c *ui.Context) {
 					a.compareView(c)
 				case "cluster":
 					a.clusterView(c)
+				case "quick":
+					a.quickView(c)
 				case "masks":
 					a.masksView(c)
 				}
@@ -362,6 +372,8 @@ func (a *app) done(page string) bool {
 		return a.cmp.st.ok != ""
 	case "cluster":
 		return a.cluster.st.ok != ""
+	case "quick":
+		return a.quick.res != nil
 	}
 	return false
 }

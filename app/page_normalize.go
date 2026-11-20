@@ -399,10 +399,10 @@ func groupName(group string) string {
 	return ""
 }
 
-func (a *app) runNormalize() {
-	p := &a.norm
-	files, controls := a.normImages(), slices.Clone(a.controls())
-	methods := p.chosen()
+// normOptions are the options of Intensity Normalisation as the settings
+// of the project make them, without the reference: those every image of the
+// project is normalised with, and Quick Classification too.
+func (a *app) normOptions() core.NormOptions {
 	o := a.opt
 	opt := core.DefaultNormOptions()
 	if !o.FWHMAuto {
@@ -414,6 +414,15 @@ func (a *app) runNormalize() {
 	}
 	opt.Target, opt.PThreshold, opt.Exclude = o.Target, o.PThreshold, excludeName(o.Exclude)
 	opt.MaxIter, opt.LiteralIPS = int(o.MaxIter), o.LiteralIPS
+	return opt
+}
+
+func (a *app) runNormalize() {
+	p := &a.norm
+	files, controls := a.normImages(), slices.Clone(a.controls())
+	methods := p.chosen()
+	o := a.opt
+	opt := a.normOptions()
 	var regionSpec core.MaskSpec
 	regionText, regionLabel := "", "region"
 	if p.methods["region"] {

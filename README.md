@@ -82,6 +82,10 @@ The pages of a project follow the workflow below, one step after the other:
 5. **Classify Parkinsonism**, from the maps step 4 wrote.
 6. **Compare Groups**, the patients against the controls, on the images
    step 3 wrote; and **Reference Cluster**.
+7. **Quick Classification**, for one more patient that is not added to
+   the project: it is warped, normalised, mapped against the project's
+   controls and classified the way the project's patients were, and its
+   map and reading are shown; its files go into `quick/<name>`.
 
 Nothing is computed twice. A step reads what the one before it wrote, waits
 until that one has run, and is marked as to be run again once what it rests

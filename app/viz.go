@@ -46,6 +46,8 @@ func (a *app) pictureOf(page string) *picture {
 		return &a.cmp.pic
 	case "cluster":
 		return &a.cluster.pic
+	case "quick":
+		return &a.quick.mapPic
 	}
 	return nil
 }

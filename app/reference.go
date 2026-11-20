@@ -304,12 +304,18 @@ type refInfo struct {
 	Models   []string `json:"models"`
 	// How the factors of the controls were estimated, where not by the mean
 	// of a region and the default smoothing of each method.
-	Statistic  string   `json:"statistic"`
-	FactorFWHM *float64 `json:"factor_fwhm_mm"`
-	Covariates []struct {
-		Name string `json:"name"`
-	} `json:"covariates"`
-	err string
+	Statistic  string    `json:"statistic"`
+	FactorFWHM *float64  `json:"factor_fwhm_mm"`
+	Covariates []refTerm `json:"covariates"`
+	err        string
+}
+
+// refTerm is a covariate the control statistics model: a number, or one of
+// two levels (F or M, say).
+type refTerm struct {
+	Name   string   `json:"name"`
+	Type   string   `json:"type"`
+	Levels []string `json:"levels"`
 }
 
 func readRefInfo(folder string) *refInfo {

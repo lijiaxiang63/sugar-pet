@@ -40,5 +40,6 @@ var (
 	iconTable      = icon(`<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M1.8 6.3h12.4M6 6.3v6.9"/>`)
 	iconSwap       = icon(`<path d="M3 5.5h10M10.5 3 13 5.5 10.5 8M13 10.5H3M5.5 8 3 10.5 5.5 13"/>`)
 	iconArrowRight = icon(`<path d="M3.2 8h9.6M9 4.2 12.8 8 9 11.8"/>`)
+	iconBolt       = icon(`<path d="M9.2 1.6 3.6 9h4.1l-.9 5.4L12.4 7H8.3z"/>`)
 	iconPlay       = icon(`<path d="M5 3.2 12.8 8 5 12.8z"/>`)
 )

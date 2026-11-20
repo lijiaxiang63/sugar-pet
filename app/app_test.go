@@ -545,6 +545,55 @@ func TestWorkflow(t *testing.T) {
 		t.Fatalf("the cross-checked classification is not the one from the image: %s", where)
 	}
 
+	// Quick Classification of a patient from outside the project: here one
+	// of its own, in MNI space, with its age and sex.  It goes the way the
+	// patients of the project went, and comes to what step 3 came to,
+	// without the project changing.
+	a.page = "quick"
+	tt.Frame()
+	if got := a.quickProblem(); got != T("Choose the PET image of the patient.", "请选择该患者的 PET 图像。") || !tt.HasText("项目之外") {
+		t.Fatalf("Quick Classification before an image is chosen: %q", got)
+	}
+	found, err := a.cov.table.Lookup(pt[:1], a.refInfo().covariateNames())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.quick.input, a.quick.space = pt[0], 1
+	a.quick.covs["age"] = found[0]["age"]
+	if got := a.quickProblem(); !strings.Contains(got, "全部协变量") {
+		t.Fatalf("with the age alone: %q", got)
+	}
+	a.quick.covs["sex"] = found[0]["sex"]
+	before := a.projectState()
+	press("quick", "开始分类", &a.quick.st)
+	quick := filepath.Join(dir, "quick", "sub-pt00")
+	exists(filepath.Join(quick, core.OutputName(pt[0], "hn", "wmap")))
+	exists(filepath.Join(quick, "sub-pt00_report.html"))
+	drawn(&a.quick.mapPic)
+	read := func(path string) *core.Classification {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c core.Classification
+		if err := json.Unmarshal(raw, &c); err != nil {
+			t.Fatal(err)
+		}
+		return &c
+	}
+	once, inStep3 := read(filepath.Join(quick, "sub-pt00_classification.json")), read(filepath.Join(reports, "sub-pt00_classification.json"))
+	if !reflect.DeepEqual(once.Conclusion, inStep3.Conclusion) || !reflect.DeepEqual(once.Patterns, inStep3.Patterns) ||
+		!reflect.DeepEqual(once.Regions, inStep3.Regions) || once.Score != "w" {
+		t.Fatalf("Quick Classification is not what step 3 found: %+v and %+v", once.Conclusion, inStep3.Conclusion)
+	}
+	if r := a.quick.res; r == nil || r.row.reading != a.classify.rows[0].reading || !tt.HasText(r.row.reading) {
+		t.Fatalf("the reading is not shown: %+v", a.quick.res)
+	}
+	if after := a.projectState(); !reflect.DeepEqual(before, after) || !a.stepDone("classify") {
+		t.Fatal("Quick Classification changed the project")
+	}
+
 	// The project opened again is where it was left: the three steps done,
 	// with what they showed, and nothing to run anew.
 	tt.Frame()
@@ -1299,8 +1348,9 @@ func TestOptionsKept(t *testing.T) {
 	}
 	// Every page that has options says which are in effect.
 	for _, p := range pages {
-		// Z-score Maps has none of its own: it takes what step 1 normalised.
-		if p.id == "data" || p.id == "masks" || p.id == "zmap" {
+		// Z-score Maps has none of its own: it takes what step 1 normalised;
+		// Quick Classification takes those of the project.
+		if p.id == "data" || p.id == "masks" || p.id == "zmap" || p.id == "quick" {
 			continue
 		}
 		if d.summary(p.id) == "" {
@@ -1367,8 +1417,8 @@ func TestRemedy(t *testing.T) {
 		}
 		a.proj.controls.files = controls
 		// The pages that rest on step 1 wait for it, and lead there.
-		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize", "compare": "normalize"} {
-			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "compare": a.cmpProblem()}[page]
+		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize", "compare": "normalize", "quick": "normalize"} {
+			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "compare": a.cmpProblem(), "quick": a.quickProblem()}[page]
 			if got := a.remedy(page, problem); got != step {
 				t.Errorf("%s before step 1 is done: remedy %q for %q", page, got, problem)
 			}
@@ -1384,7 +1434,7 @@ func TestRemedy(t *testing.T) {
 		// statistics, which step 1 makes.
 		a.norm.methods["hn"] = true
 		a.norm.done.methods = a.norm.chosen()
-		problems := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "cluster": a.clusterProblem()}
+		problems := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "cluster": a.clusterProblem(), "quick": a.quickProblem()}
 		for page, problem := range problems {
 			if problem != needReference() {
 				t.Errorf("%s without control statistics: %q", page, problem)

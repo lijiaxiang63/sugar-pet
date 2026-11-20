@@ -153,7 +153,6 @@ func reading(res *core.Classification) (text, detail string) {
 
 func (a *app) classifyView(c *ui.Context) {
 	p := &a.classify
-	t := c.Theme()
 	pal := paletteFor(c)
 	z := a.zmapCurrent()
 	a.frame(c, T("Classify Parkinsonism", "帕金森综合征分类"),
@@ -222,22 +221,7 @@ func (a *app) classifyView(c *ui.Context) {
 										barColor = pal.accent
 									}
 									ui.Box(c).Size(3, 30).Radius(1.5).Background(barColor).Shrink(0)
-									ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-										ui.Row(c).Gap(7).AlignItems(ui.Center).Wrap().GapY(3).Children(func() {
-											ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
-											if r.badge != "" {
-												_, col := classifyBadge(r.category, r.confidence, pal)
-												pill(c, r.badge, col)
-											}
-										})
-										ui.Text(c, r.image+" · "+r.detail).FontSize(12).TextColor(t.TextMuted)
-									})
-									if len(r.scores) > 0 {
-										scoreBars(c, r.scores, r.leading)
-									}
-									if smallButton(c.Key("open"), T("Open Report", "打开报告")).Clicked() {
-										openPath(r.report)
-									}
+									readingLine(c, r)
 								})
 							}
 						})
@@ -259,6 +243,57 @@ func (a *app) classifyView(c *ui.Context) {
 			a.runBar(c, "classify", a.classifyProblem(), T("Classify", "开始分类"), &p.st, a.runClassify)
 		},
 	)
+}
+
+// classifyOptions are the options of a classification: without the
+// cross-check, nothing but the map of the method is read, and no map of
+// another normalisation is computed for it.
+func classifyOptions(checked bool) core.ClassifyOptions {
+	opt := core.DefaultClassifyOptions()
+	if !checked {
+		opt.Checks = []string{}
+	}
+	return opt
+}
+
+// classifyRowOf is the line of the results of a classification of the
+// image at path, whose files were saved.
+func classifyRowOf(res *core.Classification, saved core.ClassFiles, path string) classifyRow {
+	text, detail := reading(res)
+	found := res.Conclusion
+	row := classifyRow{image: filepath.Base(path), reading: text, detail: detail, report: saved.Report,
+		source: path, zmap: saved.Map, wscore: res.Score == "w", category: found.Category, confidence: found.Confidence}
+	row.badge, _ = classifyBadge(row.category, row.confidence, &lightPalette)
+	for _, pattern := range res.Patterns {
+		row.scores = append(row.scores, patternScore{pattern.ID, core.Percent(pattern.Score)})
+	}
+	if found.Category != "none" {
+		row.leading = found.Pattern
+	}
+	return row
+}
+
+// readingLine is what a classification concluded, in a row of the results:
+// the reading and its confidence, the scores of the patterns, and the way
+// to the report.
+func readingLine(c *ui.Context, r classifyRow) {
+	pal := paletteFor(c)
+	ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+		ui.Row(c).Gap(7).AlignItems(ui.Center).Wrap().GapY(3).Children(func() {
+			ui.Text(c, r.reading).FontSize(13.5).FontWeight(600)
+			if r.badge != "" {
+				_, col := classifyBadge(r.category, r.confidence, pal)
+				pill(c, r.badge, col)
+			}
+		})
+		ui.Text(c, r.image+" · "+r.detail).FontSize(12).TextColor(pal.muted)
+	})
+	if len(r.scores) > 0 {
+		scoreBars(c, r.scores, r.leading)
+	}
+	if smallButton(c.Key("open"), T("Open Report", "打开报告")).Clicked() {
+		openPath(r.report)
+	}
 }
 
 func (a *app) runClassify() {
@@ -298,10 +333,7 @@ func (a *app) runClassify() {
 				return nil, err
 			}
 			name := filepath.Base(path)
-			opt := core.DefaultClassifyOptions()
-			if !checked {
-				opt.Checks = []string{}
-			}
+			opt := classifyOptions(checked)
 			var err error
 			if covariates != nil {
 				var found []map[string]string
@@ -339,17 +371,8 @@ func (a *app) runClassify() {
 			for _, w := range res.Warnings {
 				notes = append(notes, name+": "+w)
 			}
-			text, detail := reading(res)
+			row := classifyRowOf(res, saved, path)
 			found := res.Conclusion
-			row := classifyRow{image: name, reading: text, detail: detail, report: saved.Report,
-				source: path, zmap: saved.Map, wscore: res.Score == "w", category: found.Category, confidence: found.Confidence}
-			row.badge, _ = classifyBadge(row.category, row.confidence, &lightPalette)
-			for _, pattern := range res.Patterns {
-				row.scores = append(row.scores, patternScore{pattern.ID, core.Percent(pattern.Score)})
-			}
-			if found.Category != "none" {
-				row.leading = found.Pattern
-			}
 			rows = append(rows, row)
 			cells := []string{path, found.Category, found.Pattern, found.Alternative, found.Confidence, found.Side}
 			for _, pattern := range res.Patterns {

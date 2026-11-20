@@ -231,18 +231,19 @@ func (p *normPage) referenceProblem() string {
 	}
 	for _, m := range p.chosen() {
 		if core.NeedsReference(m) {
-			return Tf("%s needs a reference: choose one, or build it from healthy controls on the Reference page.",
-				"%s 需要参考库：请选择参考库，或先到“参考库”页面用健康对照建立。", methodName(m))
+			return Tf("%s needs a reference: build it from healthy controls on the Reference page, or import one there.",
+				"%s 需要参考库：请先到“参考库”页面用健康对照建立，或导入已有的参考库。", methodName(m))
 		}
 	}
 	return ""
 }
 
-func (p *normPage) problem() string {
+func (a *app) normProblem() string {
+	p := &a.norm
 	methods := p.chosen()
 	switch {
 	case len(p.files.files) == 0:
-		return T("Add the images to intensity-normalise.", "请添加要做强度归一化的图像。")
+		return a.needImages("patients")
 	case len(methods) == 0:
 		return T("Choose at least one method.", "请至少选择一种方法。")
 	}
@@ -254,21 +255,16 @@ func (p *normPage) problem() string {
 			return msg
 		}
 	}
-	if p.output == "" {
-		return T("Choose the output folder.", "请选择输出文件夹。")
-	}
 	return ""
 }
-
 func (a *app) normalizeView(c *ui.Context) {
 	p := &a.norm
 	a.frame(c, T("Intensity Normalisation", "强度归一化"),
 		T("Divide each image by its normalisation factor", "每幅图像除以各自的归一化因子"),
 		func() {
 			a.steps(c)
-			section(c, T("Images", "图像"), T("FDG-PET images that are already in MNI space. If yours are not, warp them on the Spatial Normalisation page first.", "已在 MNI 空间的 FDG-PET 图像。尚未配准的，请先到“空间标准化”页面处理。"), func() {
-				a.filesCardFromStudy(c, "norm-files", &p.files, T("Images in MNI space", "MNI 空间的图像"),
-					T(".nii and .nii.gz files, or whole folders", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹"), "patients")
+			section(c, T("Images", "图像"), T("The patients of the project, in MNI space.", "项目中的患者图像，须在 MNI 空间。"), func() {
+				a.source(c, "norm-data", "data", changeInData(), fact(c, T("Patients", "患者"), countText(p.files.files)))
 			})
 			section(c, T("Methods", "方法"), T("One method is enough. Several are for comparison only: each writes its own image from the original.", "选一种即可。多选仅用于对比：每种方法都从原图各自输出一幅图像，互不叠加。"), func() {
 				a.methodPicker(c, p.methods, nil)
@@ -277,18 +273,9 @@ func (a *app) normalizeView(c *ui.Context) {
 				section(c, T("Custom region", "自选区域"), "", func() { rows(c, a.regionRows(c, "norm-region", &p.region)...) })
 			}
 			section(c, T("Reference and output", "参考库与输出"), "", func() {
-				rows(c,
-					func() {
-						a.pathSetting(c, "norm-ref", T("Reference", "参考库"),
-							T("Needed by HN, iPS and iHN. With one, PS uses the same voxels as they do.", "HN、iPS、iHN 需要。选了参考库后，PS 与它们使用相同的体素。"),
-							&p.reference, pathFolder, nil, func() { a.setReference(p.reference) })
-					},
-					func() {
-						a.pathSetting(c, "norm-out", T("Output folder", "输出文件夹"),
-							T("Intensity-normalised images and factors.tsv are written here.", "强度归一化后的图像和 factors.tsv 写入此处。"),
-							&p.output, pathFolder, nil, nil)
-					},
-				)
+				a.source(c, "norm-ref", "reference", changeInReference(),
+					a.referenceFact(c),
+					fact(c, T("Written to", "输出位置"), a.writesTo(p.output)+T(" · the normalised images and factors.tsv", " · 归一化后的图像和 factors.tsv")))
 				a.optionsLine(c, "normalize", "normalize", groupNormalize, groupIterative)
 			})
 			if len(p.rows) > 0 || len(p.notes) > 0 {
@@ -321,7 +308,7 @@ func (a *app) normalizeView(c *ui.Context) {
 			}
 		},
 		func() {
-			a.runBar(c, "normalize", p.problem(), T("Normalise Intensity", "开始强度归一化"), &p.st, a.runNormalize)
+			a.runBar(c, "normalize", a.normProblem(), T("Normalise Intensity", "开始强度归一化"), &p.st, a.runNormalize)
 			a.nextStep(c, "normalize")
 		},
 	)
@@ -359,6 +346,7 @@ func (a *app) runNormalize() {
 	record := &normDone{asked: files, methods: methods, reference: reference, settings: o.normSettings(methods),
 		images: map[string]map[string]string{}, factors: map[string]map[string]float64{},
 		target: opt.Target, median: opt.Statistic == "median", fwhm: opt.FWHM}
+	record.stamp()
 	p.rows, p.notes, p.done = nil, nil, nil
 	a.start("normalize", T("Normalising intensity", "正在做强度归一化"), func(ctx context.Context, step func(int, int)) (func(), error) {
 		if reference != "" {

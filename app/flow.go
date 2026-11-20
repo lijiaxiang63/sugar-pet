@@ -39,6 +39,12 @@ type normDone struct {
 	fwhm   *float64
 	// rebuilt: the reference was built anew, in its folder, after the run.
 	rebuilt bool
+	// The images the run read and the reference it used, as they were on
+	// disk then (stamp), and whether an image was found changed when the
+	// project was opened again (look).
+	stamps   map[string]fileStamp
+	refStamp fileStamp
+	changed  bool
 }
 
 // zmapDone is what the last run of Z-score Maps that went well did: the
@@ -60,7 +66,7 @@ func (a *app) normChanged() string {
 		return ""
 	}
 	var what []string
-	if !slices.Equal(d.asked, p.files.files) {
+	if !slices.Equal(d.asked, p.files.files) || d.changed {
 		what = append(what, T("images", "图像"))
 	}
 	if !slices.Equal(d.methods, p.chosen()) {

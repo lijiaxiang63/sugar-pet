@@ -123,8 +123,6 @@ func (a *app) classifyProblem() string {
 		return needReference()
 	case p.info != nil && p.info.err != "":
 		return p.info.err
-	case p.output == "":
-		return T("Choose the output folder.", "请选择输出文件夹。")
 	}
 	// Two reports under one name: the second patient's would replace the first's.
 	if first, second, stem, found := core.SharedReportStem(z.files); found {
@@ -217,9 +215,10 @@ func (a *app) classifyView(c *ui.Context) {
 					}
 				}
 				rows(c, func() {
-					a.pathSetting(c, "cls-out", T("Output folder", "输出文件夹"), T("For each patient a report (HTML, prints to PDF), the map, and the numbers; for all, classification.tsv.",
-						"每位患者输出一份报告（HTML，可打印为 PDF）、一幅图和一份数据文件；另有汇总表 classification.tsv。"),
-						&p.output, pathFolder, nil, nil)
+					setting(c, T("Written to", "输出位置"), T("For each patient a report (HTML, prints to PDF), the map, and the numbers; for all, classification.tsv.",
+						"每位患者输出一份报告（HTML，可打印为 PDF）、一幅图和一份数据文件；另有汇总表 classification.tsv。"), func() {
+						ui.Text(c, a.writesTo(p.output)).FontSize(12.5).TextColor(pal.muted).SingleLine()
+					})
 				}, mainRow)
 				a.optionsLine(c, "classify", "classify", groupClassify)
 			})

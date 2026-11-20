@@ -23,18 +23,18 @@ type clusterPage struct {
 }
 
 func (p *clusterPage) init() {}
-func (p *clusterPage) problem() string {
+func (a *app) clusterProblem() string {
+	p := &a.cluster
 	switch {
+	case len(p.files.files) == 0:
+		return a.needImages("patients")
 	case len(p.files.files) < 2:
-		return T("Add at least 2 images of the patient group.", "请添加至少 2 幅患者组图像。")
+		return T("A reference cluster needs at least 2 patients: add more on the Data page.", "查找参考簇至少需要 2 例患者：请到“数据”页面添加。")
 	case p.reference == "":
 		return needReference()
-	case p.output == "":
-		return T("Choose where to save the mask.", "请选择掩膜的保存位置。")
 	}
 	return ""
 }
-
 func (a *app) clusterView(c *ui.Context) {
 	p := &a.cluster
 	a.frame(c, T("Reference Cluster", "参考簇"),
@@ -42,19 +42,12 @@ func (a *app) clusterView(c *ui.Context) {
 		func() {
 			section(c, T("Patient group", "患者组"), T("After scaling by the global mean, regions spared by the disease look hypermetabolic. A t-test against the controls picks them out (Yakushev et al., 2009).",
 				"按全局均值缩放后，未受疾病累及的区域会显得高代谢，与对照做 t 检验即可找出这些区域（Yakushev 等，2009）。"), func() {
-				a.filesCardFromStudy(c, "cl-files", &p.files, T("Patient images", "患者图像"), T("at least 2 images, all on the same grid", "至少 2 幅，须在同一网格上"), "patients")
+				a.source(c, "cl-data", "data", changeInData(), fact(c, T("Patients", "患者"), countText(p.files.files)))
 			})
 			section(c, T("Reference and output", "参考库与输出"), "", func() {
-				rows(c,
-					func() {
-						a.pathSetting(c, "cl-ref", T("Reference", "参考库"), T("The healthy controls the patients are compared with.", "与患者比较的健康对照。"),
-							&p.reference, pathFolder, nil, func() { a.setReference(p.reference) })
-					},
-					func() {
-						a.pathSetting(c, "cl-out", T("Save mask as", "掩膜保存为"), T("A NIfTI file, e.g. cluster.nii.gz.", "NIfTI 文件，例如 cluster.nii.gz。"),
-							&p.output, pathSave, nil, nil)
-					},
-				)
+				a.source(c, "cl-ref", "reference", changeInReference(),
+					a.referenceFact(c),
+					fact(c, T("Mask saved as", "掩膜保存为"), a.writesTo(p.output)))
 				a.optionsLine(c, "cluster", "cluster", groupCluster)
 			})
 			caution(c, T("The mask depends on the group it came from. Using it to compare that same group with controls is circular: derive it from other patients, or cross-validate.",
@@ -79,7 +72,9 @@ func (a *app) clusterView(c *ui.Context) {
 				})
 			}
 		},
-		func() { a.runBar(c, "cluster", p.problem(), T("Find Cluster", "查找参考簇"), &p.st, a.runCluster) },
+		func() {
+			a.runBar(c, "cluster", a.clusterProblem(), T("Find Cluster", "查找参考簇"), &p.st, a.runCluster)
+		},
 	)
 }
 

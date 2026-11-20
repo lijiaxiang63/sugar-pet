@@ -146,13 +146,40 @@ func (cv *covChoice) problem() string {
 // needReference is what a page says while it has no reference, which the
 // run bar offers to mend (remedy).
 func needReference() string {
-	return T("Choose a reference, or build one on the Reference page.", "请选择参考库，或先到“参考库”页面建立。")
+	return T("The project has no reference yet: build one on the Reference page, or import one there.", "项目还没有参考库：请先到“参考库”页面建立，或导入已有的参考库。")
 }
 
-// studyParticipants returns the path to participants.tsv in the active study
+// referenceFact is the line of a page that says which reference it uses.
+func (a *app) referenceFact(c *ui.Context) func() {
+	a.zmap.load()
+	value := referenceText(a.zmap.reference, a.zmap.info)
+	if a.zmap.reference == "" {
+		value = T("None yet", "尚未建立")
+	}
+
+	return fact(c, T("Reference", "参考库"), value)
+}
+
+// covText says in a line which covariates the project adjusts for.
+func (a *app) covText() string {
+	cv := &a.cov
+	switch {
+	case cv.path == "":
+		return T("None: no table chosen", "无：未选择协变量表")
+	case cv.err != "":
+		return T("The table cannot be read", "表格无法读取")
+	}
+	names := cv.names()
+	if len(names) == 0 {
+		return filepath.Base(cv.path) + T(" · no column chosen", " · 未选择列")
+	}
+	return strings.Join(names, T(", ", "、")) + " · " + filepath.Base(cv.path)
+}
+
+// studyParticipants returns the path to the participants.tsv of the project
 // if it exists, or "" otherwise.
 func (a *app) studyParticipants() string {
-	return a.inStudy("participants.tsv", false)
+	return a.inProject("participants.tsv", false)
 }
 
 // covRows are the settings of a covariate table.
@@ -165,8 +192,8 @@ func (a *app) covRows(c *ui.Context, key string, cv *covChoice, desc string) []f
 	if cv.path == "" {
 		if sp := a.studyParticipants(); sp != "" {
 			out = append(out, func() {
-				setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
-					if button(c.Key(key+"-use-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() && a.stillInStudy("participants.tsv", false) {
+				setting(c, T("The project's own table", "项目自带的表格"), T("participants.tsv in the project folder: fill it in, one row per subject, then use it.", "项目文件夹中的 participants.tsv：每位受试者填一行，然后选用它。"), func() {
+					if button(c.Key(key+"-use-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() && a.stillInProject("participants.tsv", false) {
 						cv.path = sp
 						cv.load()
 					}
@@ -238,7 +265,6 @@ func (r *refInfo) covariateNames() []string {
 
 type refPage struct {
 	files  fileList
-	cov    covChoice
 	output string
 
 	st      status
@@ -248,26 +274,28 @@ type refPage struct {
 	pic     picture
 }
 
-func (p *refPage) init() {
-	p.cov.adjust = map[string]bool{}
-}
-func (p *refPage) problem(o *options) string {
+func (p *refPage) init() {}
+
+func (a *app) refProblem() string {
+	p, o := &a.ref, &a.opt
 	switch {
+	case len(p.files.files) == 0:
+		return a.needImages("controls")
 	case len(p.files.files) < 3:
-		return T("Add at least 3 healthy-control images (10 or more is better).", "请添加至少 3 幅健康对照图像（建议 10 幅以上）。")
+		return T("A reference needs at least 3 healthy controls (10 or more is better): add them on the Data page, or import a reference.",
+			"建立参考库至少需要 3 例健康对照（建议 10 例以上）：请到“数据”页面添加，或导入已有的参考库。")
 	}
 	if o.RefMask == "file" && o.RefMaskFile == "" {
 		return T("Choose the mask file of the reference in the settings.", "请在设置中选择参考库的掩膜文件。")
 	}
-	if msg := p.cov.problem(); msg != "" {
-		return msg
-	}
-	if p.output == "" {
-		return T("Choose where to save the reference.", "请选择参考库的保存位置。")
-	}
-	return ""
+	return a.cov.problem()
 }
 
+// ownReference reports whether the reference in use is the one built in
+// the project, and not one imported from elsewhere.
+func (a *app) ownReference() bool {
+	return a.norm.reference != "" && sameDir(a.norm.reference, a.ref.output)
+}
 func (a *app) referenceView(c *ui.Context) {
 	p := &a.ref
 	if ref := a.norm.reference; ref != p.current {
@@ -282,14 +310,19 @@ func (a *app) referenceView(c *ui.Context) {
 			section(c, T("Reference in use", "当前参考库"), "", func() {
 				if p.info == nil || p.info.err != "" {
 					rows(c, func() {
-						desc := T("HN, iPS, iHN and z-score maps need a reference. Open one you have, or build one below.",
-							"HN、iPS、iHN 和 Z 值图都需要参考库。可以打开已有的参考库，或在下方新建。")
+						desc := T("HN, iPS, iHN and z-score maps need a reference. Build one below from the controls of the project, or import one built elsewhere.",
+							"HN、iPS、iHN 和 Z 值图都需要参考库。可以在下方用项目的健康对照建立，也可以导入在别处建好的参考库。")
 						if p.info != nil {
 							desc = p.info.err
 						}
-						setting(c, T("No reference chosen", "尚未选择参考库"), desc, func() {
-							if smallButton(c, T("Open…", "打开…")).Clicked() {
+						setting(c, T("No reference yet", "还没有参考库"), desc, func() {
+							if smallButton(c.Key("ref-import"), T("Import…", "导入…")).Clicked() {
 								a.chooseReference()
+							}
+							if own := a.ref.output; core.IsReferenceFolder(own) {
+								if smallButton(c.Key("ref-own"), T("Use the Project's Own", "使用项目自己的")).Clicked() {
+									a.setReference(own)
+								}
 							}
 						})
 					})
@@ -312,10 +345,19 @@ func (a *app) referenceView(c *ui.Context) {
 					)
 					rows(c,
 						func() {
-							setting(c, filepath.Base(p.current), shortDir(filepath.Dir(p.current)), func() {
+							origin := T("Built from the controls of this project", "由本项目的健康对照建立")
+							if !a.ownReference() {
+								origin = T("Imported from ", "导入自 ") + shortDir(filepath.Dir(p.current))
+							}
+							setting(c, filepath.Base(p.current), origin, func() {
 								revealButton(c, "ref-reveal", revealLabel(), p.current)
-								if smallButton(c, T("Open Another…", "打开其他…")).Clicked() {
+								if smallButton(c.Key("ref-import"), T("Import Another…", "导入其他…")).Clicked() {
 									a.chooseReference()
+								}
+								if own := a.ref.output; !a.ownReference() && core.IsReferenceFolder(own) {
+									if smallButton(c.Key("ref-own"), T("Use the Project's Own", "使用项目自己的")).Clicked() {
+										a.setReference(own)
+									}
 								}
 							})
 						},
@@ -337,27 +379,22 @@ func (a *app) referenceView(c *ui.Context) {
 			})
 			ui.Column(c).Gap(18).Children(func() {
 				ui.Box(c).Height(1).Background(paletteFor(c).line)
-				ui.Text(c, T("Build a new reference", "新建参考库")).FontSize(17).FontWeight(700).LetterSpacing(-0.2).Padding(0, 2)
+				ui.Text(c, T("Build the project's reference", "建立项目的参考库")).FontSize(17).FontWeight(700).LetterSpacing(-0.2).Padding(0, 2)
 			})
-			section(c, T("Healthy controls", "健康对照"), T("MNI-space FDG-PET images, all on the same grid. Below about 10 controls the voxel statistics get unreliable.",
-				"MNI 空间的 FDG-PET 图像，须在同一网格上。少于约 10 例时，体素统计不够可靠。"), func() {
-				a.filesCardFromStudy(c, "ref-files", &p.files, T("Control images", "对照图像"), T("at least 3 images · .nii and .nii.gz", "至少 3 幅 · 支持 .nii 与 .nii.gz"), "controls")
+			section(c, T("Healthy controls", "健康对照"), T("The controls of the project, in MNI space and all on the same grid. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
+				"项目中的健康对照图像，须在 MNI 空间且在同一网格上。少于约 10 例时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
+				a.source(c, "ref-data", "data", changeInData(),
+					fact(c, T("Controls", "对照"), countText(p.files.files)),
+					fact(c, T("Covariates", "协变量"), a.covText()))
 			})
-			section(c, T("Age and sex (W-scores)", "年龄和性别（W 值）"),
-				T("Optional. Rows are matched to images by an “image” or “participant_id” column (sub-01 matches sub-01_…_pet.nii.gz), as in a BIDS participants.tsv.",
-					"可选。通过 image 或 participant_id 列将行与图像对应（sub-01 匹配 sub-01_…_pet.nii.gz），与 BIDS 的 participants.tsv 一致。"), func() {
-					rows(c, a.covRows(c, "ref-cov", &p.cov, T("A TSV or CSV file with the covariates of the controls.", "包含对照协变量的 TSV 或 CSV 文件。"))...)
-				})
 			section(c, T("Save", "保存"), "", func() {
-				rows(c, func() {
-					a.pathSetting(c, "ref-out", T("Reference folder", "参考库文件夹"), T("A folder for this reference; it becomes the reference in use.", "用于存放该参考库的文件夹，建好后自动成为当前参考库。"),
-						&p.output, pathFolder, nil, nil)
-				})
+				rows(c, fact(c, T("Written to", "输出位置"), a.writesTo(p.output)+T(" · it becomes the reference in use", " · 建好后自动成为当前参考库")))
 				a.optionsLine(c, "reference", "reference", groupReference)
 			})
 		},
 		func() {
-			a.runBar(c, "reference", p.problem(&a.opt), T("Build Reference", "建立参考库"), &p.st, a.runReference)
+			a.runBar(c, "reference", a.refProblem(), T("Build Reference", "建立参考库"), &p.st, a.runReference)
+			a.next(c, "normalize", a.norm.reference != "" && len(a.norm.files.files) > 0)
 		},
 	)
 }
@@ -380,13 +417,13 @@ func (a *app) runReference() {
 	if o.RefMask == "file" {
 		opt.Mask = core.MaskSpec{Name: o.RefMaskFile}
 	}
-	if msg := p.cov.fresh(); msg != "" {
+	if msg := a.cov.fresh(); msg != "" {
 		p.st.err = msg
 		return
 	}
-	if p.cov.table != nil {
-		names := p.cov.names()
-		found, err := p.cov.table.Lookup(files, names)
+	if a.cov.table != nil {
+		names := a.cov.names()
+		found, err := a.cov.table.Lookup(files, names)
 		if err != nil {
 			p.st.err = err.Error()
 			return

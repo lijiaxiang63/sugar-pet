@@ -94,9 +94,6 @@ func (a *app) zmapProblem() string {
 	if why := n.unfit(yes, p.info); why != "" {
 		return why
 	}
-	if p.output == "" {
-		return T("Choose the output folder.", "请选择输出文件夹。")
-	}
 	return ""
 }
 
@@ -135,38 +132,28 @@ func (a *app) zmapView(c *ui.Context) {
 			})
 			if p.reference != "" && (p.info == nil || p.info.err == "") {
 				section(c, T("Age and sex (W-scores)", "年龄和性别（W 值）"), "", func() {
-					covDesc := T("This reference was built without covariates, so only plain z-scores are available.", "该参考库建立时未提供协变量，只能输出普通 Z 值。")
-					if !hasModels {
-						rows(c, func() { setting(c, T("Covariate table", "协变量表"), covDesc, nil) })
-						return
+					about := T("This reference was built without covariates, so the maps are plain z-scores.", "该参考库建立时未提供协变量，因此输出普通 Z 值图。")
+					switch {
+					case hasModels && p.covTable != "":
+						about = Tf("The reference models %s, and the table gives them for these images: the maps are W-scores, compared with what the controls predict for such a person.",
+							"参考库对%s建了模型，表格中有这些图像的取值：输出 W 值图，与对照对同样条件的人的预测值比较。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
+					case hasModels:
+						about = Tf("The reference models %s. Choose a covariate table on the Data page to get W-scores; without one the maps are plain z-scores.",
+							"参考库对%s建了模型。在“数据”页面选择协变量表即可输出 W 值图；不选则输出普通 Z 值图。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
 					}
-					covDesc = Tf("Optional. With the %s of these images, the maps are W-scores: compared with what the controls predict for such a person.",
-						"可选。提供这些图像的 %s 后输出 W 值图：与对照对同样条件的人的预测值比较。", strings.Join(p.info.covariateNames(), T(" and ", "、")))
-					var studyCovRow func()
-					if p.covTable == "" {
-						if sp := a.studyParticipants(); sp != "" {
-							studyCovRow = func() {
-								setting(c, T("From active study", "来自当前研究"), shortDir(sp), func() {
-									if button(c.Key("z-cov-study"), T("Use participants.tsv", "使用 participants.tsv"), iconTable, buttonSoft, 26).Clicked() && a.stillInStudy("participants.tsv", false) {
-										p.covTable = sp
-									}
-								})
-							}
-						}
+					table := T("None", "无")
+					if p.covTable != "" {
+						table = filepath.Base(p.covTable)
 					}
-					rows(c,
-						func() {
-							a.pathSetting(c, "z-cov", T("Covariate table", "协变量表"), covDesc, &p.covTable, pathFile, tableFilter, nil)
-						},
-						studyCovRow,
-					)
+					a.source(c, "z-cov", "data", changeInData(), func() {
+						setting(c, T("Covariate table", "协变量表"), about, func() {
+							ui.Text(c, table).FontSize(12.5).TextColor(paletteFor(c).muted).SingleLine()
+						})
+					})
 				})
 			}
 			section(c, T("Output", "输出"), "", func() {
-				rows(c, func() {
-					a.pathSetting(c, "z-out", T("Output folder", "输出文件夹"), T("One map per image and method, e.g. sub-01_desc-hn_zmap.nii.gz.", "每幅图像每种方法输出一幅，如 sub-01_desc-hn_zmap.nii.gz。"),
-						&p.output, pathFolder, nil, nil)
-				})
+				rows(c, fact(c, T("Written to", "输出位置"), a.writesTo(p.output)+T(" · one map per image and method", " · 每幅图像每种方法一幅图")))
 			})
 			if len(p.rows) > 0 || len(p.notes) > 0 {
 				a.results(c, T("Results", "结果"), T("“Below −2” is the share of brain voxels with z < −2 (about 2.3% is expected by chance).", "“低于 −2”为脑内 z < −2 的体素比例（随机情况下约为 2.3%）。"), func() {

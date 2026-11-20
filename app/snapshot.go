@@ -64,6 +64,32 @@ func snapshots(args []string) {
 			save(tt, name)
 		}
 	}
+	// The page the app opens with, and the form of a new project.
+	for _, dark := range []bool{false, true} {
+		for _, creating := range []bool{false, true} {
+			a := newApp()
+			a.recent = []string{"/Users/ada/study", "/Users/ada/projects/msa-2025", "/Volumes/lab/pet/dlb-pilot"}
+			a.seen = map[seenKey]seenFile{}
+			for _, dir := range a.recent[:2] { // made up: nothing is asked of the disk
+				a.seen[seenKey{dir, true}] = seenFile{true, time.Now().Add(time.Hour)}
+				a.seen[seenKey{filepath.Join(dir, projectFileName), false}] = seenFile{true, time.Now().Add(time.Hour)}
+			}
+			a.seen[seenKey{a.recent[2], true}] = seenFile{false, time.Now().Add(time.Hour)}
+			name := "welcome"
+			if creating {
+				a.welcome.creating, a.welcome.name, a.welcome.parent = true, "parkinsonism-2026", "/Users/ada/projects"
+				a.seen[seenKey{"/Users/ada/projects/parkinsonism-2026/" + projectFileName, false}] = seenFile{false, time.Now().Add(time.Hour)}
+				name = "welcome-new"
+			}
+			tt := ui.NewTesterWith(a.view, 1060, height, ui.TesterOptions{Dark: dark})
+			tt.SetScale(2)
+			tt.Frame()
+			if dark {
+				name += "-dark"
+			}
+			save(tt, name)
+		}
+	}
 	for _, dark := range []bool{false, true} {
 		for _, p := range pages {
 			a := newApp()
@@ -95,39 +121,32 @@ func snapshots(args []string) {
 
 // demo fills the pages with made-up input and results, for the snapshots.
 func (a *app) demo() {
+	// A project of images in native space, all of them warped: every page
+	// has something to show.
+	a.proj = &project{dir: "/Users/ada/study", name: "Parkinsonism 2026", created: "2026-03-02T09:30:00+01:00", unsaved: true, native: true}
+	a.projectOutputs()
 	patient := func(i int) string { return fmt.Sprintf("/Users/ada/study/patients/sub-pt%02d_space-MNI_pet.nii.gz", i) }
 	control := func(i int) string { return fmt.Sprintf("/Users/ada/study/controls/sub-hc%02d_space-MNI_pet.nii.gz", i) }
-	for i := 1; i <= 6; i++ {
-		a.norm.files.files = append(a.norm.files.files, patient(i))
+	sp := &a.spatial
+	sp.spm, sp.matlab, sp.outDir = "/Users/ada/spm12", "/Applications/MATLAB_R2025b.app", a.proj.dir
+	sp.warped = map[string]string{}
+	warp := func(list *fileList, name string, mni string) {
+		native := fmt.Sprintf("/Users/ada/study/raw/%s_pet.nii.gz", name)
+		list.files = append(list.files, native)
+		sp.warped[native] = mni
+		sp.rows = append(sp.rows, spatialRow{image: filepath.Base(native), output: core.SpatialOutputName(native), path: mni})
+		sp.written = append(sp.written, mni)
 	}
-	for i := 1; i <= 12; i++ {
-		a.cmp.g1.files = append(a.cmp.g1.files, patient(i))
-		a.cluster.files.files = append(a.cluster.files.files, patient(i))
+	for i := 1; i <= 6; i++ {
+		warp(&a.proj.patients, fmt.Sprintf("sub-pt%02d", i), patient(i))
 	}
 	for i := 1; i <= 16; i++ {
-		a.cmp.g2.files = append(a.cmp.g2.files, control(i))
-		a.ref.files.files = append(a.ref.files.files, control(i))
+		warp(&a.proj.controls, fmt.Sprintf("sub-hc%02d", i), control(i))
 	}
-	a.study.parent, a.study.made, a.study.statusOf = "/Users/ada", "/Users/ada/study", "/Users/ada/study"
-	a.study.created = make([]bool, len(core.StudyLayout))
-	for i := range a.study.created {
-		a.study.created[i] = true
-	}
-	a.study.st.ok = Tf("Study folder ready: %d created, %d already there. The pages now write into it.",
-		"研究文件夹已就绪：新建 %d 项，%d 项原已存在。各页面的输出已指向这里。", len(core.StudyLayout), 0)
-	sp := &a.spatial
-	sp.spm, sp.matlab, sp.output = "/Users/ada/spm12", "/Applications/MATLAB_R2025b.app", "/Users/ada/study/patients"
-	sp.outDir = sp.output
-	for i := 1; i <= 6; i++ {
-		native := fmt.Sprintf("/Users/ada/study/raw/sub-pt%02d_pet.nii.gz", i)
-		sp.files.files = append(sp.files.files, native)
-		sp.rows = append(sp.rows, spatialRow{image: filepath.Base(native), output: core.SpatialOutputName(native), path: patient(i)})
-		sp.written = append(sp.written, patient(i))
-	}
-	sp.st.ok = Tf("%d image(s) warped to MNI space.", "已完成：%d 幅图像已配准到 MNI 空间。", 6)
+	sp.st.ok = Tf("%d image(s) warped to MNI space.", "已完成：%d 幅图像已配准到 MNI 空间。", 22)
+	a.feed()
 	a.norm.methods["cerebellum"] = true
 	a.setReference("/Users/ada/study/hc_reference")
-	a.norm.output = "/Users/ada/study/normalised"
 	a.norm.outDir = a.norm.output
 	for i, f := range [][2]string{{"5.81437", "5.42206"}, {"6.20915", "5.96384"}, {"4.97203", "4.51870"}, {"5.53866", "5.30129"}, {"6.74052", "6.18845"}, {"5.12790", "4.89317"}} {
 		image := filepath.Base(patient(i + 1))
@@ -148,18 +167,14 @@ func (a *app) demo() {
 		Name string `json:"name"`
 	}{{"age"}, {"sex"}}
 	a.ref.current, a.ref.info = a.norm.reference, info
-	a.ref.output = "/Users/ada/study/hc_reference"
 	a.opt.RefStatsFor["cerebellum"], a.opt.RefStatsFor["white-matter"] = true, true
-	a.ref.cov.path = "/Users/ada/study/participants.tsv"
-	a.ref.cov.table = &core.Table{Path: a.ref.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 28)}
-	a.ref.cov.adjust = map[string]bool{"age": true, "sex": true}
-	a.ref.cov.stamp = stampOf(a.ref.cov.path) // the table is made up: nothing is to be read
-	// Compare Groups takes the table of the reference, as it does when shown.
-	a.cmp.cov, a.cmp.covFrom = a.ref.cov, a.ref.cov.path
-	a.cmp.cov.columns = a.ref.cov.table.Columns()
+	a.cov.path = "/Users/ada/study/participants.tsv"
+	a.cov.table = &core.Table{Path: a.cov.path, Header: []string{"participant_id", "age", "sex"}, Rows: make([]map[string]string, 22)}
+	a.cov.adjust = map[string]bool{"age": true, "sex": true}
+	a.cov.columns = a.cov.table.Columns()
+	a.cov.stamp = stampOf(a.cov.path) // the table is made up: nothing is to be read
 	a.zmap.loadedFrom, a.zmap.info = a.zmap.reference, info
-	a.zmap.covTable = "/Users/ada/study/participants.tsv"
-	a.zmap.output = "/Users/ada/study/zmaps"
+	a.zmap.covTable = a.cov.path
 	a.zmap.outDir = a.zmap.output
 	// A map of each image by each method of step 1, the first of them HN's.
 	for i, r := range [][4]string{{"-6.41", "9.8%", "-6.02", "8.9%"}, {"-5.07", "6.3%", "-4.71", "5.6%"}, {"-3.12", "2.6%", "-2.95", "2.4%"},
@@ -176,7 +191,7 @@ func (a *app) demo() {
 
 	cl := &a.classify
 	cl.loadedFrom, cl.info = cl.reference, info
-	cl.output, cl.outDir = "/Users/ada/study/reports", "/Users/ada/study/reports"
+	cl.outDir = cl.output
 	cl.from, cl.method = a.zmap.done, "hn"
 	// A reading for each image of step 2.
 	scores := [][]int{{84, 31, 22, 18, 12, 9}, {24, 12, 62, 55, 20, 14}, {11, 8, 14, 10, 16, 58}, {15, 10, 21, 26, 73, 12}, {19, 47, 16, 11, 9, 22}, {9, 12, 10, 14, 13, 61}}
@@ -205,7 +220,6 @@ func (a *app) demo() {
 	}
 	cl.st.ok = Tf("%d report(s) written.", "已生成 %d 份报告。", len(cl.rows))
 
-	a.cmp.output = "/Users/ada/study/compare"
 	a.cmp.name = "patients_vs_controls"
 	a.cmp.how = Tf("GRF correction: voxel p < %g, cluster p < %g, clusters of at least %d voxels (|z| > %.2f).",
 		"GRF 校正：体素 p < %g，团块 p < %g，团块至少 %d 个体素（|z| > %.2f）。", 0.001, 0.05, 187, 3.29)
@@ -224,7 +238,6 @@ func (a *app) demo() {
 		},
 	}
 
-	a.cluster.output = "/Users/ada/study/reference_cluster.nii.gz"
 	a.cluster.saved, a.cluster.volume = a.cluster.output, 58
 	a.cluster.st.ok = Tf("Reference cluster of %.0f mL saved.", "已保存参考簇（%.0f mL）。", 58.0)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -24,7 +25,10 @@ type spatialPage struct {
 	spm    string
 	spmBad bool   // the folder chosen is not SPM12 or SPM25
 	matlab string // chosen by the user; "" is the MATLAB found on this computer
-	output string
+	// warped is what the last run made of each image: the image in MNI
+	// space, by the image in native space.  The pages after this one read
+	// these in place of the images of the project.
+	warped map[string]string
 
 	st      status
 	rows    []spatialRow
@@ -70,29 +74,45 @@ func (p *spatialPage) setupProblem() string {
 	return ""
 }
 
-func (p *spatialPage) problem() string {
+// spatialTarget is where the image in MNI space of an image of the project
+// is written: the folder of its group.
+func (a *app) spatialTarget(path string) string {
+	group := "patients"
+	if slices.Contains(a.proj.controls.files, path) {
+		group = "controls"
+	}
+	return filepath.Join(a.proj.in(group), core.SpatialOutputName(path))
+}
+
+// notNative is what the page says of a project whose images are in MNI
+// space already.
+func notNative() string {
+	return T("Not needed: the images of this project are in MNI space already.", "无需此步：本项目的图像已在 MNI 空间。")
+}
+
+func (a *app) spatialProblem() string {
+	p := &a.spatial
 	switch {
+	case !a.proj.native:
+		return notNative()
 	case len(p.files.files) == 0:
-		return T("Add the images to bring into MNI space.", "请添加要配准到 MNI 空间的图像。")
+		return a.dataProblem()
 	case p.setupProblem() != "":
 		return p.setupProblem()
-	case p.output == "":
-		return T("Choose the output folder.", "请选择输出文件夹。")
 	}
-	names := map[string]string{}
+	targets := map[string]string{}
 	for _, path := range p.files.files {
-		name := core.SpatialOutputName(path)
-		if other, ok := names[name]; ok {
-			return Tf("%s and %s would both be written as %s: rename one, or run them separately.",
-				"%s 与 %s 都会输出为 %s：请重命名其中一个，或分开运行。",
+		target := a.spatialTarget(path)
+		if other, ok := targets[target]; ok {
+			return Tf("%s and %s would both be written as %s: rename one of them.",
+				"%s 与 %s 都会输出为 %s：请重命名其中一个。",
 				filepath.Join(filepath.Base(filepath.Dir(other)), filepath.Base(other)),
-				filepath.Join(filepath.Base(filepath.Dir(path)), filepath.Base(path)), name)
+				filepath.Join(filepath.Base(filepath.Dir(path)), filepath.Base(path)), filepath.Base(target))
 		}
-		names[name] = path
+		targets[target] = path
 	}
 	return ""
 }
-
 func (a *app) spatialView(c *ui.Context) {
 	p := &a.spatial
 	t := c.Theme()
@@ -100,10 +120,24 @@ func (a *app) spatialView(c *ui.Context) {
 	a.frame(c, T("Spatial Normalisation", "空间标准化"),
 		T("Warp native-space PET into MNI space with SPM", "用 SPM 把原始空间的 PET 配准到 MNI 空间"),
 		func() {
-			section(c, T("Images", "图像"), T("FDG-PET images as they come from the scanner; no MRI is needed. Skip this page if your images are in MNI space already.",
-				"扫描得到的原始空间 FDG-PET 图像，不需要 MRI。图像已在 MNI 空间的可跳过本页。"), func() {
-				a.filesCardFromStudy(c, "sp-files", &p.files, T("Native-space images", "原始空间的图像"),
-					T(".nii and .nii.gz files, or whole folders · 4D images are averaged over time", "支持 .nii 与 .nii.gz 文件，也可添加整个文件夹 · 4D 图像按时间取平均"), "raw")
+			section(c, T("Images", "图像"), T("The images of the project as they come from the scanner; no MRI is needed. 4D images are averaged over time. What is warped is written into the patients and controls folders of the project, and the pages after this one read it from there.",
+				"项目中扫描得到的原始空间 FDG-PET 图像，不需要 MRI；4D 图像按时间取平均。配准结果写入项目的 patients 和 controls 文件夹，之后的页面都从那里读取。"), func() {
+				if !a.proj.native {
+					a.source(c, "sp-data", "data", changeInData(), fact(c, T("Space of the images", "图像所在的空间"), notNative()))
+					return
+				}
+				done := func(files []string) string {
+					n := 0
+					for _, f := range files {
+						if p.warped[f] != "" {
+							n++
+						}
+					}
+					return countText(files) + Tf(" · %d warped", " · 已配准 %d 幅", n)
+				}
+				a.source(c, "sp-data", "data", changeInData(),
+					fact(c, T("Patients", "患者"), done(a.proj.patients.files)),
+					fact(c, T("Healthy controls", "健康对照"), done(a.proj.controls.files)))
 			})
 			section(c, T("Set-up and output", "设置与输出"), "", func() {
 				rows(c,
@@ -125,11 +159,7 @@ func (a *app) spatialView(c *ui.Context) {
 							}
 						})
 					},
-					func() {
-						a.pathSetting(c, "sp-out", T("Output folder", "输出文件夹"),
-							T("MNI-space images of 2 mm voxels, named like sub-01_space-MNI_pet.nii.gz.", "体素 2 mm 的 MNI 空间图像，文件名形如 sub-01_space-MNI_pet.nii.gz。"),
-							&p.output, pathFolder, nil, nil)
-					},
+					fact(c, T("Written to", "输出位置"), T("patients/ and controls/ · 2 mm voxels, named like sub-01_space-MNI_pet.nii.gz", "patients/ 与 controls/ · 体素 2 mm，文件名形如 sub-01_space-MNI_pet.nii.gz")),
 				)
 				a.optionsLine(c, "spatial", "spatial", groupSpatial)
 			})
@@ -159,46 +189,32 @@ func (a *app) spatialView(c *ui.Context) {
 							}
 						}).Height(float32(min(len(p.rows), 6)*32 + 34))
 					})
-					if len(p.written) > 0 {
-						// The images are patients, which go on to the individual
-						// analysis, or controls, which a reference is built from.
-						ui.Row(c).Gap(8).Wrap().GapY(6).Children(func() {
-							hand := func(to *fileList, page string) {
-								to.files, to.query = nil, "" // a filter of the old list would hide the new
-								to.add(p.written)
-								a.page = page
-							}
-							if button(c.Key("sp-to-norm"), T("Use for Intensity Normalisation", "用于强度归一化"), nil, buttonPrimary, 26).Clicked() {
-								hand(&a.norm.files, "normalize")
-							}
-							if button(c.Key("sp-to-ref"), T("Use to Build a Reference", "用于建立参考库"), nil, buttonPlain, 26).Clicked() {
-								hand(&a.ref.files, "reference")
-							}
-							revealButton(c, "sp-reveal", revealLabel(), p.outDir)
-						})
-					}
+					ui.Row(c).Children(func() { revealButton(c, "sp-reveal", revealLabel(), p.outDir) })
 					notesCard(c, p.notes)
 				})
 			}
 		},
 		func() {
-			a.runBar(c, "spatial", p.problem(), T("Warp to MNI Space", "开始空间标准化"), &p.st, a.runSpatial)
+			a.runBar(c, "spatial", a.spatialProblem(), T("Warp to MNI Space", "开始空间标准化"), &p.st, a.runSpatial)
+			a.next(c, "reference", a.spatialDone())
 		},
 	)
 }
 
 func (a *app) runSpatial() {
 	p := &a.spatial
-	files, out := append([]string(nil), p.files.files...), p.output
+	files, out := append([]string(nil), p.files.files...), a.proj.dir
+	targets := make([]string, len(files))
+	for i, path := range files {
+		targets[i] = a.spatialTarget(path)
+	}
 	opt := core.SpatialOptions{SPMPath: p.spm, Template: a.opt.Template, Matlab: p.matlabPath(), Jobs: int(a.opt.Jobs)}
 	p.rows, p.notes, p.written, p.shown = nil, nil, nil, 0
 	a.start("spatial", T("Warping to MNI space", "正在空间标准化"), func(ctx context.Context, step func(int, int)) (func(), error) {
-		if err := os.MkdirAll(out, 0o755); err != nil {
-			return nil, err
-		}
-		targets := make([]string, len(files))
-		for i, path := range files {
-			targets[i] = filepath.Join(out, core.SpatialOutputName(path))
+		for _, target := range targets {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return nil, err
+			}
 		}
 		opt.Progress = step
 		results, err := core.SpatialNormalize(ctx, files, targets, opt)
@@ -207,6 +223,7 @@ func (a *app) runSpatial() {
 		}
 		var rows []spatialRow
 		var notes, written []string
+		warped := map[string]string{}
 		for _, r := range results {
 			row := spatialRow{image: filepath.Base(r.Input), output: filepath.Base(r.Output), path: r.Output}
 			if r.Err != nil {
@@ -214,11 +231,12 @@ func (a *app) runSpatial() {
 				notes = append(notes, row.image+": "+r.Err.Error())
 			} else {
 				written = append(written, r.Output)
+				warped[r.Input] = r.Output
 			}
 			rows = append(rows, row)
 		}
 		return func() {
-			p.rows, p.notes, p.written, p.outDir = rows, notes, written, out
+			p.rows, p.notes, p.written, p.outDir, p.warped = rows, notes, written, out, warped
 			for i, r := range rows { // the picture is of the first that worked
 				if !r.failed {
 					p.shown = i

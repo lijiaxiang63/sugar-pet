@@ -38,10 +38,20 @@ var settingsSections = []settingsSection{
 	{"cluster", label{"Reference Cluster", "参考簇"}, label{"The threshold of the reference cluster", "参考簇的阈值"}, iconTarget},
 }
 
+// shownSections are the sections of the settings that have something to
+// show.  The options of the analyses are those of the project that is open:
+// while none is, only what is of this computer is shown.
+func (a *app) shownSections() []settingsSection {
+	if a.proj != nil {
+		return settingsSections
+	}
+	return settingsSections[:2]
+}
+
 // openSettings shows the settings window, at a section when one is named,
 // opening it the first time.
 func (a *app) openSettings(section string) {
-	for _, s := range settingsSections {
+	for _, s := range a.shownSections() {
 		if s.id == section {
 			a.settingsPage = section
 		}
@@ -136,8 +146,31 @@ func (a *app) setMenu() {
 		mygo.Separator(),
 		&mygo.MenuItem{Role: mygo.RoleQuit, Label: Tf("Quit %s", "退出 %s", name)},
 	)
+	// The project: made, opened and left.  Asked in the main window.
+	inMain := func(do func()) func(*mygo.MenuItem, *mygo.Window) {
+		return func(*mygo.MenuItem, *mygo.Window) {
+			a.win.Show()
+			a.win.Focus()
+			a.win.Update(func() {
+				a.dialogs = a.win
+				do()
+			})
+		}
+	}
+	fileMenu := []*mygo.MenuItem{
+		{Label: T("New Project…", "新建项目…"), Accelerator: "CmdOrCtrl+N", Click: inMain(func() {
+			if a.job == nil {
+				a.closeProject()
+				a.welcome.creating, a.welcome.err = true, ""
+			}
+		})},
+		{Label: T("Open Project…", "打开项目…"), Accelerator: "CmdOrCtrl+O", Click: inMain(a.pickProject)},
+		mygo.Separator(),
+		{Label: T("Close Project", "关闭项目"), Accelerator: "CmdOrCtrl+Shift+W", Click: inMain(a.closeProject)},
+	}
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Label: name, Submenu: appMenu},
+		{Label: T("File", "文件"), Submenu: fileMenu},
 		{Role: mygo.RoleEditMenu},
 		{Role: mygo.RoleViewMenu},
 		{Role: mygo.RoleWindowMenu},
@@ -156,8 +189,9 @@ func (a *app) settingsView(c *ui.Context) {
 	if a.settingsWin != nil {
 		c.OnShortcut(ui.Cmd, ui.KeyW, func() { a.settingsWin.Close() })
 	}
-	current := settingsSections[0]
-	for _, s := range settingsSections {
+	sections := a.shownSections()
+	current := sections[0]
+	for _, s := range sections {
 		if s.id == a.settingsPage {
 			current = s
 		}
@@ -169,10 +203,15 @@ func (a *app) settingsView(c *ui.Context) {
 			page := current.id
 			ui.Scroll(c.Key("settings-nav")).Grow(1).MinHeight(0).Children(func() {
 				ui.Column(c).Padding(0, 10, 8, 10).Gap(2).Children(func() {
-					for i, s := range settingsSections {
+					for i, s := range sections {
 						if i == 1 {
-							ui.Text(c, T("Analyses", "分析")).FontSize(11).FontWeight(600).TextColor(pal.faint).LetterSpacing(0.3).
-								Padding(12, 10, 5, 10).SingleLine()
+							// The options below are kept in the project.
+							heading := T("This computer", "本机")
+							if a.proj != nil {
+								heading = T("Analyses of this project", "本项目的分析选项")
+							}
+							ui.Text(c, heading).FontSize(11).FontWeight(600).TextColor(pal.faint).LetterSpacing(0.3).
+								Padding(12, 10, 5, 10).SingleLine().Ellipsis("…")
 						}
 						a.settingsNavItem(c, &page, s)
 					}
@@ -184,7 +223,8 @@ func (a *app) settingsView(c *ui.Context) {
 		ui.Column(c).Grow(1).MinWidth(0).Padding(cardGap, cardGap, cardGap, 0).Children(func() {
 			pane := ui.Column(c).Grow(1).MinHeight(0).Radius(12).Background(pal.card).Clip()
 			raised(pane, pal).Children(func() {
-				for _, s := range settingsSections {
+				current = sections[0]
+				for _, s := range sections {
 					if s.id == a.settingsPage {
 						current = s
 					}
@@ -218,6 +258,7 @@ func (a *app) settingsView(c *ui.Context) {
 		})
 	})
 	// What changed here shows in the main window, and is kept.
+	a.saveProject()
 	if a.saveSettings() && a.win != nil {
 		a.win.Invalidate()
 	}
@@ -433,6 +474,9 @@ func (a *app) settingsSpatial(c *ui.Context) {
 		"配准使用 SPM 的 “Old Normalise” 和 PET 模板，由 MATLAB 在后台运行。其他页面都不需要它们。"), func() {
 		rows(c, a.spmRows(c)...)
 	})
+	if a.proj == nil { // the rest is of a project
+		return
+	}
 	section(c, T("Warp", "配准"), "", func() {
 		rows(c,
 			func() {

@@ -16,8 +16,6 @@ type comparePage struct {
 	method    string
 	reference string
 	region    regionChoice
-	cov       covChoice
-	covExtra  string // a second table, when the two groups are listed apart
 	// The smoothing of the reference, as last read from its folder.
 	fwhmKnown bool
 	fwhmOf    string
@@ -25,13 +23,13 @@ type comparePage struct {
 	name      string
 	output    string
 
-	// swapped is whether the groups were swapped: the study's controls are
-	// then offered to group 1 and its patients to group 2.
+	// swapped is whether the groups were swapped: the controls of the
+	// project are then group 1 and its patients group 2.
 	swapped bool
-	// The method and the covariate table last taken from the pages before
-	// (follow): they are taken again when chosen anew there, until the user
-	// chooses others here.
-	methodFrom, covFrom string
+	// The method last taken from the individual analysis (follow): it is
+	// taken again when chosen anew there, until the user chooses another
+	// here.
+	methodFrom string
 
 	st     status
 	result *core.GroupComparison
@@ -49,9 +47,8 @@ func (p *comparePage) swap() {
 	p.result, p.how, p.st = nil, "", status{}
 }
 
-// follow takes the method of the individual analysis and the covariate
-// table of the reference, so that they are not chosen again here.  Tables
-// that list the controls and the patients apart are both taken.
+// followCompare takes the method of the individual analysis, so that it is
+// not chosen again here.
 func (a *app) followCompare() {
 	p := &a.cmp
 	if m := leadingMethod(a.norm.chosen()); m != "" && m != p.methodFrom {
@@ -60,26 +57,10 @@ func (a *app) followCompare() {
 		}
 		p.methodFrom = m
 	}
-	table, extra := a.ref.cov.path, a.zmap.covTable
-	if table == "" {
-		table, extra = extra, ""
-	}
-	if table != p.covFrom {
-		if p.cov.path == p.covFrom {
-			p.cov.path = table
-			p.cov.load()
-			if p.covExtra == "" && extra != table {
-				p.covExtra = extra
-			}
-		}
-		p.covFrom = table
-	}
 }
-
 func (p *comparePage) init() {
-	p.method, p.methodFrom, p.name = "hn", "hn", "group1_vs_group2"
+	p.method, p.methodFrom, p.name = "hn", "hn", "patients_vs_controls"
 	p.region.mask = "brainstem"
-	p.cov.adjust = map[string]bool{}
 }
 
 // referenceFWHM is the smoothing (mm) of the chosen reference, if there is
@@ -118,13 +99,24 @@ func (p *comparePage) referenceProblem() string {
 	if !core.NeedsReference(p.method) || p.reference != "" {
 		return ""
 	}
-	return Tf("%s needs a reference: choose one, or build it on the Reference page.", "%s 需要参考库：请选择参考库，或先到“参考库”页面建立。", methodName(p.method))
+	return Tf("%s needs a reference: build it on the Reference page, or import one there.", "%s 需要参考库：请先到“参考库”页面建立，或导入已有的参考库。", methodName(p.method))
 }
 
-func (p *comparePage) problem(o *options) string {
+func (a *app) cmpProblem() string {
+	p, o := &a.cmp, &a.opt
+	for i, g := range [][]string{p.g1.files, p.g2.files} {
+		group := [...]string{"patients", "controls"}[i]
+		if p.swapped {
+			group = [...]string{"controls", "patients"}[i]
+		}
+		switch {
+		case len(g) == 0:
+			return a.needImages(group)
+		case len(g) < 2:
+			return T("Each group needs at least 2 images: add more on the Data page.", "每组至少需要 2 幅图像：请到“数据”页面添加。")
+		}
+	}
 	switch {
-	case len(p.g1.files) < 2 || len(p.g2.files) < 2:
-		return T("Add at least 2 images to each group.", "每组请至少添加 2 幅图像。")
 	case p.referenceProblem() != "":
 		return p.referenceProblem()
 	case p.method == "region" && p.region.problem() != "":
@@ -132,18 +124,14 @@ func (p *comparePage) problem(o *options) string {
 	case o.Analysis == "file" && o.AnalysisFile == "":
 		return T("Choose the mask file of the voxels to test in the settings.", "请在设置中选择检验范围的掩膜文件。")
 	}
-	if msg := p.cov.problem(); msg != "" {
+	if msg := a.cov.problem(); msg != "" {
 		return msg
 	}
-	switch {
-	case strings.TrimSpace(p.name) == "" || strings.ContainsAny(p.name, `/\:`):
+	if strings.TrimSpace(p.name) == "" || strings.ContainsAny(p.name, `/\:`) {
 		return T("Give the result files a name (without slashes).", "请填写结果文件的名称（不含斜杠）。")
-	case p.output == "":
-		return T("Choose the output folder.", "请选择输出文件夹。")
 	}
 	return ""
 }
-
 func (a *app) compareView(c *ui.Context) {
 	p := &a.cmp
 	a.followCompare()
@@ -153,37 +141,23 @@ func (a *app) compareView(c *ui.Context) {
 		func() {
 			section(c, T("Groups", "分组"), T("The T-map is group 1 minus group 2: with patients as group 1 and controls as group 2, negative values mean hypometabolism.",
 				"T 图为第 1 组减第 2 组：以患者为第 1 组、对照为第 2 组时，负值表示低代谢。"), func() {
-				// The folders of the study follow the groups when they are
-				// swapped, until both lists are empty again.
-				if len(p.g1.files) == 0 && len(p.g2.files) == 0 {
-					p.swapped = false
-				}
-				hints := [2]string{T("e.g. the patients", "例如患者"), T("e.g. the controls", "例如对照")}
-				folders := [2]string{"patients", "controls"}
+				names := [2]string{T("Patients", "患者"), T("Healthy controls", "健康对照")}
 				if p.swapped {
-					hints[0], hints[1] = hints[1], hints[0]
-					folders[0], folders[1] = folders[1], folders[0]
+					names[0], names[1] = names[1], names[0]
 				}
-				ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
-					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCardFromStudy(c, "cmp-g1", &p.g1, T("Group 1", "第 1 组"), hints[0], folders[0])
-					})
-					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCardFromStudy(c, "cmp-g2", &p.g2, T("Group 2", "第 2 组"), hints[1], folders[1])
-					})
+				a.source(c, "cmp-data", "data", changeInData(),
+					fact(c, T("Group 1", "第 1 组")+" · "+names[0], countText(p.g1.files)),
+					fact(c, T("Group 2", "第 2 组")+" · "+names[1], countText(p.g2.files)))
+				ui.Row(c).Justify(ui.End).Children(func() {
+					// Not while the comparison runs: it would end under
+					// the groups the other way round.
+					swap := button(c.Key("cmp-swap"), T("Swap Groups", "互换两组"), iconSwap, buttonGhost, 26).
+						Tooltip(T("Swap Group 1 and Group 2 (reverses the sign of the T-map)", "交换第 1 组与第 2 组（将反转 T 图正负号）")).
+						Disabled(a.job != nil && a.job.page == "compare")
+					if swap.Clicked() {
+						p.swap()
+					}
 				})
-				if len(p.g1.files) > 0 || len(p.g2.files) > 0 {
-					ui.Row(c).Justify(ui.End).Children(func() {
-						// Not while the comparison runs: it would end under
-						// the groups the other way round.
-						swap := button(c.Key("cmp-swap"), T("Swap Groups", "互换两组"), iconSwap, buttonGhost, 26).
-							Tooltip(T("Swap Group 1 and Group 2 (reverses the sign of the T-map)", "交换第 1 组与第 2 组（将反转 T 图正负号）")).
-							Disabled(a.job != nil && a.job.page == "compare")
-						if swap.Clicked() {
-							p.swap()
-						}
-					})
-				}
 			})
 			section(c, T("Intensity normalisation", "强度归一化"), "", func() {
 				var ids, names []string
@@ -196,28 +170,15 @@ func (a *app) compareView(c *ui.Context) {
 				if p.method == "region" {
 					list = append(list, a.regionRows(c, "cmp-region", &p.region)...)
 				}
-				list = append(list, func() {
-					a.pathSetting(c, "cmp-ref", T("Reference", "参考库"), T("Needed by HN, iPS and iHN; the same for both groups.", "HN、iPS、iHN 需要；两组使用同一个参考库。"),
-						&p.reference, pathFolder, nil, func() { a.setReference(p.reference) })
-				})
-				rows(c, list...)
+				list = append(list, a.referenceFact(c))
+				a.source(c, "cmp-ref", "reference", changeInReference(), list...)
 			})
-			section(c, T("Covariates", "协变量"),
-				T("Optional, e.g. age and sex. The table must list every image of both groups.", "可选，例如年龄和性别。表格须包含两组的全部图像。"), func() {
-					list := a.covRows(c, "cmp-cov", &p.cov, T("A TSV or CSV file, such as a BIDS participants.tsv.", "TSV 或 CSV 文件，例如 BIDS 的 participants.tsv。"))
-					if p.cov.table != nil {
-						list = append(list, func() {
-							a.pathSetting(c, "cmp-cov2", T("Second table", "第二个表格"), T("Only when the two groups are listed in separate tables.", "仅当两组分别记录在不同表格中时使用。"),
-								&p.covExtra, pathFile, tableFilter, nil)
-						})
-					}
-					rows(c, list...)
-				})
+			section(c, T("Covariates", "协变量"), T("The comparison adjusts for the columns chosen on the Data page; the table must list every image of both groups.", "按“数据”页面选定的列做校正；表格须包含两组的全部图像。"), func() {
+				a.source(c, "cmp-cov", "data", changeInData(), fact(c, T("Adjusted for", "校正的列"), a.covText()))
+			})
 			section(c, T("Output", "输出"), "", func() {
 				rows(c,
-					func() {
-						a.pathSetting(c, "cmp-out", T("Output folder", "输出文件夹"), "", &p.output, pathFolder, nil, nil)
-					},
+					fact(c, T("Written to", "输出位置"), a.writesTo(p.output)),
 					func() {
 						setting(c, T("Name of the result files", "结果文件名称"), "", func() { ui.TextInput(c, &p.name).Width(210) })
 					},
@@ -291,7 +252,7 @@ func (a *app) compareView(c *ui.Context) {
 				})
 			}
 		},
-		func() { a.runBar(c, "compare", p.problem(&a.opt), T("Compare", "开始比较"), &p.st, a.runCompare) },
+		func() { a.runBar(c, "compare", a.cmpProblem(), T("Compare", "开始比较"), &p.st, a.runCompare) },
 	)
 }
 
@@ -318,38 +279,16 @@ func (a *app) runCompare() {
 		}
 		opt.Mask = spec
 	}
-	if msg := p.cov.fresh(); msg != "" {
+	if msg := a.cov.fresh(); msg != "" {
 		p.st.err = msg
 		return
 	}
-	if p.cov.table != nil {
-		names := p.cov.names()
-		tables := []*core.Table{p.cov.table}
-		if p.covExtra != "" {
-			extra, err := core.LoadTable(p.covExtra)
-			if err != nil {
-				p.st.err = err.Error()
-				return
-			}
-			tables = append(tables, extra)
-		}
-		var found []map[string]string
-		for _, image := range append(append([]string(nil), g1...), g2...) {
-			var row map[string]string
-			var problems []string
-			for _, table := range tables {
-				got, err := table.Lookup([]string{image}, names)
-				if err == nil {
-					row = got[0]
-					break
-				}
-				problems = append(problems, err.Error())
-			}
-			if row == nil {
-				p.st.err = strings.Join(problems, "; ")
-				return
-			}
-			found = append(found, row)
+	if a.cov.table != nil {
+		names := a.cov.names()
+		found, err := a.cov.table.Lookup(append(append([]string(nil), g1...), g2...), names)
+		if err != nil {
+			p.st.err = err.Error()
+			return
 		}
 		opt.Covariates = core.CovariatesFromRows(found, names)
 	}

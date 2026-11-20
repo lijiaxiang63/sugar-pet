@@ -6,8 +6,56 @@ that version, so write it for the people who use the app.
 
 ## [Unreleased]
 
+### Added
+
+- **Projects.** The app now works on one project at a time. It opens with a
+  page to make a project, open one, or pick one opened lately; the pages of
+  the analyses appear once a project is open. A project is a folder, laid
+  out as the study folder was, with a file in it, `sugar-pet-project.json`,
+  that records the project: its images, what you chose on every page, the
+  options of the analyses, and what each step last did. It is written as you
+  work; there is nothing to save. Open the project again and every step is
+  where you left it, results included.
+- A **Data** page, the first of a project: the patients, the healthy
+  controls and the covariate table are given there once, and every other
+  page takes them from it. The pages no longer have lists of images, tables
+  or output folders of their own: each writes into its folder of the
+  project.
+- Images from outside the project folder either stay where they are (the
+  project notes where) or are copied into it, as you choose when you make
+  the project and can change on the Data page. What lies in the project
+  folder is recorded by where it is in it, so a project that holds its
+  images can be moved, or opened on another computer.
+- A project says whether its images are in MNI space or still in native
+  space. Native images are warped by Spatial Normalisation into the
+  `patients` and `controls` folders of the project, and the pages after it
+  read them from there.
+- The reference of a project is built from its controls or **imported**
+  from a folder built elsewhere, as when many projects share the controls of
+  one lab. The Reference page says which it is, and takes the project's own
+  back.
+- A step whose files are no longer in the project, or whose images changed
+  on disk since it ran, is not shown as done when the project is opened.
+- **New Project…**, **Open Project…** and **Close Project** in the File menu
+  (macOS). A project folder dropped on the opening page is opened.
+
 ### Changed
 
+- The options of the analyses (the settings window, all but *General* and
+  SPM and MATLAB) are kept in the project and no longer in the app: a new
+  project starts with the defaults. The window shows them while a project is
+  open.
+- The Study Folder page is gone: making a project lays out its folders. A
+  study folder of an earlier version is listed among the projects and is
+  made one when you open it: what it holds is kept, the images in
+  `patients` and `controls`, its reference and a filled-in
+  `participants.tsv` are taken into the project.
+- One covariate table serves the whole project. It is chosen on the Data
+  page, with the columns to adjust for; the reference, the W-score maps and
+  the group comparison all use it. Compare Groups no longer takes a second
+  table.
+- Compare Groups compares the patients of the project with its controls;
+  **Swap Groups** turns them round.
 - The individual analysis is three steps in a row: Intensity Normalisation,
   then Z-score Maps, then Classify Parkinsonism. A line of steps at the top
   of the three pages shows where you are and which steps are done, and a
@@ -40,20 +88,14 @@ that version, so write it for the people who use the app.
   option in the settings; when the maps were made with several methods, the
   page asks which one to classify by (HN unless you say otherwise). A
   `classify_method` kept in the settings is no longer used.
-- Compare Groups starts with the method chosen in Intensity Normalisation and
-  with the covariate table the reference was built with, until others are
-  chosen on its page.
+- Compare Groups starts with the method chosen in Intensity Normalisation,
+  until another is chosen on its page.
 
 ### Removed
 
 - The option **Write normalised images** of Intensity Normalisation: the
   images are always written, as the steps after it read them. A
   `write_images` kept in the settings is no longer used.
-
-### Added
-
-- Spatial Normalisation hands its images on to the Reference page as well:
-  **Use to Build a Reference**, for controls.
 
 ## [0.8.0] - 2026-11
 

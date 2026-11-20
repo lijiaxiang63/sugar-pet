@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -64,7 +65,20 @@ type app struct {
 	// seen is what onDisk last learnt of the files it was asked about.
 	seen map[seenKey]seenFile
 
-	study    studyPage
+	// proj is the project that is open, nil while none is: the window then
+	// shows where to make or open one (welcome).
+	proj    *project
+	welcome welcomePage
+	// leaving: the project is to be closed when the frame is drawn.
+	leaving bool
+	// recent are the folders of the projects opened lately, the last first.
+	recent []string
+	// cov is the covariate table of the project, which the reference, the
+	// maps and the group comparison all adjust by.
+	cov covChoice
+	// ranAt is when the last run of each page ended.
+	ranAt map[string]time.Time
+
 	spatial  spatialPage
 	norm     normPage
 	ref      refPage
@@ -78,28 +92,27 @@ type app struct {
 	saved        string // the settings as last written
 }
 
-// settings is what the app remembers between launches.
+// settings is what the app remembers between launches: what is of this
+// computer and not of a project.  The rest is in the file of each project.
 type settings struct {
-	Language   string   `json:"language"`
-	Page       string   `json:"page"`
-	Reference  string   `json:"reference"`
-	Study      string   `json:"study,omitempty"`
-	Output     string   `json:"output"`
+	Language string `json:"language"`
+	// Project is the project that was open, which is opened again; Recent
+	// are those opened lately; Projects is where the last one was made.
+	Project    string   `json:"project,omitempty"`
+	Recent     []string `json:"recent_projects,omitempty"`
+	Projects   string   `json:"projects_folder,omitempty"`
 	SPM        string   `json:"spm,omitempty"`
 	Matlab     string   `json:"matlab,omitempty"`
 	AllMethods bool     `json:"all_methods,omitempty"`
-	Options    *options `json:"options,omitempty"`
+	// Study is the study folder an earlier version wrote into: it is listed
+	// among the projects, and made one when it is opened.
+	Study string `json:"study,omitempty"`
 }
 
 func newApp() *app {
-	a := &app{page: "normalize", opt: defaultOptions()}
-	a.study.init()
-	a.norm.init()
-	a.ref.init()
-	a.zmap.init()
-	a.classify.init()
-	a.cmp.init()
-	a.cluster.init()
+	a := &app{}
+	a.resetPages()
+	a.welcome.init()
 	return a
 }
 
@@ -113,15 +126,9 @@ func (a *app) loadSettings() {
 	if err != nil {
 		return
 	}
-	// What the file leaves out stays as the app first has it.
-	opt := defaultOptions()
-	s := settings{Options: &opt}
+	var s settings
 	if json.Unmarshal(raw, &s) != nil {
 		return
-	}
-	if s.Options != nil {
-		a.opt = *s.Options
-		a.opt.sound()
 	}
 	switch s.Language {
 	case "zh":
@@ -129,29 +136,29 @@ func (a *app) loadSettings() {
 	case "en":
 		chinese = false
 	}
-	for _, p := range pages {
-		if p.id == s.Page {
-			a.page = s.Page
-		}
-	}
-	if s.Reference != "" {
-		if _, err := os.Stat(filepath.Join(s.Reference, "reference.json")); err == nil {
-			a.setReference(s.Reference)
-		}
-	}
-	a.restoreStudy(s.Study)
 	a.allMethods = s.AllMethods
 	a.spatial.setSPM(s.SPM)
 	if _, err := core.ResolveMatlab(s.Matlab); err == nil {
 		a.spatial.matlab = s.Matlab
+	}
+	a.recent, a.welcome.parent = s.Recent, s.Projects
+	if s.Study != "" && !slices.Contains(a.recent, s.Study) {
+		a.recent = append(a.recent, s.Study)
+	}
+	// The project that was open is open again, if it can still be reached.
+	if s.Project != "" && isProject(s.Project) {
+		a.openProject(s.Project)
 	}
 	a.saved = a.settingsText()
 }
 
 // settingsText is what the app remembers between launches, as it is now.
 func (a *app) settingsText() string {
-	s := settings{Language: "en", Page: a.page, Reference: a.norm.reference, Study: a.study.kept(), SPM: a.spatial.spm, Matlab: a.spatial.matlab,
-		AllMethods: a.allMethods, Options: &a.opt}
+	s := settings{Language: "en", Recent: a.recent, Projects: a.welcome.parent, SPM: a.spatial.spm, Matlab: a.spatial.matlab,
+		AllMethods: a.allMethods}
+	if a.proj != nil && !a.proj.unsaved {
+		s.Project = a.proj.dir
+	}
 	if chinese {
 		s.Language = "zh"
 	}
@@ -195,7 +202,7 @@ type pageInfo struct {
 }
 
 var pages = []pageInfo{
-	{"study", "Study Folder", "研究文件夹", iconFolder},
+	{"data", "Data", "数据", iconFolder},
 	{"spatial", "Spatial Normalisation", "空间标准化", iconWarp},
 	{"reference", "Reference", "参考库", iconLayers},
 	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
@@ -212,7 +219,8 @@ var navGroups = []struct {
 	title label
 	pages []string
 }{
-	{label{"Prepare", "准备与建库"}, []string{"study", "spatial", "reference"}},
+	{label{"Project", "项目"}, []string{"data"}},
+	{label{"Prepare", "准备与建库"}, []string{"spatial", "reference"}},
 	{label{"Individual", "个案分析"}, []string{"normalize", "zmap", "classify"}},
 	{label{"Group", "组水平统计"}, []string{"compare", "cluster"}},
 	{label{"Resources", "资源"}, []string{"masks"}},
@@ -231,6 +239,8 @@ func pageInfoOf(id string) pageInfo {
 // pageCount returns the number of input images queued on a page.
 func (a *app) pageCount(id string) int {
 	switch id {
+	case "data":
+		return len(a.proj.patients.files) + len(a.proj.controls.files)
 	case "spatial":
 		return len(a.spatial.files.files)
 	case "reference":
@@ -267,14 +277,21 @@ func (a *app) view(c *ui.Context) {
 		wash = wash.Alpha(0.86)
 	}
 	c.Root().Background(wash)
-	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
+	if a.proj == nil {
+		a.welcomeView(c)
+		a.saveSettings()
+		return
+	}
+	a.feed()
+	a.cov.sync(c.Now()) // the table may be filled in with another program
+	ui.Row(c.Key("project")).Fill().AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(sidebarWidth).Shrink(0).Children(func() { a.sidebar(c) })
 		ui.Column(c).Grow(1).MinWidth(0).Padding(cardGap, cardGap, cardGap, 0).Children(func() {
 			pane := ui.Column(c).Grow(1).MinHeight(0).Radius(12).Background(pal.card).Clip()
 			raised(pane, pal).Children(func() {
 				switch a.page {
-				case "study":
-					a.studyView(c)
+				case "data":
+					a.dataView(c)
 				case "spatial":
 					a.spatialView(c)
 				case "normalize":
@@ -295,7 +312,15 @@ func (a *app) view(c *ui.Context) {
 			})
 		})
 	})
+	if a.leaving { // Close Project was pressed in this frame
+		a.leaving = false
+		a.closeProject()
+		a.saveSettings()
+		a.redraw()
+		return
+	}
 	// What changed is kept, and shows in the settings window.
+	a.saveProject()
 	if a.saveSettings() && a.settingsWin != nil {
 		a.settingsWin.Invalidate()
 	}
@@ -306,14 +331,14 @@ func (a *app) view(c *ui.Context) {
 // still stands on what is before it, as the line of steps on its page says.
 func (a *app) done(page string) bool {
 	switch page {
-	case "study":
-		return a.study.st.ok != ""
+	case "data":
+		return a.dataProblem() == ""
 	case "spatial":
-		return a.spatial.st.ok != ""
+		return a.spatial.st.ok != "" && a.spatialDone()
 	case "normalize":
 		return a.norm.st.ok != "" && a.stepDone(page)
-	case "reference":
-		return a.ref.st.ok != ""
+	case "reference": // built here, or imported
+		return a.norm.reference != ""
 	case "zmap":
 		return a.zmap.st.ok != "" && a.stepDone(page)
 	case "classify":
@@ -372,6 +397,7 @@ func (a *app) sidebar(c *ui.Context) {
 			ui.Text(c, T("FDG-PET normalisation", "FDG-PET 强度归一化")).FontSize(11).TextColor(pal.muted).SingleLine()
 		})
 	})
+	a.projectChip(c)
 	page := a.page
 	ui.Scroll(c.Key("nav")).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(0, 10, 8, 10).Gap(1.5).Children(func() {
@@ -385,28 +411,8 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 	a.page = page
 
-	// The active study, reference in use, and settings.
+	// The reference in use, and the settings.
 	ui.Column(c).Padding(6, 10, 10, 10).Gap(5).Shrink(0).Children(func() {
-		if study := a.study.inUse; study != "" {
-			sbox := ui.ButtonBase(c.Key("study-chip")).Padding(7, 10).Radius(10).Gap(9).AlignItems(ui.Center).
-				Label(T("Active study", "当前研究"))
-			sbg := pal.text.Alpha(0.04)
-			if sbox.Hovered() {
-				sbg = pal.text.Alpha(0.075)
-			}
-			sbox.Background(sbox.AnimateColor("bg", sbg, quick)).InsetShadow(0, 0, 0, 1, pal.border).Tooltip(study).Children(func() {
-				ui.Box(c).Size(24, 24).Radius(6).Center().Shrink(0).Background(pal.success.Alpha(0.14)).Children(func() {
-					ui.Icon(c, iconFolder).Size(13, 13).TextColor(pal.success)
-				})
-				ui.Column(c).Gap(0.5).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, T("Study", "研究文件夹")).FontSize(10).TextColor(pal.muted).SingleLine()
-					ui.Text(c, filepath.Base(study)).FontSize(12).FontWeight(500).SingleLine().Ellipsis("…")
-				})
-			})
-			if sbox.Clicked() {
-				a.page = "study"
-			}
-		}
 		ref := a.norm.reference
 		box := ui.ButtonBase(c.Key("ref-chip")).Padding(7, 10).Radius(10).Gap(9).AlignItems(ui.Center).
 			Label(T("Reference in use", "当前参考库"))
@@ -427,7 +433,7 @@ func (a *app) sidebar(c *ui.Context) {
 				if ref != "" {
 					ui.Text(c, filepath.Base(ref)).FontSize(12).FontWeight(500).SingleLine().Ellipsis("…")
 				} else {
-					ui.Text(c, T("Choose…", "点击选择…")).FontSize(12).FontWeight(500).TextColor(pal.muted).SingleLine()
+					ui.Text(c, T("None yet", "尚未建立")).FontSize(12).FontWeight(500).TextColor(pal.muted).SingleLine()
 				}
 			})
 			if ref != "" {
@@ -437,10 +443,10 @@ func (a *app) sidebar(c *ui.Context) {
 		if ref != "" {
 			box.Tooltip(ref)
 		} else {
-			box.Tooltip(T("Choose a reference folder built from healthy controls", "选择由健康对照建立的参考库文件夹"))
+			box.Tooltip(T("Build a reference from the controls of the project, or import one", "用项目的健康对照建立参考库，或导入已有的参考库"))
 		}
 		if box.Clicked() {
-			a.chooseReference()
+			a.page = "reference"
 		}
 		// The settings, with the version, or the new one there is.
 		title := T("Settings", "设置")
@@ -468,13 +474,14 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 }
 
-// chooseReference asks for a reference folder and uses it everywhere.
+// chooseReference asks for a reference built elsewhere and uses it in the
+// project, in place of one built from the project's own controls.
 func (a *app) chooseReference() {
-	a.pick(pickOptions{Title: T("Choose a reference folder", "选择参考库文件夹"), Directory: true}, func(paths []string) {
+	a.pick(pickOptions{Title: T("Import a reference folder", "导入参考库文件夹"), Directory: true}, func(paths []string) {
 		if _, err := os.Stat(filepath.Join(paths[0], "reference.json")); err != nil {
 			a.alert(T("Not a reference folder", "不是参考库文件夹"),
-				T("The folder has no reference.json. Build a reference from healthy controls on the Reference page.",
-					"该文件夹中没有 reference.json。请先在“参考库”页面用健康对照建立参考库。"))
+				T("The folder has no reference.json: it is not a reference built by SUGAR-PET or by sugar-pet build-reference.",
+					"该文件夹中没有 reference.json：它不是由 SUGAR-PET 或 sugar-pet build-reference 建立的参考库。"))
 			return
 		}
 		a.setReference(paths[0])
@@ -553,6 +560,10 @@ func (a *app) start(page, label string, work func(ctx context.Context, step func
 		}()
 		a.update(func() {
 			a.job = nil
+			if a.ranAt == nil {
+				a.ranAt = map[string]time.Time{}
+			}
+			a.ranAt[page] = time.Now()
 			cancelled := ctx.Err() != nil
 			cancel()
 			// However the run ended, it may have written over the files the

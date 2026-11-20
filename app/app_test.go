@@ -210,10 +210,12 @@ func TestWorkflow(t *testing.T) {
 	}
 	chinese = true
 	defer func() { chinese = false }()
-	dir := t.TempDir()
-	hc, pt, table := makeImages(t, filepath.Join(dir, "data"), 12, 8)
+	hc, pt, table := makeImages(t, filepath.Join(t.TempDir(), "data"), 12, 8)
 
-	a := newApp()
+	// A project, with the images where they are.
+	a := testProject(t)
+	dir := a.proj.dir
+	a.proj.patients.files, a.proj.controls.files = pt, hc
 	queue := make(chan func(), 256)
 	a.post = func(fn func()) { queue <- fn }
 	tt := ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
@@ -278,11 +280,10 @@ func TestWorkflow(t *testing.T) {
 	}
 
 	// The reference, with the cerebellum's statistics and W-scores.
-	ref := filepath.Join(dir, "reference")
-	a.ref.files.files, a.ref.output = hc, ref
+	ref := filepath.Join(dir, "hc_reference")
 	a.opt.RefStatsFor["cerebellum"] = true
-	a.ref.cov.path = table
-	a.ref.cov.load()
+	a.cov.path = table
+	a.cov.load()
 	press("reference", "建立参考库", &a.ref.st)
 	exists(filepath.Join(ref, "reference.json"))
 	if a.norm.reference != ref || a.cmp.reference != ref {
@@ -295,7 +296,6 @@ func TestWorkflow(t *testing.T) {
 	drawn(&a.ref.pic)
 
 	// The steps after the first wait for it, and say so.
-	a.zmap.output, a.classify.output = filepath.Join(dir, "zmaps"), filepath.Join(dir, "reports")
 	for _, page := range []string{"zmap", "classify"} {
 		a.page = page
 		tt.Frame()
@@ -306,7 +306,6 @@ func TestWorkflow(t *testing.T) {
 
 	// Step 1: normalisation by two methods.
 	out := filepath.Join(dir, "normalised")
-	a.norm.files.files, a.norm.output = pt, out
 	a.norm.methods = map[string]bool{"hn": true, "cerebellum": true}
 	press("normalize", "开始强度归一化", &a.norm.st)
 	if len(a.norm.rows) != 2*len(pt) {
@@ -384,7 +383,6 @@ func TestWorkflow(t *testing.T) {
 	// Step 2: W-score maps of the images of step 1, by its methods, which
 	// are shown and not asked for again.
 	zdir := filepath.Join(dir, "zmaps")
-	a.zmap.covTable = table
 	tt.Frame()
 	if !tt.HasText("来自第 1 步") || !tt.HasText("返回第 1 步修改") || tt.HasText("添加文件…") {
 		t.Fatalf("step 2 does not show what it takes from step 1: %q", tt.Texts())
@@ -515,11 +513,40 @@ func TestWorkflow(t *testing.T) {
 	}
 	a.classify.main = ""
 
+	// The project opened again is where it was left: the three steps done,
+	// with what they showed, and nothing to run anew.
+	tt.Frame()
+	again := newApp()
+	if err := again.openProject(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range flowSteps {
+		if !again.stepDone(step) || !again.done(step) {
+			t.Fatalf("in the project opened again step %s is not done (step 1 changed: %q)", step, again.normChanged())
+		}
+	}
+	if len(again.norm.rows) != len(a.norm.rows) || len(again.zmap.rows) != len(a.zmap.rows) || len(again.classify.rows) != len(pt) ||
+		again.norm.reference != ref || again.classify.rows[0].reading != a.classify.rows[0].reading {
+		t.Fatalf("the project opened again does not show what the steps did: %d, %d and %d rows, reference %q",
+			len(again.norm.rows), len(again.zmap.rows), len(again.classify.rows), again.norm.reference)
+	}
+	// An image of step 1 changed on disk since: it is not what was normalised.
+	if err := os.Chtimes(pt[0], time.Time{}, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	changed := newApp()
+	if err := changed.openProject(dir); err != nil {
+		t.Fatal(err)
+	}
+	if changed.stepDone("normalize") || !strings.Contains(changed.normChanged(), "图像") {
+		t.Fatalf("with an image changed since step 1 ran, step 1 is still done: %q", changed.normChanged())
+	}
+	if err := os.Chtimes(pt[0], time.Time{}, time.Unix(0, a.norm.done.stamps[pt[0]].modified)); err != nil {
+		t.Fatal(err)
+	}
+
 	// The patients against the controls: the cortex takes up less.
-	cmp := filepath.Join(dir, "compare")
-	a.cmp.g1.files, a.cmp.g2.files, a.cmp.output, a.cmp.method = pt, hc, cmp, "cerebellum"
-	a.cmp.cov.path = table
-	a.cmp.cov.load()
+	a.cmp.method = "cerebellum"
 	press("compare", "开始比较", &a.cmp.st)
 	res := a.cmp.result
 	if res == nil || !res.Corrected || res.NClusters == 0 || len(res.Clusters) == 0 {
@@ -547,8 +574,7 @@ func TestWorkflow(t *testing.T) {
 	}
 
 	// The reference cluster: the cerebellum, which the disease spares.
-	mask := filepath.Join(dir, "cluster.nii.gz")
-	a.cluster.files.files, a.cluster.output = pt, mask
+	mask := filepath.Join(dir, "reference_cluster.nii.gz")
 	press("cluster", "查找参考簇", &a.cluster.st)
 	if a.cluster.volume < 20 {
 		t.Fatalf("the reference cluster has %g mL", a.cluster.volume)
@@ -630,7 +656,8 @@ func TestCovariateTable(t *testing.T) {
 		}
 	}
 
-	a := newApp()
+	a := testProject(t)
+	a.proj.patients.files, a.proj.controls.files = pt, hc
 	queue := make(chan func(), 256)
 	a.post = func(fn func()) { queue <- fn }
 	tt := ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
@@ -681,10 +708,11 @@ func TestCovariateTable(t *testing.T) {
 		}
 	}
 
-	// The table as first chosen: other people, and a column for the site.
-	cv := &a.ref.cov
+	// The table as first chosen, on the Data page: other people, and a
+	// column for the site.
+	cv := &a.cov
 	write([]string{"age", "sex", "site"}, []string{"sub-xx00", "sub-xx01", "sub-xx02", "sub-xx03"})
-	a.page, a.ref.files.files, a.ref.output = "reference", hc, filepath.Join(dir, "reference")
+	a.page = "data"
 	cv.path = table
 	cv.load()
 	tt.Frame()
@@ -718,6 +746,7 @@ func TestCovariateTable(t *testing.T) {
 	if len(cv.table.Rows) != len(people)-1 {
 		t.Fatal("the page has read the file already")
 	}
+	a.page = "reference"
 	run("建立参考库", &a.ref.st)
 	if got := readRefInfo(a.ref.output).covariateNames(); fmt.Sprint(got) != "[bmi age]" {
 		t.Fatalf("the reference adjusts for %v", got)
@@ -736,6 +765,7 @@ func TestCovariateTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	refused("建立参考库", &a.ref.st, "无法读取协变量表")
+	a.page = "data"
 	later()
 	if cv.table != nil || cv.err == "" || !tt.HasText(cv.err) {
 		t.Fatalf("the page does not say that the file is gone: %q, %q", cv.err, tt.Texts())
@@ -772,13 +802,10 @@ func TestCovariateTable(t *testing.T) {
 	}
 	ticks(cv, map[string]bool{"age": true})
 
-	// The Compare Groups page keeps its table the same way.
-	cv = &a.cmp.cov
+	// The comparison of the groups adjusts by the same table, read anew.
 	write([]string{"age", "sex"}, but("sub-pt02"))
-	a.page, a.cmp.g1.files, a.cmp.g2.files, a.cmp.output, a.cmp.method = "compare", pt, hc, filepath.Join(dir, "compare"), "cerebellum"
-	cv.path = table
-	cv.load()
-	tt.Frame()
+	later()
+	ticks(cv, map[string]bool{"age": true, "sex": true})
 	tt.Scroll(640, 400, 0, 900)
 	click("sex")
 	write([]string{"age", "sex", "bmi"}, people)
@@ -786,6 +813,7 @@ func TestCovariateTable(t *testing.T) {
 	if len(cv.table.Rows) != len(people)-1 {
 		t.Fatal("the page has read the file already")
 	}
+	a.page, a.cmp.method = "compare", "cerebellum"
 	run("开始比较", &a.cmp.st)
 	if res := a.cmp.result; res == nil || res.DOF != float64(len(people)-3) {
 		t.Fatalf("the comparison is not adjusted for age alone: %+v", res)
@@ -795,10 +823,12 @@ func TestCovariateTable(t *testing.T) {
 	// The made-up table of the screenshots has no file, and stays.
 	a = newApp()
 	a.demo()
-	a.page = "reference"
+	a.page = "data"
 	tt = ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
 	later()
-	if a.ref.cov.table == nil || !tt.HasText("共 28 行") {
+	tt.Scroll(640, 400, 0, 900)
+	tt.Frame()
+	if a.cov.table == nil || !tt.HasText("共 22 行") {
 		t.Fatalf("the table of the screenshots is gone: %q", tt.Texts())
 	}
 }
@@ -835,28 +865,40 @@ done
 	return spm, matlab
 }
 
-// TestSpatial warps images on the Spatial Normalisation page, with a
-// stand-in for MATLAB, and hands them to the Intensity Normalisation page.
+// TestSpatial warps the images of a project in native space on the Spatial
+// Normalisation page, with a stand-in for MATLAB: what is warped is written
+// into the folders of the groups, and is what the pages after it read.
 func TestSpatial(t *testing.T) {
 	dir := t.TempDir()
 	spm, matlab := fakeSPM(t, dir)
 	_, pt, _ := makeImages(t, filepath.Join(dir, "raw"), 0, 3)
 
-	a := newApp()
+	a := testProject(t)
 	queue := make(chan func(), 256)
 	a.post = func(fn func()) { queue <- fn }
 	a.page = "spatial"
 	tt := ui.NewTesterWith(a.view, 1060, 740, ui.TesterOptions{})
 	tt.Frame()
 	p := &a.spatial
-	out := filepath.Join(dir, "mni")
-	p.files.files, p.output, p.matlab, a.opt.Jobs = pt, out, matlab, 2
+	// Images in MNI space need no warp: the page says so, and leads back.
+	a.proj.patients.files, a.proj.controls.files = pt[:2], pt[2:]
+	tt.Frame()
+	if msg := a.spatialProblem(); msg != notNative() || a.remedy("spatial", msg) != "data" || len(p.files.files) != 0 {
+		t.Fatalf("a project of images in MNI space: %q, %d images to warp", msg, len(p.files.files))
+	}
+	a.proj.native = true
+	p.matlab, a.opt.Jobs = matlab, 2
+	tt.Frame()
+	// Nothing is read by the pages after this one until it is warped.
+	if len(a.norm.files.files) != 0 || len(a.ref.files.files) != 0 || a.normProblem() == "" || a.remedy("normalize", a.normProblem()) != "spatial" {
+		t.Fatalf("images in native space are read before they are warped: %v, %q", a.norm.files.files, a.normProblem())
+	}
 	p.setSPM(dir)
-	if p.problem() == "" {
+	if a.spatialProblem() == "" {
 		t.Fatal("a folder that is not SPM was taken for SPM")
 	}
 	p.setSPM(spm)
-	if msg := p.problem(); msg != "" {
+	if msg := a.spatialProblem(); msg != "" {
 		t.Fatal(msg)
 	}
 	tt.Frame()
@@ -881,8 +923,11 @@ func TestSpatial(t *testing.T) {
 	if want := "sub-pt01_pet.nii.gz: SPM: the image would not fit"; p.notes[0] != want {
 		t.Fatalf("note %q, want %q", p.notes[0], want)
 	}
-	if want := filepath.Join(out, "sub-pt00_space-MNI_pet.nii.gz"); p.written[0] != want {
+	if want := a.proj.in(filepath.Join("patients", "sub-pt00_space-MNI_pet.nii.gz")); p.written[0] != want {
 		t.Fatalf("written %q, want %q", p.written[0], want)
+	}
+	if want := a.proj.in(filepath.Join("controls", "sub-pt02_space-MNI_pet.nii.gz")); p.written[1] != want {
+		t.Fatalf("the control was written as %q, want %q", p.written[1], want)
 	}
 	// The stand-in does not warp: the image is the prepared one, cropped
 	// around the head with the brain's centre moved to that of MNI space.
@@ -910,37 +955,30 @@ func TestSpatial(t *testing.T) {
 			t.Fatalf("the brain's centre is at %g mm on axis %d, want about %g", got, r, want)
 		}
 	}
-	// The picture of the first image that was warped, then, further down the
-	// results, the button that hands them on.
+	// The picture is of the first image that was warped.
 	if p.shown != 0 || p.pic.key != p.written[0] {
 		t.Fatalf("the picture is of row %d, %q", p.shown, p.pic.key)
 	}
-	tt.Scroll(640, 400, 0, 900)
+	// The pages after this one read what was warped, each of its group: the
+	// patient that failed is left out, and the page is not done.
 	tt.Frame()
-	if err := tt.Click("Use for Intensity Normalisation"); err != nil {
+	if !slices.Equal(a.norm.files.files, p.written[:1]) || !slices.Equal(a.ref.files.files, p.written[1:]) || a.spatialDone() || a.done("spatial") {
+		t.Fatalf("the warped images were not handed on: patients %v, controls %v", a.norm.files.files, a.ref.files.files)
+	}
+	// The project opened again knows what was warped.
+	again := newApp()
+	if err := again.openProject(a.proj.dir); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
-	if a.page != "normalize" || len(a.norm.files.files) != 2 || a.norm.files.files[0] != p.written[0] {
-		t.Fatalf("the warped images were not handed on: page %s, files %v", a.page, a.norm.files.files)
-	}
-	// Controls go on to the reference, in place of what its list held.
-	a.page = "spatial"
-	a.ref.files.files = []string{"/elsewhere/sub-old_pet.nii.gz"}
-	tt.Frame()
-	if err := tt.Click("Use to Build a Reference"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.page != "reference" || !slices.Equal(a.ref.files.files, p.written) {
-		t.Fatalf("the warped controls were not handed on: page %s, files %v", a.page, a.ref.files.files)
+	if !slices.Equal(again.norm.files.files, p.written[:1]) || len(again.spatial.rows) != 3 || !again.spatial.rows[1].failed {
+		t.Fatalf("the project opened again reads %v, rows %+v", again.norm.files.files, again.spatial.rows)
 	}
 
-	// Two images that would be written under one name.
-	a.page = "spatial"
+	// Two images of a group that would be written under one name.
 	other := filepath.Join(dir, "other", filepath.Base(pt[0]))
-	p.files.files = []string{pt[0], other}
-	if p.problem() == "" {
+	a.proj.patients.files = []string{pt[0], other}
+	a.feed()
+	if a.spatialProblem() == "" {
 		t.Fatal("two images with one output name were accepted")
 	}
 }
@@ -949,6 +987,7 @@ func TestSpatial(t *testing.T) {
 // appearances.
 func TestPages(t *testing.T) {
 	defer func() { chinese = false }()
+	empty := t.TempDir()
 	for _, chinese = range []bool{false, true} {
 		for _, filled := range []bool{false, true} {
 			for _, dark := range []bool{false, true} {
@@ -956,6 +995,9 @@ func TestPages(t *testing.T) {
 					a := newApp()
 					if filled {
 						a.demo()
+					} else {
+						a.proj = &project{dir: empty, name: "Empty", unsaved: true}
+						a.projectOutputs()
 					}
 					a.page = p.id
 					tt := ui.NewTesterWith(a.view, 860, 560, ui.TesterOptions{Dark: dark})
@@ -1031,7 +1073,7 @@ func TestSettings(t *testing.T) {
 	}
 	chinese = false
 
-	a := newApp()
+	a := testProject(t)
 	a.openSettings("compare") // without a window it only chooses the section
 	if a.settingsPage != "compare" {
 		t.Fatalf("section %q, want compare", a.settingsPage)
@@ -1069,21 +1111,20 @@ func TestSettings(t *testing.T) {
 	chinese = false
 }
 
-// TestOptionsKept checks that the options survive a launch, that a file of
-// an older version leaves the rest as the app first has it, and that
+// TestOptionsKept checks that the options are kept in the project, that a
+// file of an older version leaves the rest as the app first has it, and that
 // values no run could use are not taken.
 func TestOptionsKept(t *testing.T) {
-	a := newApp()
+	a := testProject(t)
 	a.opt.Target, a.opt.Statistic, a.opt.Correction, a.opt.Q = 50, 1, 1, 0.01
 	a.opt.RefStatsFor["white-matter"] = true
-	text := a.settingsText()
+	a.saveProject()
 
-	opt := defaultOptions()
-	s := settings{Options: &opt}
-	if err := json.Unmarshal([]byte(text), &s); err != nil {
+	b := newApp()
+	if err := b.openProject(a.proj.dir); err != nil {
 		t.Fatal(err)
 	}
-	opt.sound()
+	opt := b.opt
 	if opt.Target != 50 || opt.Statistic != 1 || opt.Correction != 1 || opt.Q != 0.01 || !opt.RefStatsFor["white-matter"] {
 		t.Fatalf("read back %+v", opt)
 	}
@@ -1094,23 +1135,27 @@ func TestOptionsKept(t *testing.T) {
 	if got := opt.changed(groupNormalize, groupCompare, groupReference, groupIterative, groupSpatial, groupClassify, groupCluster); len(got) != 0 {
 		t.Fatalf("still changed after restoring: %v", got)
 	}
+	// Another project has the options the app first has, not those of this one.
+	c := testProject(t)
+	if got := c.opt.changed(groupNormalize, groupCompare, groupReference); len(got) != 0 {
+		t.Fatalf("a new project has the options of another: %v", got)
+	}
 
-	// A file written before the options were kept, and one with nonsense.
-	opt = defaultOptions()
-	s = settings{Options: &opt}
-	if err := json.Unmarshal([]byte(`{"language": "zh", "options": {"target": -3, "reference_mask": "nowhere", "voxel_p": 0}}`), &s); err != nil {
+	// A file that says little of the options, and one with nonsense.
+	s := projectState{Options: defaultOptions()}
+	if err := json.Unmarshal([]byte(`{"name": "old", "options": {"target": -3, "reference_mask": "nowhere", "voxel_p": 0}}`), &s); err != nil {
 		t.Fatal(err)
 	}
+	opt = s.Options
 	opt.sound()
 	d := defaultOptions()
 	if opt.Target != d.Target || opt.RefMask != d.RefMask || opt.VoxelP != d.VoxelP || opt.FWHM != d.FWHM {
 		t.Fatalf("unsound options were taken: %+v", opt)
 	}
-
 	// Every page that has options says which are in effect.
 	for _, p := range pages {
 		// Z-score Maps has none of its own: it takes what step 1 normalised.
-		if p.id == "study" || p.id == "masks" || p.id == "zmap" {
+		if p.id == "data" || p.id == "masks" || p.id == "zmap" {
 			continue
 		}
 		if d.summary(p.id) == "" {
@@ -1154,438 +1199,18 @@ func TestPicture(t *testing.T) {
 	}
 }
 
-// TestStudy lays out a study folder with the button of the page, twice:
-// what is there the second time is kept.
-func TestStudy(t *testing.T) {
-	// The folder itself: the pages are given no links.
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := newApp()
-	a.page = "study"
-	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
-	tt.Frame()
-	if tt.HasText("Created") || a.study.problem() == "" {
-		t.Fatal("the page is ready before a place is chosen")
-	}
-	a.study.parent = dir
-	tt.Frame()
-	if err := tt.Click("Create Folders"); err != nil {
-		t.Fatalf("%v (shown: %q)", err, tt.Texts())
-	}
-	tt.Frame()
-	study := filepath.Join(dir, "study")
-	for _, e := range core.StudyLayout {
-		if info, err := os.Stat(filepath.Join(study, e.Name)); err != nil || info.IsDir() != e.Dir {
-			t.Errorf("%s was not created", e.Name)
-		}
-	}
-	if a.study.st.err != "" || !tt.HasText(a.study.st.ok) || !tt.HasText("Created") || tt.HasText("Already there") {
-		t.Fatalf("after creating: %q, shown: %q", a.study.st, tt.Texts())
-	}
-	// The pages now write into the study; Spatial Normalisation is left alone.
-	outputs := map[string]string{"hc_reference": a.ref.output, "normalised": a.norm.output, "zmaps": a.zmap.output,
-		"reports": a.classify.output, "compare": a.cmp.output, "reference_cluster.nii.gz": a.cluster.output}
-	for name, got := range outputs {
-		if got != filepath.Join(study, name) {
-			t.Errorf("the output for %s is %q", name, got)
-		}
-	}
-	if a.spatial.output != "" || a.norm.reference != "" {
-		t.Errorf("set although the study says nothing of it: %q, %q", a.spatial.output, a.norm.reference)
-	}
-	// The study is kept between launches, and used again while it is there.
-	var kept settings
-	if err := json.Unmarshal([]byte(a.settingsText()), &kept); err != nil || kept.Study != study {
-		t.Fatalf("kept the study as %q (%v)", kept.Study, err)
-	}
-	// The reference is the one the app kept, also when that is none: the
-	// study's own is not put in its place.
-	os.WriteFile(filepath.Join(study, "hc_reference", "reference.json"), []byte("{}"), 0o644)
-	b := newApp()
-	b.restoreStudy(kept.Study)
-	if b.zmap.output != filepath.Join(study, "zmaps") || b.study.parent != dir || b.study.name != "study" || b.norm.reference != "" {
-		t.Errorf("after a new launch: %q, %q, %q, %q", b.zmap.output, b.study.parent, b.study.name, b.norm.reference)
-	}
-	// A study that cannot be reached is not used, but kept in mind: it is
-	// used again once it can be, and what the settings hold of it goes when
-	// another study is used.
-	gone := filepath.Join(dir, "gone")
-	b = newApp()
-	b.restoreStudy(gone)
-	if b.zmap.output != "" || b.study.inUse != "" {
-		t.Error("a study folder that is gone is used")
-	}
-	if err := json.Unmarshal([]byte(b.settingsText()), &kept); err != nil || kept.Study != gone {
-		t.Errorf("a study that cannot be reached is forgotten: kept %q (%v)", kept.Study, err)
-	}
-	b.opt.RefMaskFile, b.opt.AnalysisFile = filepath.Join(gone, "mask.nii.gz"), filepath.Join(dir, "elsewhere", "mask.nii.gz")
-	b.useStudy(study)
-	if b.opt.RefMaskFile != "" || b.opt.AnalysisFile == "" || b.study.last != "" {
-		t.Errorf("after leaving a study that cannot be reached: masks %q (its own), %q (from elsewhere)", b.opt.RefMaskFile, b.opt.AnalysisFile)
-	}
-	os.Remove(filepath.Join(study, "hc_reference", "reference.json"))
-	table := filepath.Join(study, "participants.tsv")
-	os.WriteFile(table, []byte(core.ParticipantsHeader+"sub-01\t60\tF\n"), 0o644)
-	if err := tt.Click("Create Folders"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if text, _ := os.ReadFile(table); !strings.Contains(string(text), "sub-01") {
-		t.Error("the table that was filled was written over")
-	}
-	if !tt.HasText("Already there") || tt.HasText("Created") {
-		t.Errorf("after creating again, shown: %q", tt.Texts())
-	}
-	// Another name is another folder: nothing is said of it yet, and the
-	// page says where the pages still write.
-	ready := a.study.st.ok
-	a.study.name = "other"
-	tt.Frame()
-	if tt.HasText("Already there") || tt.HasText(ready) || a.study.st.ok != "" {
-		t.Errorf("a folder not laid out yet is spoken of as ready, shown: %q", tt.Texts())
-	}
-	if a.zmap.output != filepath.Join(study, "zmaps") || !strings.Contains(strings.Join(tt.Texts(), "\n"), "The pages still write into "+shortDir(study)+".") {
-		t.Errorf("not said where the pages still write, shown: %q", tt.Texts())
-	}
-	// With no folder chosen, it is still said where the pages write.
-	a.study.name = ""
-	tt.Frame()
-	if !tt.HasText("The pages write into " + shortDir(study) + ".") {
-		t.Errorf("with no folder chosen, not said where the pages write, shown: %q", tt.Texts())
-	}
-	// A run that fails takes back what an earlier run of the folder showed.
-	a.study.name = "study"
-	tt.Frame()
-	os.Remove(filepath.Join(study, "zmaps"))
-	os.WriteFile(filepath.Join(study, "zmaps"), nil, 0o644)
-	if err := tt.Click("Create Folders"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.study.st.err == "" || tt.HasText("Already there") || tt.HasText("Created") {
-		t.Errorf("after a run that failed (%q), shown: %q", a.study.st.err, tt.Texts())
-	}
-	os.Remove(filepath.Join(study, "zmaps"))
-
-	// The reference follows the study: with the study's own in use, another
-	// study brings its own or none; one chosen from elsewhere is kept.
-	reference := func(dir string) string {
-		ref := filepath.Join(dir, "hc_reference")
-		os.MkdirAll(ref, 0o755)
-		os.WriteFile(filepath.Join(ref, "reference.json"), []byte("{}"), 0o644)
-		return ref
-	}
-	one, two, three := filepath.Join(dir, "one"), filepath.Join(dir, "two"), filepath.Join(dir, "three")
-	refOne, refTwo := reference(one), reference(two)
-	os.MkdirAll(three, 0o755)
-	c := newApp()
-	c.useStudy(one)
-	if c.norm.reference != refOne {
-		t.Fatalf("the reference of the study is not used: %q", c.norm.reference)
-	}
-	c.useStudy(two)
-	if c.norm.reference != refTwo || c.classify.reference != refTwo {
-		t.Errorf("study two is compared with the controls of %q", c.norm.reference)
-	}
-	c.useStudy(three)
-	if c.norm.reference != "" {
-		t.Errorf("study three, which has no reference, is compared with the controls of %q", c.norm.reference)
-	}
-	outside := reference(filepath.Join(dir, "outside"))
-	c.setReference(outside)
-	c.useStudy(one)
-	if c.norm.reference != outside {
-		t.Errorf("a reference chosen from elsewhere was replaced by %q", c.norm.reference)
-	}
-	// What a page read of a reference goes with the reference.
-	c.zmap.info, c.classify.info = &refInfo{N: 16}, &refInfo{N: 16}
-	c.setReference("")
-	if c.zmap.info != nil || c.classify.info != nil {
-		t.Error("the pages still describe a reference that is no longer in use")
-	}
-
-	pages0 := []string{"spatial", "normalize", "reference", "zmap", "classify", "compare", "cluster"}
-	// Leaving a study takes its images and tables off the pages; those of
-	// elsewhere stay, and so does everything when the same study is used again.
-	mine, theirs := filepath.Join(one, "controls", "sub-hc01_pet.nii.gz"), filepath.Join(dir, "elsewhere", "sub-x_pet.nii.gz")
-	covTable := filepath.Join(one, "participants.tsv")
-	fill := func() {
-		for _, list := range []*fileList{&c.spatial.files, &c.norm.files, &c.ref.files, &c.cmp.g1, &c.cmp.g2, &c.cluster.files} {
-			list.files = []string{mine, theirs}
-		}
-		c.zmap.covTable, c.cmp.covExtra, c.ref.cov.path, c.cmp.cov.path = covTable, covTable, covTable, covTable
-		c.norm.region.kind, c.norm.region.file = 1, filepath.Join(one, "reference_cluster.nii.gz")
-		c.cmp.region.kind, c.cmp.region.file = 1, filepath.Join(dir, "elsewhere", "mask.nii.gz")
-		c.spatial.output = filepath.Join(one, "patients")
-		// The files of the settings too.
-		c.opt.Template, c.opt.RefMaskFile = filepath.Join(one, "template.nii"), filepath.Join(one, "mask.nii.gz")
-		c.opt.AnalysisFile = filepath.Join(dir, "elsewhere", "mask.nii.gz")
-	}
-	// The results of the runs that wrote into the study, and what the pages
-	// offer to do with them.
-	results := func(study string) {
-		out := func(name string) string { return filepath.Join(study, name) }
-		c.spatial.rows, c.spatial.written = []spatialRow{{image: "sub-pt01_pet.nii.gz"}}, []string{mine}
-		c.spatial.outDir, c.spatial.st.ok = out("patients"), "warped"
-		c.norm.rows, c.norm.outDir, c.norm.st.ok = []normRow{{image: "sub-pt01_pet.nii.gz"}}, out("normalised"), "normalised"
-		// The steps of the individual analysis, each done on the one before.
-		c.norm.done = &normDone{asked: c.norm.files.files, files: c.norm.files.files, methods: c.norm.chosen(), reference: c.norm.reference,
-			settings: c.opt.normSettings(c.norm.chosen())}
-		c.zmap.done = &zmapDone{from: c.norm.done, files: c.norm.files.files, methods: []string{"hn"}, table: c.zmap.covariates()}
-		c.classify.from, c.classify.method = c.zmap.done, "hn"
-		c.ref.built, c.ref.st.ok = out("hc_reference"), "built"
-		c.masks.outDir, c.masks.st.ok = out("masks"), "exported"
-		c.zmap.rows, c.zmap.outDir, c.zmap.st.ok = []zmapRow{{image: "sub-pt01_pet.nii.gz"}}, out("zmaps"), "mapped"
-		c.classify.rows, c.classify.outDir, c.classify.st.ok = []classifyRow{{image: "sub-pt01_pet.nii.gz"}}, out("reports"), "classified"
-		c.cmp.result, c.cmp.how, c.cmp.st.ok = &core.GroupComparison{TMap: filepath.Join(out("compare"), "a_vs_b_T.nii.gz")}, "corrected", "compared"
-		c.cluster.saved, c.cluster.volume, c.cluster.st.ok = out("reference_cluster.nii.gz"), 58, "found"
-	}
-	done := func() (pages []string) {
-		// The steps that are still on the pages stand on what the pages hold
-		// now: this test is of what leaving a study takes off them, not of a
-		// reference chosen after a step ran.
-		if d := c.norm.done; d != nil {
-			d.asked, d.files, d.methods, d.reference = c.norm.files.files, c.norm.files.files, c.norm.chosen(), c.norm.reference
-		}
-		if d := c.zmap.done; d != nil {
-			d.table = c.zmap.covariates()
-		}
-		for _, p := range pages0 {
-			if c.done(p) {
-				pages = append(pages, p)
-			}
-		}
-		return pages
-	}
-	fill()
-	results(one)
-	c.useStudy(one)
-	if len(c.ref.files.files) != 2 || c.zmap.covTable != covTable || c.spatial.output == "" || len(done()) != len(pages0) || len(c.zmap.rows) != 1 {
-		t.Errorf("using the same study again took its images, tables or results off the pages (done: %q)", done())
-	}
-	c.useStudy(two)
-	if got := done(); len(got) != 0 || c.norm.done != nil || c.zmap.done != nil || c.classify.from != nil {
-		t.Errorf("pages still marked as done after their study was left: %q", got)
-	}
-	if len(c.spatial.rows)+len(c.spatial.written)+len(c.norm.rows)+len(c.zmap.rows)+len(c.classify.rows) != 0 || c.cmp.result != nil || c.cmp.how != "" || c.cluster.saved != "" {
-		t.Error("results of the study left behind are still on the pages")
-	}
-	if c.masks.outDir != "" || c.masks.st.ok != "" {
-		t.Errorf("the masks exported into the study left behind are still shown: %q", c.masks.outDir)
-	}
-	// Results written elsewhere are no part of the study, and stay.
-	results(filepath.Join(dir, "elsewhere"))
-	c.spatial.output = ""
-	c.useStudy(three)
-	if got := done(); len(got) != len(pages0) || len(c.zmap.rows) != 1 || c.cmp.result == nil || c.masks.outDir == "" {
-		t.Errorf("results written elsewhere were taken off the pages (done: %q)", got)
-	}
-	// A reference built into the study is of the study, wherever the next
-	// one is to be saved.
-	c.useStudy(one)
-	c.ref.built, c.ref.st.ok, c.ref.output = refOne, "built", filepath.Join(dir, "elsewhere", "hc_reference")
-	c.useStudy(three)
-	if c.ref.st.ok != "" {
-		t.Error("the reference built into the study left behind is still marked as done")
-	}
-	results(two)
-	fill()
-	c.useStudy(one)
-	c.useStudy(two)
-	for name, list := range map[string]*fileList{"spatial": &c.spatial.files, "normalize": &c.norm.files, "reference": &c.ref.files,
-		"group 1": &c.cmp.g1, "group 2": &c.cmp.g2, "cluster": &c.cluster.files} {
-		if len(list.files) != 1 || list.files[0] != theirs {
-			t.Errorf("%s still holds %q after its study was left", name, list.files)
-		}
-	}
-	if c.zmap.covTable != "" || c.cmp.covExtra != "" || c.ref.cov.path != "" || c.cmp.cov.path != "" || c.spatial.output != "" {
-		t.Error("a table or an output of the study left behind is still chosen")
-	}
-	if c.norm.region.file != "" || c.cmp.region.file == "" {
-		t.Errorf("the masks after leaving the study: %q (its own), %q (from elsewhere)", c.norm.region.file, c.cmp.region.file)
-	}
-	if c.opt.Template != "" || c.opt.RefMaskFile != "" || c.opt.AnalysisFile == "" {
-		t.Errorf("the files of the settings after leaving the study: template %q, masks %q (its own), %q (from elsewhere)",
-			c.opt.Template, c.opt.RefMaskFile, c.opt.AnalysisFile)
-	}
-	if c.ref.output != filepath.Join(two, "hc_reference") || c.norm.reference != refTwo {
-		t.Errorf("after going over to study two: output %q, reference %q", c.ref.output, c.norm.reference)
-	}
-	// The same folder under another spelling is the same study.
-	if runtime.GOOS != "windows" {
-		alias := filepath.Join(dir, "alias")
-		if err := os.Symlink(two, alias); err != nil {
-			t.Fatal(err)
-		}
-		c.ref.files.files = []string{filepath.Join(two, "controls", "sub-hc01_pet.nii.gz")}
-		if !c.study.chosenInUse(alias) || c.study.chosenInUse(three) {
-			t.Error("the page does not know the study in use under another spelling, or takes another for it")
-		}
-		c.useStudy(alias)
-		if len(c.ref.files.files) != 1 {
-			t.Error("the same study under another spelling was taken for another study")
-		}
-		c.setReference(filepath.Join(alias, "hc_reference"))
-		c.useStudy(three)
-		if c.norm.reference != "" || len(c.ref.files.files) != 0 {
-			t.Errorf("the study left under another spelling kept its reference %q or its images", c.norm.reference)
-		}
-		// Links elsewhere that lead into a study belong to it.
-		refs := filepath.Join(dir, "refs")
-		os.MkdirAll(refs, 0o755)
-		current, image := filepath.Join(refs, "current"), filepath.Join(refs, "sub-hc01_pet.nii.gz")
-		os.WriteFile(filepath.Join(one, "sub-hc01_pet.nii.gz"), nil, 0o644)
-		os.Symlink(refOne, current)
-		os.Symlink(filepath.Join(one, "sub-hc01_pet.nii.gz"), image)
-		c.useStudy(one)
-		c.setReference(current)
-		c.ref.files.files = []string{image, theirs}
-		c.useStudy(two)
-		if c.norm.reference != refTwo || len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs {
-			t.Errorf("links that lead into the study left behind were kept: reference %q, images %q", c.norm.reference, c.ref.files.files)
-		}
-		// So do links that spell the study in other letter case, where that
-		// is the same folder.
-		if shout := filepath.Join(dir, "ONE", "hc_reference"); sameDir(shout, refOne) {
-			os.Remove(current)
-			os.Symlink(shout, current)
-			c.useStudy(one)
-			c.setReference(current)
-			c.useStudy(two)
-			if c.norm.reference != refTwo {
-				t.Errorf("a link into the study left behind, spelt in other case, was kept: %q", c.norm.reference)
-			}
-		}
-		// A study in use is the folder it was then: the pages write into
-		// it, not into the study a link to it leads to by now, and that
-		// study is another.
-		moving := filepath.Join(dir, "moving")
-		os.Symlink(one, moving)
-		c.useStudy(moving)
-		c.ref.files.files = []string{mine, theirs}
-		os.Remove(moving)
-		os.Symlink(three, moving)
-		if c.zmap.output != filepath.Join(one, "zmaps") || c.study.chosenInUse(moving) {
-			t.Errorf("the pages write through a link, which leads to another study by now: %q", c.zmap.output)
-		}
-		c.useStudy(moving)
-		if len(c.ref.files.files) != 1 || c.ref.files.files[0] != theirs || c.zmap.output != filepath.Join(three, "zmaps") {
-			t.Errorf("the images of the study a link led to before were kept: %q", c.ref.files.files)
-		}
-	}
-	// A folder made anew where the study was is another study.
-	c.useStudy(one)
-	fill()
-	results(one)
-	if err := os.Rename(one, filepath.Join(dir, "one-before")); err != nil {
-		t.Fatal(err)
-	}
-	if c.study.chosenInUse(one) {
-		t.Error("a study that was moved away is taken for the one in use")
-	}
-	os.MkdirAll(one, 0o755)
-	c.useStudy(one)
-	if got := done(); len(got) != 0 || len(c.ref.files.files) != 1 || c.zmap.covTable != "" {
-		t.Errorf("a study made anew where another was kept that one's images or results (done: %q, images %q)", got, c.ref.files.files)
-	}
-	os.Remove(one)
-	os.Rename(filepath.Join(dir, "one-before"), one)
-	// A study given another name is the same folder, but what the pages
-	// hold of it is named as before, and goes; its reference is found again.
-	c.useStudy(one)
-	fill()
-	c.setReference(refOne)
-	c.ref.current, c.ref.info = refOne, &refInfo{N: 16}
-	renamed := filepath.Join(dir, "one-renamed")
-	if err := os.Rename(one, renamed); err != nil {
-		t.Fatal(err)
-	}
-	c.useStudy(renamed)
-	if len(c.ref.files.files) != 1 || c.zmap.covTable != "" || c.norm.reference != filepath.Join(renamed, "hc_reference") {
-		t.Errorf("after the study was given another name: images %q, table %q, reference %q", c.ref.files.files, c.zmap.covTable, c.norm.reference)
-	}
-	if c.ref.current != "" {
-		t.Error("the Reference page still describes the reference it read before")
-	}
-	os.Rename(renamed, one)
-	// How a run failed is not said of the next study, wherever it was to write.
-	c.useStudy(one)
-	results(filepath.Join(dir, "elsewhere"))
-	c.norm.st, c.cmp.st = status{err: "no reference"}, status{err: "too few images"}
-	c.useStudy(three)
-	if c.norm.st.err != "" || c.cmp.st.err != "" || len(c.norm.rows) != 1 || c.zmap.st.ok == "" {
-		t.Errorf("after leaving a study: errors %q, %q; results written elsewhere: %d", c.norm.st.err, c.cmp.st.err, len(c.norm.rows))
-	}
-	// The study's own reference that is gone is not kept when the study is
-	// laid out again; one that is still there is.
-	c.useStudy(two)
-	c.setReference(refTwo)
-	c.useStudy(two)
-	if c.norm.reference != refTwo {
-		t.Errorf("laying the study out again let go of its reference: %q", c.norm.reference)
-	}
-	os.Remove(filepath.Join(refTwo, "reference.json"))
-	c.useStudy(two)
-	if c.norm.reference != "" {
-		t.Errorf("the reference that is gone is still in use: %q", c.norm.reference)
-	}
-}
-
-// TestStudyChosen checks that choosing a study folder that is there already
-// only fills in where it is: nothing is written into it, and the pages keep
-// the study they have until the folders are created.
-func TestStudyChosen(t *testing.T) {
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	old, other := filepath.Join(dir, "old"), filepath.Join(dir, "other")
-	os.MkdirAll(filepath.Join(other, "patients"), 0o755)
-	a := newApp()
-	a.study.parent, a.study.name = dir, "old"
-	a.runStudy()
-	if a.study.inUse != old {
-		t.Fatalf("the study in use is %q", a.study.inUse)
-	}
-	a.norm.files.files = []string{filepath.Join(old, "patients", "sub-01_pet.nii.gz")}
-	a.study.choose(other)
-	if a.study.target() != other {
-		t.Errorf("the folder chosen is %q", a.study.target())
-	}
-	if entries, _ := os.ReadDir(other); len(entries) != 1 {
-		t.Errorf("choosing the folder wrote into it: %d entries", len(entries))
-	}
-	if a.study.inUse != old || a.zmap.output != filepath.Join(old, "zmaps") || len(a.norm.files.files) != 1 {
-		t.Errorf("choosing the folder went over to it: in use %q, output %q, %d images", a.study.inUse, a.zmap.output, len(a.norm.files.files))
-	}
-	// The page says so, and what going over takes off the pages, before
-	// Create Folders does it.
-	a.page = "study"
-	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
-	tt.Frame()
-	if !tt.HasText("Choose Study Folder…") {
-		t.Errorf("no button to choose a study folder (shown: %q)", tt.Texts())
-	}
-	if err := tt.Click("Create Folders"); err != nil {
-		t.Fatal(err)
-	}
-	if a.study.inUse != other || len(a.norm.files.files) != 0 {
-		t.Errorf("after creating: in use %q, %d images of the study left", a.study.inUse, len(a.norm.files.files))
-	}
-}
-
 // TestRemedy checks that the run bar offers the way out of a problem for
 // that very problem only, in both languages.
 func TestRemedy(t *testing.T) {
 	defer func() { chinese = false }()
 	for _, chinese = range []bool{false, true} {
 		a := newApp()
+		a.proj = &project{dir: "/study", unsaved: true}
+		a.projectOutputs()
 		// No images yet: that is what the page says, though it has no
-		// reference either.
-		if got := a.remedy("normalize", a.norm.problem()); got != "" {
-			t.Errorf("normalize without images: remedy %q for %q", got, a.norm.problem())
+		// reference either, and the Data page is where they are added.
+		if got := a.remedy("normalize", a.normProblem()); got != "data" {
+			t.Errorf("normalize without images: remedy %q for %q", got, a.normProblem())
 		}
 		file := []string{"/study/patients/sub-01_pet.nii.gz"}
 		a.norm.files.files = file
@@ -1607,8 +1232,8 @@ func TestRemedy(t *testing.T) {
 		// With the steps before them done, they lack a reference.
 		a.norm.methods["hn"] = true
 		a.norm.done.methods = a.norm.chosen()
-		problems := map[string]string{"normalize": a.norm.problem(), "zmap": a.zmapProblem(), "classify": a.classifyProblem(),
-			"cluster": a.cluster.problem(), "compare": a.cmp.problem(&a.opt)}
+		problems := map[string]string{"normalize": a.normProblem(), "zmap": a.zmapProblem(), "classify": a.classifyProblem(),
+			"cluster": a.clusterProblem(), "compare": a.cmpProblem()}
 		for page, problem := range problems {
 			if got := a.remedy(page, problem); got != "reference" {
 				t.Errorf("%s without a reference: remedy %q for %q", page, got, problem)
@@ -1618,8 +1243,8 @@ func TestRemedy(t *testing.T) {
 		a.norm.methods = map[string]bool{"cerebellum": true}
 		a.norm.done.methods = a.norm.chosen()
 		a.zmap.reference = "/study/hc_reference"
-		if got := a.remedy("normalize", a.norm.problem()); got != "" {
-			t.Errorf("normalize by the cerebellum: remedy %q for %q", got, a.norm.problem())
+		if got := a.remedy("normalize", a.normProblem()); got != "" {
+			t.Errorf("normalize by the cerebellum: remedy %q for %q", got, a.normProblem())
 		}
 		if got := a.remedy("zmap", a.zmapProblem()); got != "" {
 			t.Errorf("zmap with a reference: remedy %q for %q", got, a.zmapProblem())
@@ -1630,10 +1255,11 @@ func TestRemedy(t *testing.T) {
 			t.Errorf("zmap after step 1 was changed: remedy %q for %q", got, a.zmapProblem())
 		}
 		// Spatial Normalisation: the settings mend SPM, not the output folder.
+		a.proj.native = true
 		a.spatial.files.files = file
 		if a.spatial.spm == "" {
-			if got := a.remedy("spatial", a.spatial.problem()); got != "spm" {
-				t.Errorf("spatial without SPM: remedy %q for %q", got, a.spatial.problem())
+			if got := a.remedy("spatial", a.spatialProblem()); got != "spm" {
+				t.Errorf("spatial without SPM: remedy %q for %q", got, a.spatialProblem())
 			}
 		}
 		if got := a.remedy("spatial", "Choose the output folder."); got != "" {
@@ -1643,20 +1269,12 @@ func TestRemedy(t *testing.T) {
 }
 
 // TestFollowCompare checks that Compare Groups takes the method of the
-// individual analysis and the covariate tables chosen before, until others
-// are chosen on its page.
+// individual analysis, until another is chosen on its page.
 func TestFollowCompare(t *testing.T) {
-	dir := t.TempDir()
-	controls, patients := filepath.Join(dir, "controls.tsv"), filepath.Join(dir, "patients.tsv")
-	for _, table := range []string{controls, patients} {
-		if err := os.WriteFile(table, []byte("participant_id\tage\tsex\nsub-01\t60\tF\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
 	a := newApp()
 	a.followCompare()
-	if a.cmp.method != "hn" || a.cmp.cov.path != "" {
-		t.Fatalf("with nothing chosen before: method %q, table %q", a.cmp.method, a.cmp.cov.path)
+	if a.cmp.method != "hn" {
+		t.Fatalf("with nothing chosen before: method %q", a.cmp.method)
 	}
 	// The method of step 1, HN before the others, and never a custom region.
 	a.norm.methods = map[string]bool{"cerebellum": true}
@@ -1674,29 +1292,6 @@ func TestFollowCompare(t *testing.T) {
 	a.followCompare()
 	if a.cmp.method != "ps" {
 		t.Errorf("the method chosen on the page was replaced by %q", a.cmp.method)
-	}
-	// The table of the reference, and that of the patients beside it when
-	// they are listed apart.
-	a.ref.cov.path, a.zmap.covTable = controls, patients
-	a.followCompare()
-	if a.cmp.cov.path != controls || a.cmp.covExtra != patients || !slices.Equal(a.cmp.cov.names(), []string{"age", "sex"}) {
-		t.Errorf("the tables chosen before were not taken: %q and %q, adjusting for %q", a.cmp.cov.path, a.cmp.covExtra, a.cmp.cov.names())
-	}
-	// One table for both is taken once.
-	b := newApp()
-	b.ref.cov.path, b.zmap.covTable = controls, controls
-	b.followCompare()
-	if b.cmp.cov.path != controls || b.cmp.covExtra != "" {
-		t.Errorf("one table for all: %q and %q", b.cmp.cov.path, b.cmp.covExtra)
-	}
-	// A table taken off the page stays off.
-	b.cmp.cov.path = ""
-	b.cmp.cov.load()
-	b.followCompare()
-	b.ref.cov.path = patients
-	b.followCompare()
-	if b.cmp.cov.path != "" {
-		t.Errorf("a table was chosen again after it was taken off the page: %q", b.cmp.cov.path)
 	}
 }
 
@@ -1756,60 +1351,8 @@ func TestSidebar(t *testing.T) {
 	}
 }
 
-// TestStudyShortcuts checks the shortcuts to what the study in use holds:
-// its folder of patients on a list of images, asked of the file system at
-// most once a second.
-func TestStudyShortcuts(t *testing.T) {
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	one, other := filepath.Join(dir, "a"), filepath.Join(dir, "b")
-	if got := commonDir([]string{filepath.Join(one, "x.nii"), filepath.Join(one, "y.nii")}); got != one {
-		t.Errorf("the folder of two files in %s is %q", one, got)
-	}
-	if got := commonDir([]string{filepath.Join(one, "x.nii"), filepath.Join(other, "y.nii")}); got != "" || commonDir(nil) != "" {
-		t.Errorf("files apart, or none, share the folder %q", got)
-	}
-	a := newApp()
-	a.page = "normalize"
-	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
-	tt.Frame()
-	if tt.HasText("Load patients/") {
-		t.Fatal("a shortcut to a study while none is in use")
-	}
-	a.study.parent = dir
-	a.runStudy()
-	study := filepath.Join(dir, "study")
-	_, pt, _ := makeImages(t, filepath.Join(study, "patients"), 0, 2)
-	tt.Frame()
-	if err := tt.Click("Load patients/"); err != nil {
-		t.Fatalf("%v (shown: %q)", err, tt.Texts())
-	}
-	tt.Frame()
-	if !slices.Equal(a.norm.files.files, pt) {
-		t.Errorf("loaded %q, not %q", a.norm.files.files, pt)
-	}
-	// What is there is asked of the file system once, and again after a
-	// second: until then a folder that has gone is still seen.
-	patients := seenKey{filepath.Join(study, "patients"), true}
-	if !a.onDisk(patients.path, true) || a.onDisk(patients.path, false) {
-		t.Error("the folder of patients is not seen as a folder")
-	}
-	os.RemoveAll(patients.path)
-	a.seen[patients] = seenFile{true, time.Now().Add(time.Hour)} // just seen, however slow the test
-	if !a.onDisk(patients.path, true) {
-		t.Error("the file system is asked on every frame")
-	}
-	a.seen[patients] = seenFile{true, time.Now().Add(-2 * time.Second)}
-	if a.onDisk(patients.path, true) {
-		t.Error("a folder that is gone is seen for good")
-	}
-}
-
 // TestSwapGroups checks that swapping the groups of a comparison takes the
-// result off the page, whose T-map has the sign of the groups as they were,
-// and that the folders of the study follow the groups.
+// result off the page, whose T-map has the sign of the groups as they were.
 func TestSwapGroups(t *testing.T) {
 	a := newApp()
 	a.demo()
@@ -1825,93 +1368,12 @@ func TestSwapGroups(t *testing.T) {
 	if p.result != nil || p.st.ok != "" || p.how != "" {
 		t.Errorf("the result of the groups as they were is still shown: %q", p.st.ok)
 	}
-	// Group 1, emptied, is where the controls go now: its hint says so.
+	// The groups stay swapped when the page takes the images of the project
+	// again, and the page says which group is which.
 	a.page = "compare"
-	p.g1.files = nil
 	tt := ui.NewTesterWith(a.view, 1060, 900, ui.TesterOptions{})
 	tt.Frame()
-	if !tt.HasText("e.g. the controls") || tt.HasText("e.g. the patients") || !p.swapped {
-		t.Errorf("the hints do not follow the groups (shown: %q)", tt.Texts())
-	}
-	// With both lists empty the groups are as at first.
-	p.g2.files = nil
-	tt.Frame()
-	tt.Frame()
-	if p.swapped || !tt.HasText("e.g. the patients") {
-		t.Error("empty groups are still swapped")
-	}
-}
-
-// TestStudyLinks checks what a study folder may hold in place of the usual:
-// a folder of patients that is a link is loaded where it leads, under the
-// names of the link; a table that is no regular file is not offered; and a
-// study folder chosen is the target to the letter.
-func TestStudyLinks(t *testing.T) {
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := newApp()
-	if a.onDisk(dir, false) || !a.onDisk(dir, true) {
-		t.Error("a folder is seen as a file")
-	}
-	_, pt, _ := makeImages(t, filepath.Join(dir, "elsewhere"), 0, 2)
-	link := filepath.Join(dir, "patients")
-	if err := os.Symlink(filepath.Join(dir, "elsewhere"), link); err != nil {
-		t.Skipf("no links here: %v", err)
-	}
-	want := []string{filepath.Join(link, filepath.Base(pt[0])), filepath.Join(link, filepath.Base(pt[1]))}
-	if got := expandPaths([]string{link}); !slices.Equal(got, want) {
-		t.Errorf("a linked folder holds %q, not %q", got, want)
-	}
-	if got := expandPaths([]string{filepath.Join(dir, "elsewhere")}); !slices.Equal(got, pt) {
-		t.Errorf("the folder itself holds %q, not %q", got, pt)
-	}
-	// An image is one image, by its own path and through the link.
-	var list fileList
-	list.add(pt[:1])
-	list.add([]string{link})
-	if want := []string{pt[0], want[1]}; !slices.Equal(list.files, want) {
-		t.Errorf("the list holds %q, not %q", list.files, want)
-	}
-	// A study folder named with ":" is no name to type, but may be picked,
-	// and is the study again at the next launch.
-	if odd := filepath.Join(dir, "study:baseline"); os.Mkdir(odd, 0o755) == nil {
-		a.study.choose(odd)
-		if msg := a.study.problem(); msg != "" {
-			t.Errorf("a folder that is there cannot be chosen: %s", msg)
-		}
-		b := newApp()
-		b.restoreStudy(odd)
-		if b.study.target() != odd || b.study.problem() != "" {
-			t.Errorf("after a new launch the target is %q (%s)", b.study.target(), b.study.problem())
-		}
-	}
-	// A header that is a link to that of another scan has its own image.
-	hdr, shared := filepath.Join(dir, "sub-01.hdr"), filepath.Join(dir, "sub-02.hdr")
-	os.WriteFile(hdr, nil, 0o644)
-	if os.Symlink(hdr, shared) == nil {
-		var pairs fileList
-		pairs.add([]string{hdr, shared})
-		if len(pairs.files) != 2 {
-			t.Errorf("two scans that share a header are listed as %q", pairs.files)
-		}
-	}
-	// The picker may end the folder with a separator: it is still the study.
-	a.study.choose(link + string(filepath.Separator))
-	if a.study.target() != link {
-		t.Errorf("chose %q with a separator at its end, the target is %q", link, a.study.target())
-	}
-	// A name with a space at its end is no name to type, but may be picked.
-	spaced := filepath.Join(dir, "cohort ")
-	if err := os.Mkdir(spaced, 0o755); err == nil {
-		a.study.choose(spaced)
-		if a.study.target() != spaced {
-			t.Errorf("chose %q, the target is %q", spaced, a.study.target())
-		}
-		a.study.name = "cohort"
-		if a.study.target() != filepath.Join(dir, "cohort") {
-			t.Errorf("a name typed afterwards gives the target %q", a.study.target())
-		}
+	if !slices.Equal(p.g1.files, g2) || !slices.Equal(p.g2.files, g1) || !tt.HasText("Group 1 · Healthy controls") || !tt.HasText("Group 2 · Patients") {
+		t.Errorf("the groups do not stay swapped (shown: %q)", tt.Texts())
 	}
 }

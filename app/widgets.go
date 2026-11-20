@@ -188,6 +188,18 @@ type fileList struct {
 	query string // optional filter for large lists
 	// real is where each image added leads, asked of the file system once.
 	real map[string]string
+	// adder, if set, takes what is added in place of add: the lists of a
+	// project may copy an image into its folder first.
+	adder func(paths []string)
+}
+
+// take adds what the user dropped or chose.
+func (f *fileList) take(paths []string) {
+	if f.adder != nil {
+		f.adder(paths)
+		return
+	}
+	f.add(paths)
 }
 
 type seenKey struct {
@@ -218,35 +230,23 @@ func (a *app) onDisk(path string, dir bool) bool {
 	return there
 }
 
-// inStudy is a folder (dir) or a file of the study in use, or "" if it is
-// not there, or if the folder in use is no longer that study: moved away,
-// with another under its name, whose images are not those the pages hold.
-func (a *app) inStudy(name string, dir bool) string {
-	p := &a.study
-	if p.inUse == "" {
+// inProject is a folder (dir) or a file of the project, or "" if it is
+// not there.
+func (a *app) inProject(name string, dir bool) string {
+	if a.proj == nil {
 		return ""
 	}
-	// The folder in use is known by its own key: "" is no path.
-	held := seenKey{"", true}
-	s, ok := a.seen[held]
-	if !ok || time.Since(s.at) >= time.Second {
-		if a.seen == nil {
-			a.seen = map[seenKey]seenFile{}
-		}
-		s = seenFile{p.holds(p.inUse), time.Now()}
-		a.seen[held] = s
-	}
-	if path := filepath.Join(p.inUse, name); s.there && a.onDisk(path, dir) {
+	if path := a.proj.in(name); a.onDisk(path, dir) {
 		return path
 	}
 	return ""
 }
 
-// stillInStudy asks the file system now, when a shortcut to the study in
-// use is taken, whether what it leads to is there and of that study.
-func (a *app) stillInStudy(name string, dir bool) bool {
+// stillInProject asks the file system now, when a shortcut to a folder or a
+// file of the project is taken, whether it is there.
+func (a *app) stillInProject(name string, dir bool) bool {
 	a.seen = nil
-	return a.inStudy(name, dir) != ""
+	return a.inProject(name, dir) != ""
 }
 
 // commonDir returns the shared parent folder if all files live in the same
@@ -357,14 +357,9 @@ func (f *fileList) remove(path string) {
 	}
 }
 
-// filesCard shows a file list: drop files or folders on it, or add them
-// with its buttons.
-func (a *app) filesCard(c *ui.Context, key string, f *fileList, title, hint string) {
-	a.filesCardFromStudy(c, key, f, title, hint, "")
-}
-
-// filesCardFromStudy is filesCard with an optional one-click shortcut to load
-// images from a subfolder of the active study (e.g. "patients", "controls").
+// filesCardFromStudy shows a file list: drop files or folders on it, or add
+// them with its buttons.  With studySubdir, it has a one-click shortcut to
+// load the images in that folder of the project ("patients", "controls").
 func (a *app) filesCardFromStudy(c *ui.Context, key string, f *fileList, title, hint, studySubdir string) {
 	pal := paletteFor(c)
 	n := len(f.files)
@@ -373,7 +368,7 @@ func (a *app) filesCardFromStudy(c *ui.Context, key string, f *fileList, title, 
 	}
 	box := ui.Column(c.Key(key)).Radius(12).Clip().Background(pal.panel)
 	if files := box.DroppedFiles(); files != nil {
-		f.add(files)
+		f.take(files)
 	}
 	over := box.FileDragOver()
 	if over {
@@ -391,20 +386,20 @@ func (a *app) filesCardFromStudy(c *ui.Context, key string, f *fileList, title, 
 	}
 	studyDir := ""
 	if studySubdir != "" {
-		studyDir = a.inStudy(studySubdir, true)
+		studyDir = a.inProject(studySubdir, true)
 	}
 	addButtons := func(kind buttonKind, height float32) {
 		if studyDir != "" {
-			label := Tf("Load %s/", "加载研究 %s/", studySubdir)
-			if button(c.Key("from-study"), label, iconFolder, buttonSoft, height).Tooltip(studyDir).Clicked() && a.stillInStudy(studySubdir, true) {
+			label := Tf("Load %s/", "加载项目的 %s/", studySubdir)
+			if button(c.Key("from-study"), label, iconFolder, buttonSoft, height).Tooltip(studyDir).Clicked() && a.stillInProject(studySubdir, true) {
 				f.add([]string{studyDir})
 			}
 		}
 		if button(c.Key("files"), T("Add Files…", "添加文件…"), iconPlus, kind, height).Clicked() {
-			a.pick(pickOptions{Title: title, Multiple: true, Filters: niftiFilter}, f.add)
+			a.pick(pickOptions{Title: title, Multiple: true, Filters: niftiFilter}, f.take)
 		}
 		if button(c.Key("folder"), T("Add Folder…", "添加文件夹…"), iconFolder, kind, height).Clicked() {
-			a.pick(pickOptions{Title: title, Directory: true, Multiple: true}, f.add)
+			a.pick(pickOptions{Title: title, Directory: true, Multiple: true}, f.take)
 		}
 	}
 	shared := commonDir(f.files)
@@ -569,9 +564,10 @@ func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string,
 }
 
 // remedy is where the problem a page reports is mended, when a button of
-// its run bar can lead there: "reference" for the Reference page, "spm" for
-// the settings of SPM and MATLAB, the step of the individual analysis that
-// the page waits for, or "".  The problem is known by being the very one the
+// its run bar can lead there: "data" for the Data page, "spatial" for
+// Spatial Normalisation, "reference" for the Reference page, "spm" for the
+// settings of SPM and MATLAB, the step of the individual analysis that the
+// page waits for, or "".  The problem is known by being the very one the
 // page gives for that lack, not by its wording.
 func (a *app) remedy(page, problem string) string {
 	if problem == "" {
@@ -580,11 +576,26 @@ func (a *app) remedy(page, problem string) string {
 	if step, why := a.lock(page); step != "" && problem == why {
 		return step
 	}
+	// The images a page works on come from the Data page or, of images in
+	// native space, from Spatial Normalisation.
+	if a.proj != nil {
+		for _, group := range []string{"patients", "controls"} {
+			if problem == a.needImages(group) {
+				if a.proj.native && a.pageCount("data") > 0 && page != "spatial" {
+					return "spatial"
+				}
+				return "data"
+			}
+		}
+	}
 	lack := ""
 	switch page {
 	case "spatial":
 		if problem == a.spatial.setupProblem() {
 			return "spm"
+		}
+		if problem == a.dataProblem() || problem == notNative() {
+			return "data"
 		}
 	case "normalize":
 		lack = a.norm.referenceProblem()
@@ -647,6 +658,14 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 	// run, which stays on the bar while the button is disabled for it.
 	mend := func() {
 		switch a.remedy(page, problem) {
+		case "data":
+			if button(c.Key("fix-data"), T("Go to Data", "前往数据"), iconArrowRight, buttonSoft, 28).Clicked() {
+				a.page = "data"
+			}
+		case "spatial":
+			if button(c.Key("fix-spatial"), T("Go to Spatial Normalisation", "前往空间标准化"), iconArrowRight, buttonSoft, 28).Clicked() {
+				a.page = "spatial"
+			}
 		case "reference":
 			if button(c.Key("fix-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 28).Clicked() {
 				a.page = "reference"
@@ -680,8 +699,13 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 		message(iconCheck, pal.success, st.ok)
 	case a.job != nil:
 		message(iconInfo, pal.muted, T("Another task is running.", "另一项任务正在运行。"))
+	case page == "data":
+		message(iconCheck, pal.muted, a.dataSummary())
 	default:
 		message(iconCheck, pal.muted, T("Ready.", "准备就绪。"))
+	}
+	if runLabel == "" { // a page with nothing to run
+		return
 	}
 	btn := button(c, runLabel, nil, buttonPrimary, 34).Disabled(problem != "" || a.job != nil)
 	if btn.Clicked() {

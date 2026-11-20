@@ -137,7 +137,7 @@ var methodGroups = []struct {
 	title   label
 	methods []string
 }{
-	{label{"Data-driven, with a reference", "数据驱动 · 需要参考库"}, []string{"hn", "ihn", "ips"}},
+	{label{"Data-driven, against the controls", "数据驱动 · 与对照比较"}, []string{"hn", "ihn", "ips"}},
 	{label{"Global", "全局"}, []string{"ps", "spm-global", "whole-brain"}},
 	{label{"Reference regions", "参考区"}, []string{"cerebellum", "cerebellar-gm", "pons", "white-matter", "occipital", "sensorimotor", "region"}},
 }
@@ -248,20 +248,14 @@ func (p *normPage) chosen() []string {
 	return out
 }
 
-// normReferenceProblem is what is missing while a method chosen needs a
-// reference, and the project has none and cannot build one, or "".
+// normReferenceProblem is what is missing while the project cannot
+// summarise its controls, which this step does first: the 3 controls in MNI
+// space that it takes at least.  "" while it can.
 func (a *app) normReferenceProblem() string {
-	p := &a.norm
-	if a.reference != "" || a.buildsReference() {
+	if a.buildsReference() {
 		return ""
 	}
-	for _, m := range p.chosen() {
-		if core.NeedsReference(m) {
-			return Tf("%s needs a reference: add at least 3 healthy controls on the Data page, or import a reference on the Reference page.",
-				"%s 需要参考库：请在“数据”页面添加至少 3 例健康对照，或到“参考库”页面导入。", methodName(m))
-		}
-	}
-	return ""
+	return Tf("Step 1 summarises at least 3 healthy controls in MNI space first; the project has %d.", "第 1 步要先汇总至少 3 例 MNI 空间的健康对照，项目目前只有 %d 例。", len(a.controls()))
 }
 
 func (a *app) normProblem() string {
@@ -279,10 +273,8 @@ func (a *app) normProblem() string {
 	if msg := a.normReferenceProblem(); msg != "" {
 		return msg
 	}
-	if a.buildsReference() {
-		if msg := a.buildProblem(); msg != "" {
-			return msg
-		}
+	if msg := a.buildProblem(); msg != "" {
+		return msg
 	}
 	if p.methods["region"] {
 		if msg := p.region.problem(); msg != "" {
@@ -331,10 +323,9 @@ func (a *app) normalizeView(c *ui.Context) {
 			if p.methods["region"] {
 				section(c, T("Custom region", "自选区域"), "", func() { rows(c, a.regionRows(c, "norm-region", &p.region)...) })
 			}
-			section(c, T("Reference and output", "参考库与输出"), "", func() {
-				a.source(c, "norm-ref", "reference", T("Open Reference", "查看参考库"),
-					a.referenceFact(c),
-					fact(c, T("Written to", "输出位置"), a.writesTo(p.output)+T(" · the normalised images, by group, and factors.tsv", " · 按组存放的归一化图像和 factors.tsv")))
+			a.controlStats(c)
+			section(c, T("Output", "输出"), "", func() {
+				rows(c, fact(c, T("Written to", "输出位置"), a.writesTo(p.output)+T(" · the normalised images, by group, and factors.tsv", " · 按组存放的归一化图像和 factors.tsv")))
 				a.optionsLine(c, "normalize", "normalize", groupNormalize, groupIterative)
 			})
 			if len(p.rows) > 0 || len(p.notes) > 0 {
@@ -456,7 +447,7 @@ func (a *app) runNormalize() {
 	label := T("Normalising intensity", "正在做强度归一化")
 	first := label
 	if build != nil {
-		first = T("Building the reference from the controls", "正在用对照建立参考库")
+		first = T("Summarising the healthy controls", "正在汇总健康对照")
 	}
 	a.start("normalize", first, func(ctx context.Context, step func(int, int)) (func(), error) {
 		if build != nil {
@@ -580,7 +571,7 @@ func (a *app) runNormalize() {
 			patients := len(files) - len(controls)
 			p.st.ok = Tf("%d patient and %d control image(s) intensity-normalised with %d method(s).", "强度归一化已完成：%d 幅患者图像、%d 幅对照图像 × %d 种方法。", patients, len(controls), len(methods))
 			if build != nil {
-				p.st.ok = Tf("Reference built from %d controls. ", "已用 %d 例对照建立参考库。", len(build.files)) + p.st.ok
+				p.st.ok = Tf("Control statistics summarised from %d controls. ", "已由 %d 例对照汇总出对照统计。", len(build.files)) + p.st.ok
 			}
 		}, nil
 	}, func(err error) { p.st.err = err.Error() })

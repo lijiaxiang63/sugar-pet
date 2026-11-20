@@ -76,8 +76,9 @@ type app struct {
 	// cov is the covariate table of the project, which the reference, the
 	// maps and the group comparison all adjust by.
 	cov covChoice
-	// reference is the reference every page uses: the one the project
-	// builds from its controls, or one imported.  setReference changes it.
+	// reference is the folder of the control statistics every page uses,
+	// which the project builds from its controls; "" until it has.
+	// setReference changes it.
 	reference string
 	// refRead is what the reference said about itself when refInfo last read
 	// its folder (of).
@@ -223,7 +224,6 @@ type pageInfo struct {
 var pages = []pageInfo{
 	{"data", "Data", "数据", iconFolder},
 	{"spatial", "Spatial Normalisation", "空间标准化", iconWarp},
-	{"reference", "Reference", "参考库", iconLayers},
 	{"normalize", "Intensity Normalisation", "强度归一化", iconSliders},
 	{"zmap", "Z-score Maps", "Z 值图", iconCurve},
 	{"classify", "Classify Parkinsonism", "帕金森综合征分类", iconReport},
@@ -242,8 +242,7 @@ var navGroups = []struct {
 	{label{"Prepare", "准备"}, []string{"spatial"}},
 	{label{"Individual", "个案分析"}, []string{"normalize", "zmap", "classify"}},
 	{label{"Group", "组水平统计"}, []string{"compare", "cluster"}},
-	// The reference is no step: step 1 builds it from the controls.
-	{label{"Resources", "资源"}, []string{"reference", "masks"}},
+	{label{"Resources", "资源"}, []string{"masks"}},
 }
 
 // pageInfoOf returns the metadata of a page by id.
@@ -316,8 +315,6 @@ func (a *app) view(c *ui.Context) {
 					a.spatialView(c)
 				case "normalize":
 					a.normalizeView(c)
-				case "reference":
-					a.referenceView(c)
 				case "zmap":
 					a.zmapView(c)
 				case "classify":
@@ -429,43 +426,8 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 	a.page = page
 
-	// The reference in use, and the settings.
+	// The settings.
 	ui.Column(c).Padding(6, 10, 10, 10).Gap(5).Shrink(0).Children(func() {
-		ref := a.reference
-		box := ui.ButtonBase(c.Key("ref-chip")).Padding(7, 10).Radius(10).Gap(9).AlignItems(ui.Center).
-			Label(T("Reference in use", "当前参考库"))
-		bg := pal.text.Alpha(0.045)
-		if box.Hovered() {
-			bg = pal.text.Alpha(0.08)
-		}
-		box.Background(box.AnimateColor("bg", bg, quick)).InsetShadow(0, 0, 0, 1, pal.border).Children(func() {
-			tint := pal.faint
-			if ref != "" {
-				tint = pal.accent
-			}
-			ui.Box(c).Size(24, 24).Radius(6).Center().Shrink(0).Background(tint.Alpha(0.14)).Children(func() {
-				ui.Icon(c, iconLayers).Size(13, 13).TextColor(tint)
-			})
-			ui.Column(c).Gap(0.5).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, T("Reference", "参考库")).FontSize(10).TextColor(pal.muted).SingleLine()
-				if ref != "" {
-					ui.Text(c, filepath.Base(ref)).FontSize(12).FontWeight(500).SingleLine().Ellipsis("…")
-				} else {
-					ui.Text(c, T("None yet", "尚未建立")).FontSize(12).FontWeight(500).TextColor(pal.muted).SingleLine()
-				}
-			})
-			if ref != "" {
-				ui.Box(c).Size(6, 6).Radius(3).Background(pal.success).Shrink(0)
-			}
-		})
-		if ref != "" {
-			box.Tooltip(ref)
-		} else {
-			box.Tooltip(T("Intensity Normalisation builds the reference from the controls of the project; or import one", "运行强度归一化时由项目的健康对照自动建立，也可以导入已有的参考库"))
-		}
-		if box.Clicked() {
-			a.page = "reference"
-		}
 		// The settings, with the version, or the new one there is.
 		title := T("Settings", "设置")
 		gear := ui.ButtonBase(c.Key("settings")).Height(32).Padding(0, 9, 0, 10).Gap(10).Radius(8).AlignItems(ui.Center).Label(title)
@@ -489,20 +451,6 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 			a.openSettings(section)
 		}
-	})
-}
-
-// chooseReference asks for a reference built elsewhere and uses it in the
-// project, in place of one built from the project's own controls.
-func (a *app) chooseReference() {
-	a.pick(pickOptions{Title: T("Import a reference folder", "导入参考库文件夹"), Directory: true}, func(paths []string) {
-		if _, err := os.Stat(filepath.Join(paths[0], "reference.json")); err != nil {
-			a.alert(T("Not a reference folder", "不是参考库文件夹"),
-				T("The folder has no reference.json: it is not a reference built by SUGAR-PET or by sugar-pet build-reference.",
-					"该文件夹中没有 reference.json：它不是由 SUGAR-PET 或 sugar-pet build-reference 建立的参考库。"))
-			return
-		}
-		a.setReference(paths[0])
 	})
 }
 

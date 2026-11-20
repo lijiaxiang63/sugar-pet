@@ -144,33 +144,90 @@ func (cv *covChoice) problem() string {
 	return ""
 }
 
-// needReference is what a page says while it has no reference, which the
-// run bar offers to mend (remedy).
+// needReference is what a page says while the controls of the project are
+// not summarised yet, which the run bar offers to mend (remedy).
 func needReference() string {
-	return T("The project has no reference yet: Intensity Normalisation builds it from the healthy controls (at least 3), or import one on the Reference page.",
-		"项目还没有参考库：运行强度归一化时会用健康对照（至少 3 例）自动建立，也可以到“参考库”页面导入。")
+	return T("The healthy controls are not summarised yet: Intensity Normalisation does that first, from at least 3 of them.",
+		"健康对照还没有汇总成对照统计：运行强度归一化时会先完成这一步（至少需要 3 例对照）。")
 }
 
-// referenceFact is the line of a page that says which reference it uses.
+// referenceFact is the line of a page that says which controls it compares
+// with.
 func (a *app) referenceFact(c *ui.Context) func() {
-	return fact(c, T("Reference", "参考库"), a.referenceLine())
+	return fact(c, T("Healthy controls", "健康对照"), a.referenceLine())
 }
 
-// referenceLine says in a line which reference the project uses, or how it
-// comes to one.
+// referenceLine says in a line how many controls the project compares with,
+// as they were summarised, or when they are.
 func (a *app) referenceLine() string {
 	ref, n := a.reference, len(a.controls())
 	switch {
-	case a.imported():
-		return referenceText(ref, a.refInfo()) + T(" · imported", " · 导入")
 	case ref == "" && !a.buildsReference():
-		return T("None: it takes at least 3 healthy controls, or an imported reference", "无：需要至少 3 例健康对照，或导入参考库")
+		return Tf("%d: it takes at least 3", "%d 例：至少需要 3 例", n)
 	case ref == "":
-		return Tf("Built from the %d controls when Intensity Normalisation runs", "运行强度归一化时由 %d 例对照自动建立", n)
+		return Tf("%d · summarised when Intensity Normalisation runs", "%d 例 · 运行强度归一化时汇总", n)
 	case a.refStale():
-		return Tf("Built anew from the %d controls when %s runs", "下次运行%[2]s时由 %[1]d 例对照重新建立", n, a.rebuiltWhen())
+		return Tf("%d · summarised anew when %s runs", "%[1]d 例 · 下次运行%[2]s时重新汇总", n, a.rebuiltWhen())
 	}
-	return referenceText(ref, a.refInfo())
+	return controlsText(a.refInfo())
+}
+
+// controlsText says in a line what the summary of the controls holds.
+func controlsText(info *refInfo) string {
+	if info == nil {
+		return T("Not summarised yet", "尚未汇总")
+	}
+	if info.err != "" {
+		return info.err
+	}
+	return Tf("%d · smoothed %g mm", "%d 例 · 平滑 %g mm", info.N, info.FWHM)
+}
+
+// controlStats is the section of Intensity Normalisation on the summary of
+// the controls that it makes before it normalises the images: what it
+// holds, and how it is made.
+func (a *app) controlStats(c *ui.Context) {
+	p := &a.ref
+	info := a.refInfo()
+	section(c, T("Control statistics", "对照统计"),
+		T("Before it normalises the images, this step summarises the healthy controls: the mean and spread of every voxel for each method, and, with a covariate table, what age and sex do (W-scores). HN, iPS, iHN, the z-score maps and the reference cluster all compare with them. They are summarised anew once the controls or these settings change; when only the covariates change, Z-score Maps does it. Below about 10 controls the voxel statistics get unreliable.",
+			"本步在归一化图像之前，先把健康对照汇总成对照统计：每种方法下每个体素的均值和离散程度；提供协变量表时，还会对年龄和性别的影响建模（W 值）。HN、iPS、iHN、Z 值图和参考簇都与它比较。对照或这些设置变动后会重新汇总；只改了协变量时，由 Z 值图重新汇总。少于约 10 例对照时，体素统计不够可靠。"), func() {
+			if a.refStale() {
+				caution(c, Tf("The controls, the covariates or the settings have changed since the controls were summarised: %s does it anew the next time it runs.",
+					"汇总对照统计之后，对照、协变量或设置有了变化：下次运行%s时会重新汇总。", a.rebuiltWhen()))
+			}
+			if info != nil && info.err == "" {
+				extra := T("PS, iPS, HN, iHN", "PS、iPS、HN、iHN")
+				for _, m := range info.StatsFor {
+					extra += T(", ", "、") + methodName(m)
+				}
+				cov := T("None", "无")
+				if names := info.covariateNames(); len(names) > 0 {
+					cov = strings.Join(names, T(", ", "、"))
+				}
+				stats(c,
+					[2]string{strconv.Itoa(info.N), T("Controls", "对照人数")},
+					[2]string{strconv.FormatFloat(info.FWHM, 'g', 4, 64) + " mm", T("Smoothing (FWHM)", "平滑 (FWHM)")},
+					[2]string{cov, T("Covariates (W-scores)", "协变量（W 值）")},
+				)
+				rows(c,
+					func() { setting(c, T("Z-score maps available for", "可制作 Z 值图的方法"), extra, nil) },
+					func() {
+						setting(c, T("Saved in", "保存位置"), a.writesTo(a.reference), func() {
+							revealButton(c, "ref-reveal", revealLabel(), a.reference)
+						})
+					},
+				)
+				a.show(&p.pic, a.reference, referencePicture(a.reference))
+				a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
+			} else {
+				rows(c,
+					fact(c, T("Healthy controls", "健康对照"), a.referenceLine()),
+					fact(c, T("Covariates", "协变量"), a.covText()),
+					fact(c, T("Saved in", "保存位置"), a.writesTo(p.output)))
+			}
+			a.optionsLine(c, "reference", "reference", groupReference)
+		})
 }
 
 // covText says in a line which covariates the project adjusts for.
@@ -259,7 +316,7 @@ func readRefInfo(folder string) *refInfo {
 	info := &refInfo{}
 	raw, err := os.ReadFile(filepath.Join(folder, "reference.json"))
 	if err != nil {
-		info.err = T("This folder is not a reference (it has no reference.json).", "该文件夹不是参考库（没有 reference.json）。")
+		info.err = T("The control statistics cannot be read (reference.json is missing): run Intensity Normalisation again.", "无法读取对照统计（缺少 reference.json）：请重新运行强度归一化。")
 		return info
 	}
 	if err := json.Unmarshal(raw, info); err != nil {
@@ -276,13 +333,16 @@ func (r *refInfo) covariateNames() []string {
 	return names
 }
 
-// The reference of a project is its healthy controls, summarised: it is no
-// step of its own.  Intensity Normalisation builds it from the controls
-// before it normalises the images, and builds it anew once the controls or
-// the settings it was built with have changed.  Where no more than its model
-// of the covariates, or the statistics it keeps, have changed, the images
-// normalised still stand, and Z-score Maps builds it anew instead.  A project
-// without controls of its own imports a reference built elsewhere instead.
+// The reference of a project is its healthy controls, summarised (the
+// control statistics, as the pages call it): it is no step of its own.
+// Intensity Normalisation builds it from the controls before it normalises
+// the images, and builds it anew once the controls or the settings it was
+// built with have changed.  Where no more than its model of the covariates,
+// or the statistics it keeps, have changed, the images normalised still
+// stand, and Z-score Maps builds it anew instead.  Every project has
+// controls of its own, at least 3: a reference is never brought in from
+// elsewhere, so that the maps and the group comparison rest on the same
+// controls.
 type refPage struct {
 	output string // where the reference of the project is built
 
@@ -300,21 +360,10 @@ type refBuilt struct {
 
 func (p *refPage) init() {}
 
-// imported reports whether the reference in use was built elsewhere.
-func (a *app) imported() bool {
-	return a.reference != "" && !sameDir(a.reference, a.ref.output)
-}
-
-// ownReference reports whether the reference in use is the one built in
-// the project, and not one imported from elsewhere.
-func (a *app) ownReference() bool {
-	return a.reference != "" && sameDir(a.reference, a.ref.output)
-}
-
-// buildsReference reports whether the project makes its own reference: it
-// has imported none, and holds the 3 controls that one takes at least.
+// buildsReference reports whether the project can summarise its controls:
+// it holds the 3 that it takes at least.
 func (a *app) buildsReference() bool {
-	return a.ref.output != "" && !a.imported() && len(a.controls()) >= 3
+	return a.ref.output != "" && len(a.controls()) >= 3
 }
 
 // refStatsFor are the methods the reference of the project keeps control
@@ -414,7 +463,7 @@ func (a *app) refStale() bool {
 // or "".
 func (a *app) buildProblem() string {
 	if o := &a.opt; o.RefMask == "file" && o.RefMaskFile == "" {
-		return T("Choose the mask file of the reference in the settings.", "请在设置中选择参考库的掩膜文件。")
+		return T("Choose the mask file of the control statistics in the settings.", "请在设置中选择对照统计所用的掩膜文件。")
 	}
 	return a.cov.problem()
 }
@@ -492,109 +541,4 @@ func (b *refBuild) run(ctx context.Context, step func(done, total int)) (*refBui
 	}
 	b.built.stamp = stampOf(filepath.Join(b.out, "reference.json"))
 	return b.built, nil
-}
-
-// useOwn goes back from an imported reference to that of the project.
-func (a *app) useOwn() {
-	own := a.ref.output
-	if !core.IsReferenceFolder(own) {
-		own = "" // built when Intensity Normalisation runs
-	}
-	a.setReference(own)
-}
-
-func (a *app) referenceView(c *ui.Context) {
-	p := &a.ref
-	controls := len(a.controls())
-	// The way back from an imported reference, where the project can have
-	// one of its own.
-	ownButton := func() {
-		if a.imported() && (controls >= 3 || core.IsReferenceFolder(p.output)) {
-			if smallButton(c.Key("ref-own"), T("Use the Project's Controls", "改用项目的对照")).Clicked() {
-				a.useOwn()
-			}
-		}
-	}
-	a.frame(c, T("Reference", "参考库"),
-		T("The healthy controls, summarised: what every patient is compared with", "健康对照的统计汇总：每位患者都与它比较"),
-		func() {
-			section(c, T("Reference in use", "当前参考库"), "", func() {
-				if a.refInfo() == nil || a.refInfo().err != "" {
-					rows(c, func() {
-						desc := T("HN, iPS, iHN and z-score maps need a reference. Add at least 3 healthy controls on the Data page and Intensity Normalisation builds it from them; or import one built elsewhere.",
-							"HN、iPS、iHN 和 Z 值图都需要参考库。在“数据”页面添加至少 3 例健康对照，运行强度归一化时就会自动建立；也可以导入在别处建好的参考库。")
-						if a.buildsReference() {
-							desc = Tf("Intensity Normalisation builds it from the %d healthy controls of the project before it normalises the images. To use one built elsewhere instead, import it.",
-								"运行强度归一化时，会先用项目的 %d 例健康对照自动建立，再对图像做归一化。如要改用在别处建好的参考库，请导入。", controls)
-						}
-						if a.refInfo() != nil {
-							desc = a.refInfo().err
-						}
-						setting(c, T("No reference yet", "还没有参考库"), desc, func() {
-							if smallButton(c.Key("ref-import"), T("Import…", "导入…")).Clicked() {
-								a.chooseReference()
-							}
-							ownButton()
-						})
-					})
-					return
-				}
-				info := a.refInfo()
-				extra := T("PS, iPS, HN, iHN", "PS、iPS、HN、iHN")
-				for _, m := range info.StatsFor {
-					extra += T(", ", "、") + methodName(m)
-				}
-				cov := T("None", "无")
-				if names := info.covariateNames(); len(names) > 0 {
-					cov = strings.Join(names, T(", ", "、"))
-				}
-				ui.Column(c).Gap(8).Children(func() {
-					if a.refStale() {
-						caution(c, Tf("The controls, the covariates or the settings have changed since this reference was built: %s builds it anew the next time it runs.",
-							"建立该参考库之后，对照、协变量或设置有了变化：下次运行%s时会重新建立。", a.rebuiltWhen()))
-					}
-					stats(c,
-						[2]string{strconv.Itoa(info.N), T("Controls", "对照人数")},
-						[2]string{strconv.FormatFloat(info.FWHM, 'g', 4, 64) + " mm", T("Smoothing (FWHM)", "平滑 (FWHM)")},
-						[2]string{cov, T("Covariates (W-scores)", "协变量（W 值）")},
-					)
-					rows(c,
-						func() {
-							origin := T("Built from the healthy controls of this project", "由本项目的健康对照建立")
-							if a.imported() {
-								origin = T("Imported from ", "导入自 ") + shortDir(filepath.Dir(a.reference))
-							}
-							setting(c, filepath.Base(a.reference), origin, func() {
-								revealButton(c, "ref-reveal", revealLabel(), a.reference)
-								if smallButton(c.Key("ref-import"), T("Import Another…", "导入其他…")).Clicked() {
-									a.chooseReference()
-								}
-								ownButton()
-							})
-						},
-						func() { setting(c, T("Z-score maps available for", "可制作 Z 值图的方法"), extra, nil) },
-					)
-					a.show(&p.pic, a.reference, referencePicture(a.reference))
-					a.figure(c, &p.pic, T("Mean of the controls", "对照的均值图"), legend{})
-				})
-			})
-			if a.imported() {
-				return
-			}
-			section(c, T("How it is built", "如何建立"), T("There is nothing to run here: Intensity Normalisation builds the reference from the healthy controls of the project, and builds it anew after the controls or these settings change. When only the covariates change, the images normalised still stand, and Z-score Maps builds it anew. Below about 10 controls the voxel statistics get unreliable. With a covariate table, the reference also models age and sex (W-scores).",
-				"这里没有需要运行的步骤：强度归一化会用项目的健康对照自动建立参考库，对照或这些设置变动后会重新建立；只改了协变量时，已归一化的图像仍然有效，由 Z 值图重新建立。少于约 10 例对照时，体素统计不够可靠。提供协变量表后，参考库还会对年龄和性别建模（W 值）。"), func() {
-				a.source(c, "ref-data", "data", changeInData(),
-					fact(c, T("Healthy controls", "健康对照"), countText(a.controls())),
-					fact(c, T("Covariates", "协变量"), a.covText()),
-					fact(c, T("Saved in", "保存位置"), a.writesTo(p.output)))
-				a.optionsLine(c, "reference", "reference", groupReference)
-				ui.Row(c).Children(func() {
-					if button(c.Key("ref-to-norm"), T("Go to Intensity Normalisation", "前往强度归一化"), iconArrowRight, buttonSoft, 26).Clicked() {
-						a.page = "normalize"
-					}
-				})
-			})
-		},
-		nil,
-	)
 }

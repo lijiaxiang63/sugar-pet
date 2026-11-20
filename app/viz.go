@@ -38,8 +38,6 @@ func (a *app) pictureOf(page string) *picture {
 	switch page {
 	case "spatial":
 		return &a.spatial.pic
-	case "reference":
-		return &a.ref.pic
 	case "zmap":
 		return &a.zmap.pic
 	case "classify":
@@ -361,7 +359,7 @@ func overlayPicture(path string, opt core.PictureOptions) func() (*image.RGBA, e
 	}
 }
 
-// referencePicture is the mean of the controls of a reference.
+// referencePicture is the mean of the controls, as they were summarised.
 func referencePicture(folder string) func() (*image.RGBA, error) {
 	return imagePicture(filepath.Join(folder, "template.nii.gz"), false)
 }

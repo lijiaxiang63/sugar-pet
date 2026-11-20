@@ -278,7 +278,10 @@ func (a *app) applyState(s *projectState) {
 	if s.Compare.Name != "" {
 		a.cmp.name = s.Compare.Name
 	}
-	if s.Reference != "" && core.IsReferenceFolder(s.Reference) {
+	// The control statistics are those the project built from its own
+	// controls: a reference an earlier version imported from elsewhere is
+	// let go, and the controls are summarised anew.
+	if s.Reference != "" && sameDir(s.Reference, a.ref.output) && core.IsReferenceFolder(s.Reference) {
 		a.setReference(s.Reference)
 	}
 

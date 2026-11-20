@@ -565,7 +565,7 @@ func (a *app) pathSetting(c *ui.Context, key, title, desc string, value *string,
 
 // remedy is where the problem a page reports is mended, when a button of
 // its run bar can lead there: "data" for the Data page, "spatial" for
-// Spatial Normalisation, "reference" for the Reference page, "spm" for the
+// Spatial Normalisation, "spm" for the
 // settings of SPM and MATLAB, the step of the individual analysis that the
 // page waits for, or "".  The problem is known by being the very one the
 // page gives for that lack, not by its wording.
@@ -601,28 +601,24 @@ func (a *app) remedy(page, problem string) string {
 			return "data"
 		}
 	case "normalize":
-		lack = a.normReferenceProblem()
-	case "zmap":
-		if a.reference == "" {
-			lack = needReference()
-		} else if n := a.normCurrent(); n != nil {
-			if yes, _ := a.usable(n.methods); n.unfit(yes, a.refInfo()) == problem {
-				return "factors"
+		// The controls are added on the Data page, or warped into MNI space.
+		if problem == a.normReferenceProblem() {
+			if a.proj != nil && a.proj.native {
+				return "spatial"
 			}
+			return "data"
 		}
+	case "zmap", "cluster":
+		lack = needReference()
 	case "classify":
-		if a.reference == "" {
-			lack = needReference()
-		} else if problem == primaryWithoutMap(a.norm.primary()) {
+		lack = needReference()
+		if a.reference != "" && problem == primaryWithoutMap(a.norm.primary()) {
 			return "normalize"
 		}
-	case "cluster":
-		if a.reference == "" {
-			lack = needReference()
-		}
 	}
-	if problem == lack {
-		return "reference"
+	// Step 1 summarises the controls.
+	if a.reference == "" && problem == lack {
+		return "normalize"
 	}
 	return ""
 }
@@ -669,20 +665,9 @@ func (a *app) runBar(c *ui.Context, page, problem, runLabel string, st *status, 
 			if button(c.Key("fix-spatial"), T("Go to Spatial Normalisation", "前往空间标准化"), iconArrowRight, buttonSoft, 28).Clicked() {
 				a.page = "spatial"
 			}
-		case "reference":
-			if button(c.Key("fix-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 28).Clicked() {
-				a.page = "reference"
-			}
 		case "spm":
 			if button(c.Key("fix-spm"), T("Set Up SPM…", "设置 SPM…"), iconGear, buttonSoft, 28).Clicked() {
 				a.openSettings("spatial")
-			}
-		case "factors": // either side can be made to agree with the other
-			if button(c.Key("fix-settings"), T("Open Settings…", "打开设置…"), iconGear, buttonSoft, 28).Clicked() {
-				a.openSettings("normalize")
-			}
-			if button(c.Key("fix-ref"), T("Go to Reference", "前往参考库"), iconArrowRight, buttonSoft, 28).Clicked() {
-				a.page = "reference"
 			}
 		case "normalize", "zmap":
 			step := a.remedy(page, problem)

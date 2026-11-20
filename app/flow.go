@@ -1,14 +1,11 @@
 package main
 
 import (
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
-
-	"sugarpet/core"
 )
 
 // The individual analysis is three steps, each resting on the one before:
@@ -32,7 +29,7 @@ type normDone struct {
 	reference string
 	// refSig is app.refFactorSignature as the run found it: what of the
 	// settings the reference of the project was built with the factors rest
-	// on ("" with an imported one, or with none).
+	// on ("" with none).
 	refSig   string
 	settings string // options.normSettings as the run had them
 	// What the run wrote of each image, by image and method: the normalised
@@ -108,11 +105,11 @@ func (a *app) normChanged() string {
 		what = append(what, T("methods", "方法"))
 	}
 	if d.reference != a.reference || d.rebuilt {
-		what = append(what, T("reference", "参考库"))
+		what = append(what, T("control statistics", "对照统计"))
 	} else if d.refSig != a.refFactorSignature() {
 		// The reference of the project would be built anew, and the factors
 		// estimated otherwise.
-		what = append(what, T("reference settings", "参考库设置"))
+		what = append(what, T("settings of the control statistics", "对照统计设置"))
 	}
 	if d.settings != a.opt.normSettings(d.methods) {
 		what = append(what, T("settings", "设置"))
@@ -127,48 +124,6 @@ func (a *app) normCurrent() *normDone {
 		return nil
 	}
 	return a.norm.done
-}
-
-// statisticText and factorSmoothingText say how factors are estimated.
-func statisticText(median bool) string {
-	if median {
-		return T("the median of a region", "区域中位数")
-	}
-	return T("the mean of a region", "区域均值")
-}
-
-func factorSmoothingText(fwhm *float64) string {
-	if fwhm == nil {
-		return T("automatic smoothing", "自动平滑")
-	}
-	return Tf("a smoothing of %s mm", "%s mm 的平滑", num(*fwhm))
-}
-
-// unfit says why no z-score map can be made, by these methods, of what step
-// 1 normalised, or "": an image is compared with the controls of a reference
-// only when its factor was estimated the way theirs were, by the same
-// statistic of a region and after the same smoothing.  Either side can be
-// made to agree: the settings of step 1, or the reference, built anew.
-func (d *normDone) unfit(methods []string, ref *refInfo) string {
-	if ref == nil || ref.err != "" {
-		return ""
-	}
-	var mine, theirs []string
-	if (d.fwhm == nil) != (ref.FactorFWHM == nil) || d.fwhm != nil && *d.fwhm != *ref.FactorFWHM {
-		mine, theirs = append(mine, factorSmoothingText(d.fwhm)), append(theirs, factorSmoothingText(ref.FactorFWHM))
-	}
-	// The statistic is that of the reference regions and of PS.
-	regional := slices.ContainsFunc(methods, func(m string) bool { return !core.NeedsReference(m) && m != "spm-global" })
-	if regional && d.median != (ref.Statistic == "median") {
-		mine, theirs = append(mine, statisticText(d.median)), append(theirs, statisticText(ref.Statistic == "median"))
-	}
-	if len(mine) == 0 {
-		return ""
-	}
-	and := T(" and ", "和")
-	return Tf("Step 1 estimated its factors with %s, the imported reference those of its controls with %s: the images cannot be compared with the controls. Make Settings › Intensity Normalisation agree with the reference and run step 1 again, or use a reference built with the settings as they are.",
-		"第 1 步估计因子时用的是%s，而导入的参考库估计对照的因子时用的是%s，两者无法比较。请把“设置 › 强度归一化”改成与参考库一致并重新运行第 1 步，或者改用按现在的设置建立的参考库。",
-		strings.Join(mine, and), strings.Join(theirs, and))
 }
 
 // zmapCovariates is the covariate table a run of step 2 uses: none while
@@ -242,8 +197,8 @@ func (a *app) lock(page string) (step, why string) {
 	if page == "classify" && a.zmapCurrent() == nil {
 		if d := a.zmap.done; d != nil {
 			if d.from == a.normCurrent() && d.refSig != a.refSignature() {
-				return "zmap", T("The covariates or the reference settings changed after step 2 ran: run Z-score Maps again, which builds the reference anew.",
-					"第 2 步运行之后改了协变量或参考库设置：请重新运行 Z 值图，它会先重新建立参考库。")
+				return "zmap", T("The covariates or the settings of the control statistics changed after step 2 ran: run Z-score Maps again, which summarises the controls anew.",
+					"第 2 步运行之后改了协变量或对照统计设置：请重新运行 Z 值图，它会先重新汇总对照统计。")
 			}
 			return "zmap", T("Step 2 no longer rests on what is before it: run Z-score Maps again.", "第 2 步与它之前的内容已不一致：请重新运行 Z 值图。")
 		}
@@ -405,23 +360,4 @@ func (a *app) nextStep(c *ui.Context, page string) {
 	if button(c.Key("next-step"), Tf("Next: %s", "下一步：%s", T(next.en, next.zh)), iconArrowRight, buttonSoft, 34).Clicked() {
 		a.page = next.id
 	}
-}
-
-// referenceText says in a line which reference the steps use.
-func referenceText(path string, info *refInfo) string {
-	if path == "" {
-		return T("None chosen", "尚未选择")
-	}
-	text := filepath.Base(path)
-	if info != nil && info.err == "" {
-		text += Tf(" · %d controls · smoothed %g mm", " · %d 例对照 · 平滑 %g mm", info.N, info.FWHM)
-		// How its factors were estimated, where not the usual way.
-		if info.Statistic == "median" {
-			text += T(" · factors by the median", " · 因子取中位数")
-		}
-		if info.FactorFWHM != nil {
-			text += Tf(" · factors after %s mm", " · 估计因子前平滑 %s mm", num(*info.FactorFWHM))
-		}
-	}
-	return text
 }

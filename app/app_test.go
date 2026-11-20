@@ -280,15 +280,15 @@ func TestWorkflow(t *testing.T) {
 		}
 	}
 
-	// The reference is the controls, and no step of its own: its page has
-	// nothing to run, and says that step 1 builds it.
+	// The control statistics are no step of their own: step 1 says that it
+	// summarises the controls first.
 	ref := filepath.Join(dir, "hc_reference")
 	a.cov.path = table
 	a.cov.load()
-	a.page = "reference"
+	a.page = "normalize"
 	tt.Frame()
-	if _, shown := tt.Find("建立参考库"); shown || !tt.HasText("还没有参考库") || !tt.HasText("如何建立") || a.reference != "" || !a.buildsReference() {
-		t.Fatalf("the Reference page before step 1: %q", tt.Texts())
+	if !tt.HasText("对照统计") || !tt.HasText(fmt.Sprintf("%d 例 · 运行强度归一化时汇总", len(hc))) || a.reference != "" || !a.buildsReference() {
+		t.Fatalf("the control statistics before step 1: %q", tt.Texts())
 	}
 
 	// The pages that rest on step 1 wait for it, and say so.
@@ -307,12 +307,12 @@ func TestWorkflow(t *testing.T) {
 	a.norm.methods = map[string]bool{"hn": true, "cerebellum": true}
 	a.page = "normalize"
 	tt.Frame()
-	if !tt.HasText(fmt.Sprintf("运行强度归一化时由 %d 例对照自动建立", len(hc))) || !tt.HasText("主方法") {
+	if !tt.HasText(fmt.Sprintf("%d 例 · 运行强度归一化时汇总", len(hc))) || !tt.HasText("主方法") {
 		t.Fatalf("step 1 does not say that it builds the reference, or which method is primary: %q", tt.Texts())
 	}
 	press("normalize", "开始强度归一化", &a.norm.st)
 	exists(filepath.Join(ref, "reference.json"))
-	if a.reference != ref || a.ref.built == nil || a.refStale() || !strings.HasPrefix(a.norm.st.ok, "已用 12 例对照建立参考库") {
+	if a.reference != ref || a.ref.built == nil || a.refStale() || !strings.HasPrefix(a.norm.st.ok, "已由 12 例对照汇总出对照统计") {
 		t.Fatalf("step 1 did not build the reference of the project: %q, %q", a.reference, a.norm.st.ok)
 	}
 	if info := readRefInfo(ref); !slices.Contains(info.StatsFor, "cerebellum") || fmt.Sprint(info.covariateNames()) != "[age sex]" || info.N != len(hc) {
@@ -327,17 +327,17 @@ func TestWorkflow(t *testing.T) {
 	if got, _ := a.norm.done.of(true); !slices.Equal(got, hc) {
 		t.Fatalf("the controls step 1 normalised: %v", got)
 	}
-	// The Reference page shows what was built.
-	a.page = "reference"
+	// Step 1 shows the control statistics it made.
+	a.page = "normalize"
 	tt.Frame()
-	if !tt.HasText("age、sex") || !tt.HasText("由本项目的健康对照建立") {
-		t.Fatalf("the reference is not shown: %q", tt.Texts())
+	if !tt.HasText("age、sex") || !tt.HasText("可制作 Z 值图的方法") || !tt.HasText("对照的均值图") {
+		t.Fatalf("the control statistics are not shown: %q", tt.Texts())
 	}
 	drawn(&a.ref.pic)
 	// What the reference is built with changed: it is built anew by the next
 	// run, and step 1 is not what it would do now.
 	a.opt.RefFWHM += 2
-	if !a.refStale() || a.stepDone("normalize") || !strings.Contains(a.normChanged(), "参考库设置") {
+	if !a.refStale() || a.stepDone("normalize") || !strings.Contains(a.normChanged(), "对照统计设置") {
 		t.Fatalf("with another smoothing of the reference: stale %v, changed %q", a.refStale(), a.normChanged())
 	}
 	a.opt.RefFWHM -= 2
@@ -368,35 +368,9 @@ func TestWorkflow(t *testing.T) {
 		t.Fatal("a setting of the iterative methods undid a run without them")
 	}
 	a.opt.PThreshold *= 2
-	// Factors estimated unlike those of the controls give no map.
-	a.norm.done.median = true
-	if why := a.zmapProblem(); !strings.Contains(why, "区域中位数") || !strings.Contains(why, "区域均值") || a.remedy("zmap", why) != "factors" {
-		t.Fatalf("with factors from the median: %q, remedy %q", why, a.remedy("zmap", why))
-	}
-	// A reference whose controls were scaled by the median is one to
-	// compare them with; of HN alone the statistic is no part.
-	a.refInfo().Statistic = "median"
-	if why := a.zmapProblem(); why != "" {
-		t.Fatalf("step 1 and the reference both by the median: %q", why)
-	}
-	a.refInfo().Statistic = "mean"
-	if why := a.norm.done.unfit([]string{"hn"}, a.refInfo()); why != "" {
-		t.Fatalf("HN with another statistic than the reference: %q", why)
-	}
-	a.norm.done.median = false
-	six := 6.0
-	a.norm.done.fwhm = &six
-	if why := a.norm.done.unfit([]string{"hn"}, a.refInfo()); !strings.Contains(why, "6 mm") || !strings.Contains(why, "自动平滑") {
-		t.Fatalf("with a smoothing of its own: %q", why)
-	}
-	a.refInfo().FactorFWHM = &six
-	if why := a.zmapProblem(); why != "" {
-		t.Fatalf("step 1 and the reference both after 6 mm: %q", why)
-	}
-	a.norm.done.fwhm, a.refInfo().FactorFWHM = nil, nil
 	// The reference built anew in its folder is not the one step 1 used.
 	a.norm.done.rebuilt = true
-	if _, why := a.lock("zmap"); a.stepDone("normalize") || !strings.Contains(why, "参考库") {
+	if _, why := a.lock("zmap"); a.stepDone("normalize") || !strings.Contains(why, "对照统计") {
 		t.Fatalf("with the reference rebuilt: %q", why)
 	}
 	a.norm.done.rebuilt = false
@@ -623,14 +597,14 @@ func TestWorkflow(t *testing.T) {
 	if step, _ := a.lock("compare"); step != "" {
 		t.Fatalf("with sex left out the comparison waits for %q", step)
 	}
-	a.page = "reference"
+	a.page = "normalize"
 	tt.Frame()
-	if !tt.HasText("下次运行Z 值图时会重新建立") {
-		t.Fatalf("the Reference page does not say that step 2 builds it: %q", tt.Texts())
+	if !tt.HasText("下次运行Z 值图时会重新汇总") {
+		t.Fatalf("step 1 does not say that step 2 summarises the controls anew: %q", tt.Texts())
 	}
 	normalised := a.norm.done
 	press("zmap", "生成 Z 值图", &a.zmap.st)
-	if got := readRefInfo(ref).covariateNames(); fmt.Sprint(got) != "[age]" || a.refStale() || !strings.HasPrefix(a.zmap.st.ok, "已用 12 例对照重新建立参考库") {
+	if got := readRefInfo(ref).covariateNames(); fmt.Sprint(got) != "[age]" || a.refStale() || !strings.HasPrefix(a.zmap.st.ok, "已由 12 例对照重新汇总对照统计") {
 		t.Fatalf("step 2 did not build the reference anew: %v, %q", got, a.zmap.st.ok)
 	}
 	if a.norm.done != normalised || !a.stepDone("normalize") || !a.stepDone("zmap") {
@@ -736,7 +710,7 @@ func TestWorkflow(t *testing.T) {
 	if len(a.norm.rows) != len(pt)+len(hc) || a.norm.rows[0].voxels == "" || a.norm.rows[0].mask != "custom" {
 		t.Fatalf("normalising by the cluster gave %+v", a.norm.rows)
 	}
-	if a.ref.built != built || strings.Contains(a.norm.st.ok, "参考库") {
+	if a.ref.built != built || strings.Contains(a.norm.st.ok, "对照统计") {
 		t.Fatalf("the reference was built again though nothing of it changed: %q", a.norm.st.ok)
 	}
 	// No map can be made with a custom region: step 2 says so.
@@ -1379,13 +1353,19 @@ func TestRemedy(t *testing.T) {
 		a.proj = &project{dir: "/study", unsaved: true}
 		a.projectOutputs()
 		// No images yet: that is what the page says, though it has no
-		// reference either, and the Data page is where they are added.
+		// control statistics either, and the Data page is where they are added.
 		if got := a.remedy("normalize", a.normProblem()); got != "data" {
 			t.Errorf("normalize without images: remedy %q for %q", got, a.normProblem())
 		}
 		file := []string{"/study/patients/sub-01_pet.nii.gz", "/study/patients/sub-02_pet.nii.gz"}
 		a.proj.patients.files = file
-		a.proj.controls.files = []string{"/study/controls/sub-03_pet.nii.gz", "/study/controls/sub-04_pet.nii.gz"}
+		controls := []string{"/study/controls/sub-03_pet.nii.gz", "/study/controls/sub-04_pet.nii.gz", "/study/controls/sub-05_pet.nii.gz"}
+		// Fewer than 3 controls: the Data page, where they are added.
+		a.proj.controls.files = controls[:2]
+		if got := a.remedy("normalize", a.normProblem()); got != "data" || a.normProblem() != a.dataProblem() {
+			t.Errorf("normalize with 2 controls: remedy %q for %q", got, a.normProblem())
+		}
+		a.proj.controls.files = controls
 		// The pages that rest on step 1 wait for it, and lead there.
 		for page, step := range map[string]string{"zmap": "normalize", "classify": "normalize", "compare": "normalize"} {
 			problem := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "compare": a.cmpProblem()}[page]
@@ -1395,19 +1375,22 @@ func TestRemedy(t *testing.T) {
 		}
 		a.norm.methods = map[string]bool{"cerebellum": true}
 		a.norm.done = &normDone{asked: a.normImages(), files: a.normImages(), controls: a.controls(), methods: a.norm.chosen(),
-			settings: a.opt.normSettings(a.norm.chosen())}
+			settings: a.opt.normSettings(a.norm.chosen()), refSig: a.refFactorSignature()}
 		if got := a.remedy("classify", a.classifyProblem()); got != "zmap" {
 			t.Errorf("classify before step 2 is done: remedy %q for %q", got, a.classifyProblem())
 		}
-		a.zmap.done = &zmapDone{from: a.norm.done, files: file, methods: []string{"hn"}}
-		// With the steps before them done, they lack a reference.
+		a.zmap.done = &zmapDone{from: a.norm.done, files: file, methods: []string{"hn"}, refSig: a.refSignature()}
+		// With the steps before them done, they lack the control
+		// statistics, which step 1 makes.
 		a.norm.methods["hn"] = true
 		a.norm.done.methods = a.norm.chosen()
-		problems := map[string]string{"normalize": a.normProblem(), "zmap": a.zmapProblem(), "classify": a.classifyProblem(),
-			"cluster": a.clusterProblem()}
+		problems := map[string]string{"zmap": a.zmapProblem(), "classify": a.classifyProblem(), "cluster": a.clusterProblem()}
 		for page, problem := range problems {
-			if got := a.remedy(page, problem); got != "reference" {
-				t.Errorf("%s without a reference: remedy %q for %q", page, got, problem)
+			if problem != needReference() {
+				t.Errorf("%s without control statistics: %q", page, problem)
+			}
+			if got := a.remedy(page, problem); got != "normalize" {
+				t.Errorf("%s without control statistics: remedy %q for %q", page, got, problem)
 			}
 		}
 		// A method that needs none, and a page that has one.

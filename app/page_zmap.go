@@ -50,14 +50,14 @@ func (a *app) zmapAllowed(id string) (bool, string) {
 			}
 		}
 	}
-	return false, T("The reference in use holds no control statistics for this method.",
-		"当前参考库中没有该方法的对照统计。")
+	return false, T("The control statistics hold none for this method.",
+		"对照统计中没有该方法的统计。")
 }
 
 // noMethod is what the page says when no method of step 1 can make maps.
 func noMethod(methods []string) string {
-	return Tf("Z-score maps cannot be made with %s: the reference in use holds no control statistics for it. Go back to step 1 and choose HN.",
-		"无法用%s制作 Z 值图：当前参考库中没有它的对照统计。请返回第 1 步改用 HN。", methodNames(methods))
+	return Tf("Z-score maps cannot be made with %s: the control statistics hold none for it. Go back to step 1 and choose HN.",
+		"无法用%s制作 Z 值图：对照统计中没有它的统计。请返回第 1 步改用 HN。", methodNames(methods))
 }
 
 // zmapProblem is what keeps step 2 from running, or "".
@@ -88,9 +88,6 @@ func (a *app) zmapProblem() string {
 			return msg
 		}
 	}
-	if why := n.unfit(yes, a.refInfo()); why != "" {
-		return why
-	}
 	return ""
 }
 
@@ -106,8 +103,8 @@ func (a *app) zmapView(c *ui.Context) {
 		T("How far each voxel is from the healthy controls", "每个体素偏离健康对照的程度"),
 		func() {
 			a.steps(c)
-			section(c, T("From step 1", "来自第 1 步"), T("The normalised images of the patients are read as step 1 wrote them: smoothed like the controls and compared with them voxel by voxel. Negative values mean lower uptake. No map is made of the controls: they are what the reference is made of.",
-				"直接读取第 1 步写出的患者归一化图像：按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。对照本身不做 Z 值图：参考库就是由它们建成的。"), func() {
+			section(c, T("From step 1", "来自第 1 步"), T("The normalised images of the patients are read as step 1 wrote them: smoothed like the controls and compared with them voxel by voxel. Negative values mean lower uptake. No map is made of the controls: they are what the patients are compared with.",
+				"直接读取第 1 步写出的患者归一化图像：按对照的方式平滑，再逐体素与对照比较。负值表示摄取低于对照。对照本身不做 Z 值图：患者正是与它们比较。"), func() {
 				if n == nil {
 					a.taken(c, "zmap")
 					return
@@ -119,23 +116,23 @@ func (a *app) zmapView(c *ui.Context) {
 				a.taken(c, "zmap",
 					fact(c, T("Patients", "患者"), imagesText(n.of(false))),
 					fact(c, T("Methods", "方法"), shown),
-					fact(c, T("Reference", "参考库"), a.referenceLine()),
+					a.referenceFact(c),
 				)
 				if len(skipped) > 0 && len(methods) > 0 {
-					caution(c, Tf("No map is made with %s: the reference in use holds no control statistics for it.",
-						"本步不用%s制作 Z 值图：当前参考库中没有它的对照统计。", methodNames(skipped)))
+					caution(c, Tf("No map is made with %s: the control statistics hold none for it.",
+						"本步不用%s制作 Z 值图：对照统计中没有它的统计。", methodNames(skipped)))
 				}
 			})
 			if a.reference != "" && (a.refInfo() == nil || a.refInfo().err == "") {
 				section(c, T("Age and sex (W-scores)", "年龄和性别（W 值）"), "", func() {
-					about := T("This reference was built without covariates, so the maps are plain z-scores.", "该参考库建立时未提供协变量，因此输出普通 Z 值图。")
+					about := T("The controls were summarised without covariates, so the maps are plain z-scores.", "汇总对照统计时未提供协变量，因此输出普通 Z 值图。")
 					switch {
 					case hasModels && a.cov.path != "":
-						about = Tf("The reference models %s, and the table gives them for these images: the maps are W-scores, compared with what the controls predict for such a person.",
-							"参考库对%s建了模型，表格中有这些图像的取值：输出 W 值图，与对照对同样条件的人的预测值比较。", strings.Join(a.refInfo().covariateNames(), T(" and ", "、")))
+						about = Tf("The control statistics model %s, and the table gives them for these images: the maps are W-scores, compared with what the controls predict for such a person.",
+							"对照统计对%s建了模型，表格中有这些图像的取值：输出 W 值图，与对照对同样条件的人的预测值比较。", strings.Join(a.refInfo().covariateNames(), T(" and ", "、")))
 					case hasModels:
-						about = Tf("The reference models %s. Choose a covariate table on the Data page to get W-scores; without one the maps are plain z-scores.",
-							"参考库对%s建了模型。在“数据”页面选择协变量表即可输出 W 值图；不选则输出普通 Z 值图。", strings.Join(a.refInfo().covariateNames(), T(" and ", "、")))
+						about = Tf("The control statistics model %s. Choose a covariate table on the Data page to get W-scores; without one the maps are plain z-scores.",
+							"对照统计对%s建了模型。在“数据”页面选择协变量表即可输出 W 值图；不选则输出普通 Z 值图。", strings.Join(a.refInfo().covariateNames(), T(" and ", "、")))
 					}
 					table := T("None", "无")
 					if a.cov.path != "" {
@@ -218,7 +215,7 @@ func (a *app) runZMap() {
 	label := T("Making maps", "正在生成 Z 值图")
 	first := label
 	if build != nil {
-		first = T("Building the reference from the controls", "正在用对照建立参考库")
+		first = T("Summarising the healthy controls", "正在汇总健康对照")
 	}
 	a.start("zmap", first, func(ctx context.Context, step func(int, int)) (func(), error) {
 		if build != nil {
@@ -352,7 +349,7 @@ func (a *app) runZMap() {
 			} else {
 				p.st.ok = Tf("%d map(s) written.", "已输出 %d 幅图。", len(rows))
 				if build != nil {
-					p.st.ok = Tf("Reference built anew from %d controls. ", "已用 %d 例对照重新建立参考库。", len(build.files)) + p.st.ok
+					p.st.ok = Tf("Control statistics summarised anew from %d controls. ", "已由 %d 例对照重新汇总对照统计。", len(build.files)) + p.st.ok
 				}
 			}
 		}, nil

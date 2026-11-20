@@ -63,20 +63,21 @@ project, open one, or pick one opened lately.
 
 The pages of a project follow the workflow below, one step after the other:
 
-1. **Data.** The patients, the healthy controls and, if you have one, a
-   table of age and sex are given here once; every other page takes them
-   from it. Images stay where they are or are copied into the project, as
+1. **Data.** The patients, the healthy controls (at least 3) and, if you
+   have one, a table of age and sex are given here once; every other page
+   takes them from it. Images stay where they are or are copied into the project, as
    you choose. The project also says whether its images are in MNI space or
    still in native space.
 2. **Spatial Normalisation**, only for images in native space: warps them
    into MNI space with SPM.
 3. **Intensity Normalisation.** Normalises the patients and the controls
    together, the same way, and shows the factors of both groups in one
-   table. It begins by building the reference from the controls of the
-   project: there is no step to build it, and it is built anew only after
-   the controls or its settings have changed. Where only the covariates
-   have changed, the images normalised still stand: Z-score Maps builds the
-   reference anew instead.
+   table. It begins by summarising the controls of the project into the
+   *control statistics* (the reference of the command line): there is no
+   step to build them, and they are summarised anew only after the
+   controls or their settings have changed. Where only the covariates have
+   changed, the images normalised still stand: Z-score Maps summarises the
+   controls anew instead.
 4. **Z-score Maps** of the patients, from the images step 3 wrote.
 5. **Classify Parkinsonism**, from the maps step 4 wrote.
 6. **Compare Groups**, the patients against the controls, on the images
@@ -84,9 +85,10 @@ The pages of a project follow the workflow below, one step after the other:
 
 Nothing is computed twice. A step reads what the one before it wrote, waits
 until that one has run, and is marked as to be run again once what it rests
-on has changed. A project without controls of its own imports a reference
-built elsewhere, on the **Reference** page, which otherwise shows the one in
-use; **Masks & Atlas** shows the built-in regions.
+on has changed. Every patient is compared with the controls of the project
+and no others: the maps, the classification and the group comparison all
+rest on the same ones, so the app takes no reference built elsewhere.
+**Masks & Atlas** shows the built-in regions.
 
 The project folder is laid out as `sugar-pet init` lays out a study, and the
 app reads and writes the same files as the command line (reference folders,
@@ -106,7 +108,7 @@ factor and needs nothing else.
 
 The options that most runs leave alone are in the settings: the gear at the
 bottom of the sidebar, or ⌘, / Ctrl+,. Those of the analyses (smoothing, the
-iterative methods, how the reference is built, the cross-check of the
+iterative methods, how the controls are summarised, the cross-check of the
 classification, the correction of a group comparison) are kept in the
 project, and a new project starts with the defaults; SPM, MATLAB and the
 language are the app's.

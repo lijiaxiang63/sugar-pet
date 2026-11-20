@@ -240,11 +240,14 @@ func (a *app) projectChip(c *ui.Context) {
 	})
 }
 
-// dataProblem is what the project lacks before any analysis: its images.
+// dataProblem is what the project lacks before any analysis: its images,
+// and among them the 3 healthy controls it takes at least.  Every patient
+// is compared with the controls of the project, and no others: the maps and
+// the group comparison rest on the same ones.
 func (a *app) dataProblem() string {
 	p := a.proj
 	if len(p.patients.files)+len(p.controls.files) == 0 {
-		return T("Add the images of the project: patients, healthy controls, or both.", "请添加项目的图像：患者、健康对照，或两者都加。")
+		return T("Add the images of the project: the patients, and at least 3 healthy controls.", "请添加项目的图像：患者，以及至少 3 例健康对照。")
 	}
 	// An image is of one group: it is normalised once, and then compared
 	// with the other.
@@ -252,6 +255,9 @@ func (a *app) dataProblem() string {
 		if slices.Contains(p.patients.files, path) {
 			return Tf("%s is among the patients and among the controls: remove it from one of the two.", "%s 同时出现在患者和对照中：请从其中一组移除。", filepath.Base(path))
 		}
+	}
+	if n := len(p.controls.files); n < 3 {
+		return Tf("Add at least 3 healthy controls: every patient is compared with them. The project has %d.", "请至少添加 3 例健康对照：每位患者都要与它们比较。项目目前有 %d 例。", n)
 	}
 	return ""
 }
@@ -322,8 +328,7 @@ func (a *app) source(c *ui.Context, key, page, label string, facts ...func()) {
 }
 
 // The labels of the ways back to where a page's input is chosen.
-func changeInData() string      { return T("Change in Data", "到“数据”页面修改") }
-func changeInReference() string { return T("Open Reference", "查看参考库") }
+func changeInData() string { return T("Change in Data", "到“数据”页面修改") }
 
 // countText says how many images a group holds and where they lie.
 func countText(files []string) string {
@@ -378,8 +383,8 @@ func (a *app) dataView(c *ui.Context) {
 					},
 				)
 			})
-			section(c, T("Images", "图像"), T("One FDG-PET scan per subject. Every page of the project takes its images from here: both groups are normalised, the controls make the reference, the patients are mapped and classified, and the two groups are compared.",
-				"每位受试者一幅 FDG-PET 图像。项目的每个页面都从这里取图像：两组都做强度归一化，对照用于建立参考库，患者用于制图和分类，两组一起用于组间比较。"), func() {
+			section(c, T("Images", "图像"), T("One FDG-PET scan per subject. Every page of the project takes its images from here: both groups are normalised, the controls are summarised for the patients to be compared with, the patients are mapped and classified, and the two groups are compared.",
+				"每位受试者一幅 FDG-PET 图像。项目的每个页面都从这里取图像：两组都做强度归一化，对照汇总为对照统计供患者比较，患者用于制图和分类，两组一起用于组间比较。"), func() {
 				rows(c,
 					func() {
 						setting(c, T("The images are in", "图像所在的空间"), T("Images in native space are warped into MNI space by Spatial Normalisation before anything else reads them; that needs MATLAB and SPM.",
@@ -419,14 +424,14 @@ func (a *app) dataView(c *ui.Context) {
 						a.filesCardFromStudy(c, "data-patients", &p.patients, T("Patients", "患者"), hint, folders[0])
 					})
 					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
-						a.filesCardFromStudy(c, "data-controls", &p.controls, T("Healthy controls", "健康对照"), hint, folders[1])
+						a.filesCardFromStudy(c, "data-controls", &p.controls, T("Healthy controls (at least 3)", "健康对照（至少 3 例）"), hint, folders[1])
 					})
 				})
 				notesCard(c, p.notes)
 			})
 			section(c, T("Age and sex (covariates)", "年龄和性别（协变量）"),
-				T("Optional. With a table, the reference models what age and sex do to the uptake of the controls (W-scores), and the group comparison adjusts for them. It must list every image of the project: rows are matched by an “image” or “participant_id” column (sub-01 matches sub-01_…_pet.nii.gz), as in a BIDS participants.tsv.",
-					"可选。提供表格后，参考库会对年龄和性别对对照摄取的影响建模（W 值），组间比较也会校正它们。表格须包含项目的全部图像：通过 image 或 participant_id 列将行与图像对应（sub-01 匹配 sub-01_…_pet.nii.gz），与 BIDS 的 participants.tsv 一致。"), func() {
+				T("Optional. With a table, the control statistics model what age and sex do to the uptake of the controls (W-scores), and the group comparison adjusts for them. It must list every image of the project: rows are matched by an “image” or “participant_id” column (sub-01 matches sub-01_…_pet.nii.gz), as in a BIDS participants.tsv.",
+					"可选。提供表格后，对照统计会对年龄和性别对对照摄取的影响建模（W 值），组间比较也会校正它们。表格须包含项目的全部图像：通过 image 或 participant_id 列将行与图像对应（sub-01 匹配 sub-01_…_pet.nii.gz），与 BIDS 的 participants.tsv 一致。"), func() {
 					rows(c, a.covRows(c, "cov", &a.cov, T("A TSV or CSV file with the covariates of the patients and the controls.", "包含患者和对照协变量的 TSV 或 CSV 文件。"))...)
 				})
 		},

@@ -37,18 +37,18 @@ that version, so write it for the people who use the app.
   both in one table and one chart, by group. The normalised images are
   written by group, in `normalised/patients` and `normalised/controls`, and
   `factors.tsv` has a `group` column.
-- **The reference is no step of its own any more.** It is the controls of
-  the project, summarised: Intensity Normalisation builds it from them
-  before it normalises the images, and builds it anew after the controls
-  or the settings of the reference change. Where only the covariates
-  changed, no factor rests on them: the images normalised still stand, and
-  Z-score Maps builds the reference anew before it makes the maps. It always keeps
-  the control statistics of the methods chosen, so a z-score map can be made
-  with each of them. The Reference page shows the reference in use and has
-  nothing to run.
-- A project without controls of its own **imports** a reference built
-  elsewhere, on the Reference page, as when many projects share the controls
-  of one lab; the page takes the project's own controls back.
+- **The reference is now the control statistics, and no step or page of
+  its own.** A project needs at least 3 healthy controls of its own, and
+  every patient is compared with them: the z-score maps, the classification
+  and the group comparison all rest on the same controls. Intensity
+  Normalisation summarises them before it normalises the images, and does
+  so anew after the controls or the settings of the control statistics
+  change. Where only the covariates changed, no factor rests on them: the
+  images normalised still stand, and Z-score Maps summarises the controls
+  anew before it makes the maps. The statistics always hold those of the
+  methods chosen, so a z-score map can be made with each of them. The
+  Intensity Normalisation page shows them, with the mean image of the
+  controls.
 - A step whose files are no longer in the project, or whose images changed
   on disk since it ran, is not shown as done when the project is opened.
 - **New Project…**, **Open Project…** and **Close Project** in the File menu
@@ -63,10 +63,10 @@ that version, so write it for the people who use the app.
 - The Study Folder page is gone: making a project lays out its folders. A
   study folder of an earlier version is listed among the projects and is
   made one when you open it: what it holds is kept, the images in
-  `patients` and `controls`, its reference and a filled-in
+  `patients` and `controls`, its `hc_reference` and a filled-in
   `participants.tsv` are taken into the project.
 - One covariate table serves the whole project. It is chosen on the Data
-  page, with the columns to adjust for; the reference, the W-score maps and
+  page, with the columns to adjust for; the control statistics, the W-score maps and
   the group comparison all use it. Compare Groups no longer takes a second
   table.
 - Compare Groups compares the patients of the project with its controls;
@@ -80,7 +80,7 @@ that version, so write it for the people who use the app.
   then Z-score Maps, then Classify Parkinsonism. A line of steps at the top
   of the three pages shows where you are and which steps are done, and a
   **Next** button beside the run button leads on.
-- A later step takes its images, methods, reference and covariate table from
+- A later step takes its images, methods, controls and covariate table from
   the step before it: they are shown, not asked for again, and are changed
   where they were chosen. A step waits until the one before it has run, and
   again when what that one ran with was changed.
@@ -93,7 +93,7 @@ that version, so write it for the people who use the app.
   normalisation unless asked to: it reads the maps of Z-score Maps alone and
   computes no map itself. **Settings › Classify Parkinsonism › Cross-check
   with another normalisation** turns the check by global scaling (and by
-  deep white matter, if the reference keeps its statistics) back on; the
+  deep white matter, if the control statistics hold its own) back on; the
   maps for it are then computed during the classification, as before.
 - Classifying many patients is several times faster. The regions the
   classification reads were put on the grid of the image anew for every
@@ -101,19 +101,15 @@ that version, so write it for the people who use the app.
   and so are the built-in masks that Intensity Normalisation and Z-score
   Maps use. The results are the same.
 - Z-score Maps makes a map with each method of Intensity Normalisation that
-  the reference holds control statistics for, and says which it leaves out.
-- A reference is built with the *Region statistic* and the *Smoothing before
-  estimating* of Settings › Intensity Normalisation, and records them: the
-  factors of its controls are estimated the way those of your images are.
-  Z-score Maps asks that step 1 and the reference agree in the two, and
-  when they do not it offers both ways out: change the settings and run
-  step 1 again, or build the reference again. References built before were
-  all built with the mean and automatic smoothing, and are read so.
+  the control statistics hold, and says which it leaves out.
+- The controls are summarised with the *Region statistic* and the
+  *Smoothing before estimating* of Settings › Intensity Normalisation: the
+  factors of the controls are estimated the way those of the patients are.
 - When a setting of Intensity Normalisation is changed after the step ran,
   a note in the settings says so, the app tells you when you leave the
   settings window, and Z-score Maps and Classify Parkinsonism wait until
   the step is run again with the new settings. The same holds when the
-  reference is built again in its folder.
+  control statistics are summarised again in their folder.
 - Classify Parkinsonism rests on the maps of Z-score Maps and writes no
   second copy of the map into its own folder. Its method is no longer an
   option in the settings. A `classify_method` kept in the settings is no
@@ -125,6 +121,12 @@ that version, so write it for the people who use the app.
   choose.
 
 ### Removed
+
+- The Reference page, the reference shown in the sidebar, and importing a
+  reference built elsewhere. A project that used one imported lets it go
+  when opened, and Intensity Normalisation summarises its own controls.
+  The `sugar-pet build-reference` command of the Python package is
+  unchanged.
 
 - The option **Write normalised images** of Intensity Normalisation: the
   images are always written, as the steps after it read them. A

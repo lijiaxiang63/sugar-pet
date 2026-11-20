@@ -171,7 +171,7 @@ func (a *app) classifyView(c *ui.Context) {
 				if checks := a.classifyChecks(method); len(checks) > 0 {
 					shown += Tf(" · checked with %s", " · 另以%s复核", methodNames(checks))
 				}
-				reference := referenceText(a.reference, a.refInfo())
+				reference := controlsText(a.refInfo())
 				if a.refInfo() != nil && a.refInfo().err == "" && a.refInfo().N < 30 {
 					reference += T(" (30 or more are recommended)", "（建议至少 30 例）")
 				}
@@ -182,7 +182,7 @@ func (a *app) classifyView(c *ui.Context) {
 				a.taken(c, "classify",
 					fact(c, T("Images", "图像"), imagesText(z.files, len(a.pageImages(z.from))-len(z.files))),
 					fact(c, T("Method", "方法"), shown),
-					fact(c, T("Reference", "参考库"), reference),
+					fact(c, T("Healthy controls", "健康对照"), reference),
 					fact(c, T("Covariate table", "协变量表"), table),
 				)
 			})

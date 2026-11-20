@@ -44,8 +44,8 @@ func (a *app) clusterView(c *ui.Context) {
 				"按全局均值缩放后，未受疾病累及的区域会显得高代谢，与对照做 t 检验即可找出这些区域（Yakushev 等，2009）。"), func() {
 				a.source(c, "cl-data", "data", changeInData(), fact(c, T("Patients", "患者"), countText(patients)))
 			})
-			section(c, T("Reference and output", "参考库与输出"), "", func() {
-				a.source(c, "cl-ref", "reference", changeInReference(),
+			section(c, T("Controls and output", "对照与输出"), "", func() {
+				a.source(c, "cl-ref", "normalize", T("Open Intensity Normalisation", "查看强度归一化"),
 					a.referenceFact(c),
 					fact(c, T("Mask saved as", "掩膜保存为"), a.writesTo(p.output)))
 				a.optionsLine(c, "cluster", "cluster", groupCluster)

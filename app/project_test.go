@@ -170,7 +170,7 @@ func TestProject(t *testing.T) {
 		t.Fatalf("the copied images are not written as of the project: %s", text)
 	}
 	if !slices.Equal(a.controls(), copied) {
-		t.Errorf("the Reference page does not take the controls of the project: %v", a.controls())
+		t.Errorf("the controls of the project are not those summarised: %v", a.controls())
 	}
 
 	// Some choices of the pages, and a run that is noted.
@@ -308,34 +308,24 @@ func TestStudyFolder(t *testing.T) {
 	if !slices.Equal(p.patients.files, []string{pt}) || !slices.Equal(p.controls.files, []string{hc}) {
 		t.Errorf("the images of the study were not taken: %v, %v", p.patients.files, p.controls.files)
 	}
-	if a.reference != filepath.Join(study, "hc_reference") || !a.ownReference() || a.imported() {
+	if a.reference != filepath.Join(study, "hc_reference") {
 		t.Errorf("the reference of the study is not in use: %q", a.reference)
 	}
 	if a.cov.path != table || !slices.Equal(a.cov.names(), []string{"age", "sex"}) {
 		t.Errorf("the table of the study is not used: %q, %v", a.cov.path, a.cov.names())
 	}
-	// A reference from elsewhere is used in its place, and the project's own
-	// can be taken back.
+	// A project of an earlier version that imported a reference from
+	// elsewhere lets it go: its controls are summarised anew.
 	other := filepath.Join(dir, "lab_reference")
 	writeFile(t, filepath.Join(other, "reference.json"), `{"n_controls": 40, "fwhm_mm": 8}`)
 	a.setReference(other)
-	a.page = "reference"
-	tt.Frame()
-	if a.ownReference() || !tt.HasText("Imported from "+shortDir(dir)) {
-		t.Fatalf("an imported reference is not shown as one: %q", tt.Texts())
-	}
 	tt.Frame()
 	b := newApp()
-	if err := b.openProject(study); err != nil || b.reference != other {
-		t.Fatalf("the imported reference was not kept: %v, %q", err, b.reference)
+	if err := b.openProject(study); err != nil || b.reference != "" {
+		t.Fatalf("a reference from elsewhere was kept: %v, %q", err, b.reference)
 	}
-	if err := tt.Click("Use the Project's Controls"); err != nil {
-		t.Fatalf("%v (shown: %q)", err, tt.Texts())
-	}
+	a.setReference(filepath.Join(study, "hc_reference"))
 	tt.Frame()
-	if !a.ownReference() {
-		t.Error("the project's own reference was not taken back")
-	}
 	// What is there is asked of the file system once, and again after a
 	// second: until then a folder that has gone is still seen.
 	patients := seenKey{filepath.Join(study, "patients"), true}

@@ -32,7 +32,7 @@ var settingsSections = []settingsSection{
 	{"general", label{"General", "通用"}, label{"Language, version and updates", "语言、版本与更新"}, iconGear},
 	{"spatial", label{"Spatial Normalisation", "空间标准化"}, label{"SPM, MATLAB and the template of the warp", "SPM、MATLAB 与配准所用的模板"}, iconWarp},
 	{"normalize", label{"Intensity Normalisation", "强度归一化"}, label{"How factors are estimated and what is written", "因子如何估计，输出哪些文件"}, iconSliders},
-	{"reference", label{"Reference", "参考库"}, label{"How a new reference is built", "如何建立新的参考库"}, iconLayers},
+	{"reference", label{"Control Statistics", "对照统计"}, label{"How the healthy controls are summarised", "如何汇总健康对照"}, iconLayers},
 	{"classify", label{"Classify Parkinsonism", "帕金森综合征分类"}, label{"The normalisation of the maps and the language of the report", "制图所用的归一化方法与报告语言"}, iconReport},
 	{"compare", label{"Compare Groups", "组间比较"}, label{"The correction and the voxels of the t-test", "t 检验的校正方式与检验范围"}, iconCompare},
 	{"cluster", label{"Reference Cluster", "参考簇"}, label{"The threshold of the reference cluster", "参考簇的阈值"}, iconTarget},
@@ -502,8 +502,8 @@ func (a *app) settingsNormalize(c *ui.Context) {
 		caution(c, T("These are no longer the settings Intensity Normalisation last ran with. Run it again: until then Z-score Maps and Classify Parkinsonism cannot go on.",
 			"这些设置已与上次运行强度归一化时不同。请重新运行强度归一化：在此之前，Z 值图和帕金森综合征分类无法继续。"))
 	}
-	section(c, T("Factors", "因子"), T("The reference of the project estimates the factors of its controls the same way. An imported reference must agree with these for Z-score maps.",
-		"项目的参考库也按这里的方式估计对照的因子。导入的参考库须与这里一致，才能做 Z 值图。"), func() {
+	section(c, T("Factors", "因子"), T("The factors of the healthy controls are estimated the same way when they are summarised.",
+		"汇总对照统计时，健康对照的因子也按这里的方式估计。"), func() {
 		rows(c,
 			func() {
 				setting(c, lblStatistic.String(), T("For the reference regions and PS.", "用于参考区法和 PS。"), func() {
@@ -516,7 +516,7 @@ func (a *app) settingsNormalize(c *ui.Context) {
 			},
 			func() {
 				setting(c, lblSmoothing.String(),
-					T("Automatic: that of the reference for HN, iPS and iHN, none otherwise. The output is never smoothed.", "自动：HN、iPS、iHN 采用参考库的平滑，其他方法不平滑。输出图像不会被平滑。"),
+					T("Automatic: that of the control statistics for HN, iPS and iHN, none otherwise. The output is never smoothed.", "自动：HN、iPS、iHN 采用对照统计的平滑，其他方法不平滑。输出图像不会被平滑。"),
 					func() {
 						check(c.Key("fwhm-auto"), &o.FWHMAuto, T("Automatic", "自动"))
 						number(c.Key("fwhm"), &o.FWHM, 0, 30, 1).Disabled(o.FWHMAuto).Tooltip("FWHM, mm")
@@ -567,7 +567,7 @@ func maskChoices() (ids, names []string) {
 
 func (a *app) settingsReference(c *ui.Context) {
 	o := &a.opt
-	section(c, T("Building the reference", "建立参考库"), T("Intensity Normalisation builds the reference from the healthy controls of the project; after a change here it builds it anew the next time it runs. An imported reference keeps its own.", "强度归一化会用项目的健康对照自动建立参考库；这里改动后，下次运行时会重新建立。导入的参考库不受影响。"), func() {
+	section(c, T("Summarising the controls", "汇总对照"), T("Intensity Normalisation summarises the healthy controls of the project before it normalises the images; after a change here it does so anew the next time it runs.", "强度归一化会先把项目的健康对照汇总成对照统计，再归一化图像；这里改动后，下次运行时会重新汇总。"), func() {
 		ids, names := maskChoices()
 		var maskRow func()
 		if o.RefMask == "file" {
@@ -589,8 +589,8 @@ func (a *app) settingsReference(c *ui.Context) {
 		)
 	})
 	section(c, lblRefStats.String(),
-		T("The reference always keeps the control statistics of the methods chosen for Intensity Normalisation, so there is nothing to tick for z-score maps. Tick a method to keep its statistics as well: White matter adds a check to the classification that does not rest on gray matter.",
-			"参考库总会保留强度归一化所选方法的对照统计，做 Z 值图无需在此勾选。如要额外保留某种方法的统计，请勾选：勾选“深部白质”可为分类增加一种不依赖灰质的核对方式。"), func() {
+		T("The control statistics always hold those of the methods chosen for Intensity Normalisation, so there is nothing to tick for z-score maps. Tick a method to keep its statistics as well: White matter adds a check to the classification that does not rest on gray matter.",
+			"对照统计总会包含强度归一化所选方法的统计，做 Z 值图无需在此勾选。如要额外保留某种方法的统计，请勾选：勾选“深部白质”可为分类增加一种不依赖灰质的核对方式。"), func() {
 			card(c).Padding(8, 11).Children(func() {
 				ui.Row(c).Wrap().Children(func() {
 					for _, m := range core.StatsMethods() {
@@ -615,8 +615,8 @@ func (a *app) settingsClassify(c *ui.Context) {
 	section(c, T("Cross-check", "交叉验证"), "", func() {
 		rows(c, func() {
 			setting(c, lblClsCheck.String(),
-				T("Off: the classification reads the maps of Z-score Maps alone, and computes nothing again. On: every finding is also read on maps made by global scaling (PS) and, if the reference keeps its statistics, by deep white matter; those Z-score Maps did not make are computed here, which takes longer. A finding the other normalisations do not show is then marked in the report and counts less towards a pattern.",
-					"关闭：分类只读取“Z 值图”写出的图，不做任何重复计算。开启：每项发现还会在按全局缩放（PS）得到的图上复核，参考库保留了深部白质统计时也按深部白质复核；“Z 值图”没有做过的图会在这里现算，耗时更长。其他归一化方法未显示的发现会在报告中标出，并在模式匹配中降低权重。"),
+				T("Off: the classification reads the maps of Z-score Maps alone, and computes nothing again. On: every finding is also read on maps made by global scaling (PS) and, if the control statistics hold those of deep white matter, by it; those Z-score Maps did not make are computed here, which takes longer. A finding the other normalisations do not show is then marked in the report and counts less towards a pattern.",
+					"关闭：分类只读取“Z 值图”写出的图，不做任何重复计算。开启：每项发现还会在按全局缩放（PS）得到的图上复核，对照统计包含深部白质的统计时也按深部白质复核；“Z 值图”没有做过的图会在这里现算，耗时更长。其他归一化方法未显示的发现会在报告中标出，并在模式匹配中降低权重。"),
 				func() { toggle(c.Key("cls-check"), &o.CrossCheck, lblClsCheck.String()) })
 		})
 	})
@@ -675,9 +675,9 @@ func (a *app) settingsCompare(c *ui.Context) {
 			},
 			fileRow,
 			func() {
-				about := T("Automatic: 8 mm, as no reference is chosen. Use 0 if the images are already smoothed.", "自动：未选择参考库，采用 8 mm。图像已平滑时填 0。")
+				about := T("Automatic: 8 mm, as the controls are not summarised yet. Use 0 if the images are already smoothed.", "自动：对照统计尚未汇总，采用 8 mm。图像已平滑时填 0。")
 				if info := a.refInfo(); info != nil && info.err == "" {
-					about = Tf("Automatic: %g mm, that of the reference. Use 0 if the images are already smoothed.", "自动：采用参考库的平滑 %g mm。图像已平滑时填 0。", info.FWHM)
+					about = Tf("Automatic: %g mm, that of the control statistics. Use 0 if the images are already smoothed.", "自动：采用对照统计的平滑 %g mm。图像已平滑时填 0。", info.FWHM)
 				}
 				setting(c, lblCmpFWHM.String(), about,
 					func() {
